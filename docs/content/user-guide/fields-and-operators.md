@@ -117,7 +117,7 @@ The following fields track per-user data and support an optional **user selector
 
 | Field | JSON name | Description |
 |-------|-----------|-------------|
-| **Is Favorite** | `IsFavorite` | Whether the item is marked as a favorite |
+| **Is Favorite** | `IsFavorite` | Whether the item is marked as a favorite. [See parent favorite options below.](#parent-favorite-options) |
 | **Play Count** | `PlayCount` | Number of times the item has been played |
 | **User Rating** | `Rating` | The personal rating the user gave the item (0-10) |
 | **Last Played** | `LastPlayedDate` | When the item was last played |
@@ -148,6 +148,34 @@ The following fields track per-user data and support an optional **user selector
 **Next Unwatched options:**
 
 - **Include unwatched series** (default: Yes) - When enabled, includes the first episode of series that haven't been started. When disabled, only shows next episodes from partially watched series.
+
+#### Parent favorite options {#parent-favorite-options}
+
+**Is Favorite** can also match favorites set on the item's parents: favorite an album and its tracks match, favorite a series or a season and its episodes match. The option is available for **every media type**.
+
+It has three options:
+
+- **No - Only check the item itself** (default) - Only checks whether the item itself is a favorite.
+- **Yes - Also check parent favorites (season, series, album, folder, library)** - Matches if the item **or** any of its parents is a favorite.
+- **Yes - Only check parent favorites (season, series, album, folder, library)** - Ignores the item's own favorite and checks only its parents.
+
+**What counts as a parent?** The same parents as the [parent metadata options](#parent-metadata-options): everything above the item, all the way up to and including the Jellyfin library it lives in. Collections and playlists are not parents - favoriting a collection or playlist does not count for the items inside it.
+
+Favorites are per user, so the parents are checked for the same user as the rule itself: each playlist user by default, the collection's reference user, or the user selected in the rule.
+
+!!! warning "Is Favorite = Yes matches more items, Is Favorite = No matches fewer"
+    - **Is Favorite = Yes** matches the item if *any checked source* is a favorite.
+    - **Is Favorite = No** only matches if *every checked source* is not a favorite - so favoriting an album removes its tracks from the list.
+
+    With **Also check parent favorites**, the checked sources are the item and all its parents. With **Only check parent favorites**, they are the parents alone, so the item's own favorite never includes or excludes it.
+
+    **not equals** works the other way round: **not equals No** behaves like **= Yes**, and **not equals Yes** like **= No**.
+
+!!! note "Auto-refresh"
+    With auto-refresh set to **On All Changes**, favoriting or unfavoriting an album, series, season, or folder refreshes the lists that use this option.
+
+!!! note "Favorite artists"
+    Favoriting an artist on Jellyfin's **Artists** page only counts when that artist is also the folder its albums are stored in (for example `Music/Artist/Album/`). If it isn't, favorite the albums instead.
 
 ### Library
 

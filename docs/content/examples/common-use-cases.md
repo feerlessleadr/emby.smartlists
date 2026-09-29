@@ -296,6 +296,16 @@ Create distinct sections for different genres in one playlist:
 ### Top Rated Favorites
 - **Is Favorite** = True AND **Community Rating** greater than 8
 
+### Tracks from Favorite Albums
+- **Is Favorite** = True with **Yes - Also check parent favorites** enabled
+- **Media Type**: Audio
+- Includes every track on the albums you've favorited, plus any tracks you've favorited individually
+- Use **Yes - Only check parent favorites** instead to get only the tracks from favorite albums
+- Works for TV too: select Episode and favorite a series or a season to get its episodes
+- With multiple playlist users, each user gets the tracks from their own favorite albums
+- Set auto-refresh to **On All Changes** so the playlist updates when you favorite or unfavorite an album
+- See [Parent favorite options](../user-guide/fields-and-operators.md#parent-favorite-options) for details
+
 ### Rediscover Music
 - **Last Played** older than 6 months
 

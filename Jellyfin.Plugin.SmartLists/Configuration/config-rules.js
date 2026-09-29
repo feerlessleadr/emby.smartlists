@@ -1219,6 +1219,16 @@
             '<option value="only">Yes - Only check parent genres (season, series, album, folder, library)</option>' +
             '</select>' +
             '</div>' +
+            '<div class="rule-isfavorite-options" style="display: none; margin-bottom: 0.75em; padding: 0.5em; background: var(--jf-palette-background-paper); border: 1px solid var(--jf-palette-divider); border-radius: 4px;">' +
+            '<label style="display: block; margin-bottom: 0.25em; font-size: 0.85em; opacity: 0.8; font-weight: 500;">' +
+            'Include parent favorites:' +
+            '</label>' +
+            '<select is="emby-select" class="emby-select rule-isfavorite-select" style="width: 100%;">' +
+            '<option value="false">No - Only check the item itself</option>' +
+            '<option value="true">Yes - Also check parent favorites (season, series, album, folder, library)</option>' +
+            '<option value="only">Yes - Only check parent favorites (season, series, album, folder, library)</option>' +
+            '</select>' +
+            '</div>' +
             '<div class="rule-audiolanguages-options" style="display: none; margin-bottom: 0.75em; padding: 0.5em; background: var(--jf-palette-background-paper); border: 1px solid var(--jf-palette-divider); border-radius: 4px;">' +
             '<label style="display: block; margin-bottom: 0.25em; font-size: 0.85em; opacity: 0.8; font-weight: 500;">' +
             'Must be the default language:' +
@@ -1303,6 +1313,9 @@
         // Initialize Genres options visibility
         SmartLists.updateGenresOptionsVisibility(newRuleRow, fieldSelect.value, page);
 
+        // Initialize IsFavorite options visibility
+        SmartLists.updateIsFavoriteOptionsVisibility(newRuleRow, fieldSelect.value, page);
+
         // Initialize AudioLanguages options visibility
         SmartLists.updateAudioLanguagesOptionsVisibility(newRuleRow, fieldSelect.value, page);
 
@@ -1336,6 +1349,7 @@
             SmartLists.updateTagsOptionsVisibility(newRuleRow, fieldSelect.value, page);
             SmartLists.updateStudiosOptionsVisibility(newRuleRow, fieldSelect.value, page);
             SmartLists.updateGenresOptionsVisibility(newRuleRow, fieldSelect.value, page);
+            SmartLists.updateIsFavoriteOptionsVisibility(newRuleRow, fieldSelect.value, page);
             SmartLists.updateAudioLanguagesOptionsVisibility(newRuleRow, fieldSelect.value, page);
             SmartLists.updateSimilarityOptionsVisibility(newRuleRow, fieldSelect.value);
             SmartLists.updatePeopleOptionsVisibility(newRuleRow, fieldSelect.value);
@@ -1491,13 +1505,15 @@
         const collectionsSelect = ruleRow.querySelector('.rule-collections-select');
         const collectionsValue = collectionsSelect ? collectionsSelect.value : '';
 
-        // Extract Tags, Studios, Genres, AudioLanguages options
+        // Extract Tags, Studios, Genres, IsFavorite, AudioLanguages options
         const tagsSelect = ruleRow.querySelector('.rule-tags-select');
         const tagsValue = tagsSelect ? tagsSelect.value : '';
         const studiosSelect = ruleRow.querySelector('.rule-studios-select');
         const studiosValue = studiosSelect ? studiosSelect.value : '';
         const genresSelect = ruleRow.querySelector('.rule-genres-select');
         const genresValue = genresSelect ? genresSelect.value : '';
+        const isFavoriteSelect = ruleRow.querySelector('.rule-isfavorite-select');
+        const isFavoriteValue = isFavoriteSelect ? isFavoriteSelect.value : '';
         const audioLanguagesSelect = ruleRow.querySelector('.rule-audiolanguages-select');
         const audioLanguagesValue = audioLanguagesSelect ? audioLanguagesSelect.value : '';
         const runtimeUnitSelect = ruleRow.querySelector('.rule-runtime-unit');
@@ -1600,6 +1616,14 @@
                 expression.IncludeParentGenres = true;
             } else if (genresValue === 'true') {
                 expression.IncludeParentGenres = true;
+            }
+        }
+        if (fieldValue === 'IsFavorite') {
+            if (isFavoriteValue === 'only') {
+                expression.OnlyParentFavorite = true;
+                expression.IncludeParentFavorite = true;
+            } else if (isFavoriteValue === 'true') {
+                expression.IncludeParentFavorite = true;
             }
         }
         if (fieldValue === 'AudioLanguages' && audioLanguagesValue === 'true') {
@@ -1902,6 +1926,7 @@
                     SmartLists.updateTagsOptionsVisibility(ruleRow, currentFieldValue, page);
                     SmartLists.updateStudiosOptionsVisibility(ruleRow, currentFieldValue, page);
                     SmartLists.updateGenresOptionsVisibility(ruleRow, currentFieldValue, page);
+                    SmartLists.updateIsFavoriteOptionsVisibility(ruleRow, currentFieldValue, page);
                     SmartLists.updateAudioLanguagesOptionsVisibility(ruleRow, currentFieldValue, page);
                     SmartLists.updateSimilarityOptionsVisibility(ruleRow, currentFieldValue);
                 }
@@ -1932,6 +1957,7 @@
                     SmartLists.updateTagsOptionsVisibility(ruleRow, fieldSelect.value, page);
                     SmartLists.updateStudiosOptionsVisibility(ruleRow, fieldSelect.value, page);
                     SmartLists.updateGenresOptionsVisibility(ruleRow, fieldSelect.value, page);
+                    SmartLists.updateIsFavoriteOptionsVisibility(ruleRow, fieldSelect.value, page);
                     SmartLists.updateAudioLanguagesOptionsVisibility(ruleRow, fieldSelect.value, page);
                     SmartLists.updateSimilarityOptionsVisibility(ruleRow, fieldSelect.value);
                     SmartLists.updatePeopleOptionsVisibility(ruleRow, fieldSelect.value);
@@ -2154,6 +2180,7 @@
                         SmartLists.updateTagsOptionsVisibility(ruleRow, '', page);
                         SmartLists.updateStudiosOptionsVisibility(ruleRow, '', page);
                         SmartLists.updateGenresOptionsVisibility(ruleRow, '', page);
+                        SmartLists.updateIsFavoriteOptionsVisibility(ruleRow, '', page);
                     }
                     SmartLists.updateSimilarityOptionsVisibility(ruleRow, '');
                     SmartLists.updatePeopleOptionsVisibility(ruleRow, '');
@@ -2171,6 +2198,7 @@
                         SmartLists.updateTagsOptionsVisibility(ruleRow, currentValue, page);
                         SmartLists.updateStudiosOptionsVisibility(ruleRow, currentValue, page);
                         SmartLists.updateGenresOptionsVisibility(ruleRow, currentValue, page);
+                        SmartLists.updateIsFavoriteOptionsVisibility(ruleRow, currentValue, page);
                     }
                     SmartLists.updateSimilarityOptionsVisibility(ruleRow, currentValue);
                     SmartLists.updatePeopleOptionsVisibility(ruleRow, currentValue);
@@ -2430,6 +2458,19 @@
     // Update visibility of Genres options for all rules
     SmartLists.updateAllGenresOptionsVisibility = function (page) {
         SmartLists.updateAllRules(page, SmartLists.updateGenresOptionsVisibility);
+    };
+
+    // Same as the parent tag options: every media type is supported, and page is unused
+    SmartLists.updateIsFavoriteOptionsVisibility = function (ruleRow, fieldValue, page) {
+        const isFavoriteOptionsDiv = ruleRow.querySelector('.rule-isfavorite-options');
+        if (isFavoriteOptionsDiv) {
+            isFavoriteOptionsDiv.style.display = fieldValue === 'IsFavorite' ? 'block' : 'none';
+        }
+    };
+
+    // Update visibility of IsFavorite options for all rules
+    SmartLists.updateAllIsFavoriteOptionsVisibility = function (page) {
+        SmartLists.updateAllRules(page, SmartLists.updateIsFavoriteOptionsVisibility);
     };
 
     SmartLists.updateAudioLanguagesOptionsVisibility = function (ruleRow, fieldValue, page) {
@@ -2820,6 +2861,20 @@
                         // If 'false' (default), don't include the parameter to save space
                     }
 
+                    // Handle IsFavorite-specific options (all media types - favorite state of
+                    // every ancestor, checked for the rule's user)
+                    const isFavoriteSelect = rule.querySelector('.rule-isfavorite-select');
+                    if (isFavoriteSelect && memberName === 'IsFavorite') {
+                        const isFavoriteSelectValue = isFavoriteSelect.value;
+                        if (isFavoriteSelectValue === 'only') {
+                            expression.OnlyParentFavorite = true;
+                            expression.IncludeParentFavorite = true;
+                        } else if (isFavoriteSelectValue === 'true') {
+                            expression.IncludeParentFavorite = true;
+                        }
+                        // If 'false' (default), don't include the parameter to save space
+                    }
+
                     // Handle AudioLanguages-specific options (only if audio-capable media type is selected)
                     const audioLanguagesSelect = rule.querySelector('.rule-audiolanguages-select');
                     if (audioLanguagesSelect && memberName === 'AudioLanguages' && hasAudioCapable) {
@@ -2963,6 +3018,7 @@
                 SmartLists.updateTagsOptionsVisibility(ruleRow, actualMemberName, page);
                 SmartLists.updateStudiosOptionsVisibility(ruleRow, actualMemberName, page);
                 SmartLists.updateGenresOptionsVisibility(ruleRow, actualMemberName, page);
+                SmartLists.updateIsFavoriteOptionsVisibility(ruleRow, actualMemberName, page);
                 SmartLists.updateAudioLanguagesOptionsVisibility(ruleRow, actualMemberName, page);
 
                 // For SimilarTo field, get similarity fields from page state (set by clone/edit flows)
@@ -3065,6 +3121,18 @@
                         includeValue = 'true';
                     }
                     genresSelect.value = includeValue;
+                }
+            }
+            if (expression.MemberName === 'IsFavorite') {
+                const isFavoriteSelect = ruleRow.querySelector('.rule-isfavorite-select');
+                if (isFavoriteSelect) {
+                    let includeValue = 'false';
+                    if (expression.OnlyParentFavorite === true) {
+                        includeValue = 'only';
+                    } else if (expression.IncludeParentFavorite === true) {
+                        includeValue = 'true';
+                    }
+                    isFavoriteSelect.value = includeValue;
                 }
             }
             if (expression.MemberName === 'AudioLanguages') {

@@ -187,4 +187,29 @@ public class RefreshCacheStalenessTests
 
         Assert.Empty(ExtractCollections(movie, cache, depth: 1));
     }
+
+    /// <summary>
+    /// A favorite set mid-drain (UserDataSaved) must not be shadowed by the value an earlier refresh
+    /// in that drain cached - parent-favorite refreshes read every album's user data on their way.
+    /// Only the saved (item, user) pair goes; other users and other items keep their entries.
+    /// </summary>
+    [Fact]
+    public void InvalidateUserData_DropsOnlyThatItemAndUsersEntry()
+    {
+        var album = TestItems.Album("Kind of Blue");
+        var otherAlbum = TestItems.Album("Blue Train");
+
+        var cache = new RefreshQueueService.RefreshCache();
+        TestItems.SeedUserData(cache, album, TestItems.User);
+        TestItems.SeedUserData(cache, album, TestItems.OtherUser);
+        TestItems.SeedUserData(cache, otherAlbum, TestItems.User);
+        TestItems.SeedNoUserData(cache, album, TestItems.User);
+
+        cache.InvalidateUserData(album.Id, TestItems.User.Id);
+
+        Assert.False(cache.UserDataCache.ContainsKey((album.Id, TestItems.User.Id)));
+        Assert.False(cache.UserDataNegativeCache.ContainsKey((album.Id, TestItems.User.Id)));
+        Assert.True(cache.UserDataCache.ContainsKey((album.Id, TestItems.OtherUser.Id)));
+        Assert.True(cache.UserDataCache.ContainsKey((otherAlbum.Id, TestItems.User.Id)));
+    }
 }

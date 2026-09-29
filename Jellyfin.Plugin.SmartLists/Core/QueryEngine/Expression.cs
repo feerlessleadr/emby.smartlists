@@ -98,6 +98,14 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
         [JsonIgnore]
         public bool IncludeParentGenresEffective => IncludeParentGenres == true || IncludeParentSeriesGenres == true || IncludeParentAlbumGenres == true;
 
+        // IsFavorite-specific option: also match when any ancestor (season, series, album, folder, library) is a favorite for the rule's user - only serialize when meaningful
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? IncludeParentFavorite { get; set; } = null;
+
+        // IsFavorite-specific option to only check ancestor favorites (skip the item's own flag) - only serialize when meaningful
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public bool? OnlyParentFavorite { get; set; } = null;
+
         // AudioLanguages-specific option - only serialize when meaningful
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public bool? OnlyDefaultAudioLanguage { get; set; } = null;

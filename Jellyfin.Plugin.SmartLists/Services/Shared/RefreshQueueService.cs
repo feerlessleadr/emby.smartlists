@@ -340,6 +340,7 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                 foreach (var cache in _refreshCaches.Values)
                 {
                     cache.AncestorValuesById.Clear();
+                    cache.AncestorItemsById.Clear();
                 }
             }
         }
@@ -872,6 +873,23 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
+        /// Drops one (item, user) user-data entry, positive or negative, across every user's cache.
+        ///
+        /// Same per-drain lifetime problem as <see cref="InvalidateContainerChildCaches"/>: without
+        /// this, a favorite or playback change made mid-drain stays invisible to every later refresh
+        /// in that drain. Parent favorites make it routine - a parent-favorite refresh reads the
+        /// user data of every album, season and series on its way, so favoriting albums one after
+        /// another would leave the refresh queued by the second one reading the first run's value.
+        /// </summary>
+        public void InvalidateUserData(Guid itemId, Guid userId)
+        {
+            foreach (var cache in _refreshCaches.Values)
+            {
+                cache.InvalidateUserData(itemId, userId);
+            }
+        }
+
+        /// <summary>
         /// Per-refresh cache for expensive operations within single playlist processing.
         /// Uses ConcurrentDictionary for thread-safety during parallel processing.
         /// </summary>
@@ -974,12 +992,30 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             /// </summary>
             public ConcurrentDictionary<Guid, AncestorValues> AncestorValuesById { get; } = new();
 
+            /// <summary>
+            /// Ancestor NODES for parent favorites - the same walk and the same ANCESTOR-NODE keying
+            /// as AncestorValuesById, but it stores the nodes themselves: favorite state is per user
+            /// and is read through UserDataCache, so it cannot be folded into a user-agnostic value.
+            /// Cleared per queue item alongside AncestorValuesById (see ProcessQueueItemAsync).
+            /// </summary>
+            public ConcurrentDictionary<Guid, IReadOnlyList<BaseItem>> AncestorItemsById { get; } = new();
+
             public ConcurrentDictionary<Guid, CategorizedPeople> ItemPeople { get; } = new();
             
             // User-specific data cache - keyed by (ItemId, UserId) to support playlist user + additional users in rules
             public ConcurrentDictionary<(Guid ItemId, Guid UserId), MediaBrowser.Controller.Entities.UserItemData> UserDataCache { get; } = new();
             // Tracks (ItemId, UserId) pairs for which GetUserData returned null, to avoid repeated DB calls.
             public ConcurrentDictionary<(Guid ItemId, Guid UserId), byte> UserDataNegativeCache { get; } = new();
+
+            /// <summary>
+            /// Forgets the cached user data for one (item, user) pair so the next read goes to the
+            /// user-data manager. See <see cref="RefreshQueueService.InvalidateUserData"/>.
+            /// </summary>
+            internal void InvalidateUserData(Guid itemId, Guid userId)
+            {
+                UserDataCache.TryRemove((itemId, userId), out _);
+                UserDataNegativeCache.TryRemove((itemId, userId), out _);
+            }
             
             // Media streams cache - keyed by ItemId only (user-agnostic)
             public ConcurrentDictionary<Guid, IEnumerable<object>> MediaStreamsCache { get; } = new();

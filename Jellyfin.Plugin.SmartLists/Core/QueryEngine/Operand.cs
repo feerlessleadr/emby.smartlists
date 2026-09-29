@@ -127,6 +127,7 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
         public Dictionary<string, int> PlayCountByUser { get; set; } = [];
         public Dictionary<string, double> RatingByUser { get; set; } = [];
         public Dictionary<string, bool> IsFavoriteByUser { get; set; } = [];
+        public Dictionary<string, bool> ParentIsFavoriteByUser { get; set; } = [];
         public Dictionary<string, bool> NextUnwatchedByUser { get; set; } = [];
         public Dictionary<string, double> LastPlayedDateByUser { get; set; } = [];
 
@@ -156,6 +157,13 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
             // Note: We can't log here as this method is called from compiled expressions
             // If lookup fails, it means the UserId format doesn't match what was used during population
             return hasKey && value;
+        }
+
+        // True when ANY ancestor (season, series, album, folder, library) is a favorite for the user.
+        // A missing key means false - the entry is only written when parent favorites are extracted.
+        public bool GetParentIsFavoriteByUser(string userId)
+        {
+            return ParentIsFavoriteByUser.TryGetValue(userId, out var value) && value;
         }
 
         public bool GetNextUnwatchedByUser(string userId)

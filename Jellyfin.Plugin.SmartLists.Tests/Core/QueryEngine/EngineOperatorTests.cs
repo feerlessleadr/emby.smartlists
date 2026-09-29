@@ -1010,6 +1010,179 @@ public class EngineOperatorTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // Parent-aware favorites (IsFavorite + IncludeParentFavorite / OnlyParentFavorite)
+    // ---------------------------------------------------------------------------------------
+
+    private static Operand Favorites(bool own, bool parent, string userIdN)
+    {
+        var operand = new Operand("item");
+        operand.IsFavoriteByUser[userIdN] = own;
+        operand.ParentIsFavoriteByUser[userIdN] = parent;
+        return operand;
+    }
+
+    /// <summary>
+    /// A rule that WANTS favorites (Equal true / NotEqual false) ORs the item's own flag with the
+    /// ancestor flag: a track on a favorited album matches even though the track itself is not a
+    /// favorite. Same positive=OR convention as the parent Tags/Studios/Genres options.
+    /// </summary>
+    [Theory]
+    [InlineData("Equal", "true", true, false, true)]
+    [InlineData("Equal", "true", false, true, true)]
+    [InlineData("Equal", "true", false, false, false)]
+    [InlineData("Equal", "true", true, true, true)]
+    [InlineData("NotEqual", "false", true, false, true)]
+    [InlineData("NotEqual", "false", false, true, true)]
+    [InlineData("NotEqual", "false", false, false, false)]
+    [InlineData("NotEqual", "false", true, true, true)]
+    public void CompileRule_IsFavoriteIncludingParent_OrsOwnAndParentWhenWantingFavorites(string op, string target, bool own, bool parent, bool expected)
+    {
+        var rule = Compile(new Expression("IsFavorite", op, target) { UserId = UserIdDashed, IncludeParentFavorite = true });
+
+        Assert.Equal(expected, rule(Favorites(own, parent, UserIdN)));
+    }
+
+    /// <summary>
+    /// A rule that EXCLUDES favorites (Equal false / NotEqual true) ANDs them instead, so a
+    /// favorite on the item OR any ancestor excludes it - "not a favorite" must not leak in the
+    /// tracks of a favorited album. Same negative=AND convention as the parent Tags option.
+    /// </summary>
+    [Theory]
+    [InlineData("Equal", "false", false, false, true)]
+    [InlineData("Equal", "false", true, false, false)]
+    [InlineData("Equal", "false", false, true, false)]
+    [InlineData("Equal", "false", true, true, false)]
+    [InlineData("NotEqual", "true", false, false, true)]
+    [InlineData("NotEqual", "true", true, false, false)]
+    [InlineData("NotEqual", "true", false, true, false)]
+    [InlineData("NotEqual", "true", true, true, false)]
+    public void CompileRule_IsFavoriteIncludingParent_AndsOwnAndParentWhenExcludingFavorites(string op, string target, bool own, bool parent, bool expected)
+    {
+        var rule = Compile(new Expression("IsFavorite", op, target) { UserId = UserIdDashed, IncludeParentFavorite = true });
+
+        Assert.Equal(expected, rule(Favorites(own, parent, UserIdN)));
+    }
+
+    /// <summary>
+    /// OnlyParent (emitted by the UI together with IncludeParent) skips the item's own flag.
+    /// </summary>
+    [Theory]
+    [InlineData("Equal", "true", true, false, false)]
+    [InlineData("Equal", "true", false, true, true)]
+    [InlineData("Equal", "false", true, false, true)]
+    [InlineData("Equal", "false", false, true, false)]
+    [InlineData("NotEqual", "false", false, true, true)]
+    [InlineData("NotEqual", "true", true, false, true)]
+    public void CompileRule_IsFavoriteOnlyParent_IgnoresTheItemsOwnFlag(string op, string target, bool own, bool parent, bool expected)
+    {
+        var rule = Compile(new Expression("IsFavorite", op, target)
+        {
+            UserId = UserIdDashed,
+            OnlyParentFavorite = true,
+            IncludeParentFavorite = true,
+        });
+
+        Assert.Equal(expected, rule(Favorites(own, parent, UserIdN)));
+    }
+
+    /// <summary>
+    /// OnlyParent without IncludeParent compiles to constant false - even for "Equal false", which
+    /// would otherwise match an item with no favorites anywhere. Mirrors the Tags behaviour.
+    /// </summary>
+    [Theory]
+    [InlineData("true", false, false)]
+    [InlineData("true", true, true)]
+    [InlineData("false", false, false)]
+    [InlineData("false", true, true)]
+    public void CompileRule_IsFavoriteOnlyParentWithNoParentSource_MatchesNothing(string target, bool own, bool parent)
+    {
+        var rule = Compile(new Expression("IsFavorite", "Equal", target) { UserId = UserIdDashed, OnlyParentFavorite = true });
+
+        Assert.False(rule(Favorites(own, parent, UserIdN)));
+    }
+
+    /// <summary>
+    /// Ancestor favorites are keyed by user exactly like the item's own favorites: an album
+    /// another user favorited does not pull its tracks into this user's list, and a missing
+    /// entry reads as "no ancestor is a favorite".
+    /// </summary>
+    [Fact]
+    public void CompileRule_IsFavoriteIncludingParent_IsPerUserWithFalseDefault()
+    {
+        var otherUserN = Guid.NewGuid().ToString("N");
+        var rule = Compile(new Expression("IsFavorite", "Equal", "true") { UserId = UserIdDashed, IncludeParentFavorite = true });
+
+        var favoritedByOtherUser = new Operand("item");
+        favoritedByOtherUser.ParentIsFavoriteByUser[otherUserN] = true;
+
+        Assert.False(rule(favoritedByOtherUser));
+        Assert.False(rule(new Operand("item")));
+
+        var excludeRule = Compile(new Expression("IsFavorite", "Equal", "false") { UserId = UserIdDashed, IncludeParentFavorite = true });
+        Assert.True(excludeRule(favoritedByOtherUser));
+    }
+
+    /// <summary>
+    /// With no UserId on the rule the list user (defaultUserId) is used for BOTH flags - the
+    /// user-specific branch in BuildExpr rebuilds the expression and must carry the parent flags.
+    /// </summary>
+    [Fact]
+    public void CompileRule_IsFavoriteIncludingParentWithoutUserId_FallsBackToDefaultUserId()
+    {
+        var rule = Compile(new Expression("IsFavorite", "Equal", "true") { IncludeParentFavorite = true }, UserIdDashed);
+
+        Assert.True(rule(Favorites(own: false, parent: true, UserIdN)));
+        Assert.False(rule(Favorites(own: false, parent: false, UserIdN)));
+    }
+
+    /// <summary>
+    /// The parent option does not loosen compile-time validation.
+    /// </summary>
+    [Fact]
+    public void CompileRule_IsFavoriteIncludingParent_StillRejectsBadTargetAndOperator()
+    {
+        Assert.Throws<ArgumentException>(
+            () => Compile(new Expression("IsFavorite", "Equal", "yes") { UserId = UserIdDashed, IncludeParentFavorite = true }));
+        Assert.Throws<ArgumentException>(
+            () => Compile(new Expression("IsFavorite", "Contains", "true") { UserId = UserIdDashed, IncludeParentFavorite = true }));
+        Assert.Throws<ArgumentException>(
+            () => Compile(new Expression("IsFavorite", "Equal", "yes") { UserId = UserIdDashed, OnlyParentFavorite = true, IncludeParentFavorite = true }));
+    }
+
+    /// <summary>
+    /// Default off: a plain IsFavorite rule never reads the ancestor flag, so lists saved before
+    /// this option existed behave exactly as before.
+    /// </summary>
+    [Fact]
+    public void CompileRule_IsFavoriteWithoutParentOption_IgnoresAncestorFavorites()
+    {
+        var rule = Compile(new Expression("IsFavorite", "Equal", "true") { UserId = UserIdDashed });
+
+        Assert.False(rule(Favorites(own: false, parent: true, UserIdN)));
+        Assert.True(rule(Favorites(own: true, parent: false, UserIdN)));
+    }
+
+    /// <summary>
+    /// The favorite flags only mean something on IsFavorite; on any other field they are ignored.
+    /// </summary>
+    [Fact]
+    public void CompileRule_ParentFavoriteFlagsOnOtherFields_AreIgnored()
+    {
+        var tags = Compile(new Expression("Tags", "Equal", "Anime") { IncludeParentFavorite = true, OnlyParentFavorite = true });
+
+        Assert.True(tags(new Operand("item") { Tags = ["Anime"] }));
+        Assert.False(tags(new Operand("item") { ParentTags = ["Anime"] }));
+
+        var playCount = Compile(new Expression("PlayCount", "GreaterThan", "2") { UserId = UserIdDashed, IncludeParentFavorite = true });
+        var played = new Operand("item");
+        played.PlayCountByUser[UserIdN] = 3;
+        played.ParentIsFavoriteByUser[UserIdN] = true;
+
+        Assert.True(playCount(played));
+        Assert.False(playCount(new Operand("item")));
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Field redirects
     // ---------------------------------------------------------------------------------------
 

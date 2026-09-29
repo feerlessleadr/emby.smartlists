@@ -112,6 +112,12 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
             set => RequiredGroups = value ? RequiredGroups | ExtractionGroup.ParentGenres : RequiredGroups & ~ExtractionGroup.ParentGenres;
         }
 
+        public bool ExtractParentFavorite
+        {
+            get => RequiredGroups.HasFlag(ExtractionGroup.ParentFavorite);
+            set => RequiredGroups = value ? RequiredGroups | ExtractionGroup.ParentFavorite : RequiredGroups & ~ExtractionGroup.ParentFavorite;
+        }
+
         public bool ExtractLastEpisodeAirDate
         {
             get => RequiredGroups.HasFlag(ExtractionGroup.LastEpisodeAirDate);
@@ -2309,6 +2315,73 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
         }
 
         /// <summary>
+        /// Resolves whether ANY ancestor (season, series, album, folder, library - the same walk as
+        /// the parent Tags/Studios/Genres) is a favorite, for the list user and for every user a rule
+        /// names. Ancestor user data is read through the per-refresh cache, so an ancestor shared by
+        /// many items costs one lookup per (user, ancestor) per refresh.
+        /// </summary>
+        private static void ExtractParentFavorites(
+            Operand operand,
+            BaseItem baseItem,
+            User user,
+            List<string>? additionalUserIds,
+            IUserManager userManager,
+            ILibraryManager libraryManager,
+            IUserDataManager userDataManager,
+            RefreshQueueServiceRefreshCache cache,
+            ILogger? logger)
+        {
+            try
+            {
+                var ancestors = AncestorValueResolver.ResolveAncestors(baseItem, libraryManager, cache.AncestorItemsById, logger);
+                operand.ParentIsFavoriteByUser[user.Id.ToString("N")] = AnyAncestorIsFavorite(ancestors, user, userDataManager, cache);
+
+                if (additionalUserIds == null)
+                {
+                    return;
+                }
+
+                foreach (var userId in additionalUserIds)
+                {
+                    if (!Guid.TryParse(userId, out var userGuid))
+                    {
+                        continue;
+                    }
+
+                    // A missing user is already reported (and thrown) by the additional-user loop above
+                    var targetUser = GetUserById(userManager, userGuid);
+                    if (targetUser == null)
+                    {
+                        continue;
+                    }
+
+                    operand.ParentIsFavoriteByUser[userGuid.ToString("N")] = AnyAncestorIsFavorite(ancestors, targetUser, userDataManager, cache);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "SmartLists failed to resolve parent favorites for '{Name}'", baseItem.Name);
+            }
+        }
+
+        private static bool AnyAncestorIsFavorite(
+            IReadOnlyList<BaseItem> ancestors,
+            User user,
+            IUserDataManager userDataManager,
+            RefreshQueueServiceRefreshCache cache)
+        {
+            foreach (var ancestor in ancestors)
+            {
+                if (GetCachedUserData(ancestor, user, userDataManager, cache)?.IsFavorite == true)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
         /// Extracts people (actors, directors, producers, etc.) associated with the item.
         /// </summary>
         private static void ExtractPeople(Operand operand, BaseItem baseItem, ILibraryManager libraryManager, RefreshQueueServiceRefreshCache cache, ILogger? logger)
@@ -2665,6 +2738,7 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
             var extractParentTags = options.ExtractParentTags;
             var extractParentStudios = options.ExtractParentStudios;
             var extractParentGenres = options.ExtractParentGenres;
+            var extractParentFavorite = options.ExtractParentFavorite;
             var extractLastEpisodeAirDate = options.ExtractLastEpisodeAirDate;
 
             // Cheap extraction flags (for performance optimization)
@@ -3108,6 +3182,15 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
             if (!extractParentTags) { operand.ParentTags = []; }
             if (!extractParentStudios) { operand.ParentStudios = []; }
             if (!extractParentGenres) { operand.ParentGenres = []; }
+
+            // Ancestor favorites, per evaluated user (list user + every user a rule names). Expensive
+            // (tree walk + per-ancestor user data), so gated on the requirement flag like the parent groups
+            // above. Phase 1 masks the group off and never evaluates the rule (IsParentAwareFavoriteExpression).
+            // No reset needed: every call builds a fresh Operand whose ParentIsFavoriteByUser starts empty.
+            if (extractParentFavorite && userDataManager != null)
+            {
+                ExtractParentFavorites(operand, baseItem, user, additionalUserIds, userManager, libraryManager, userDataManager, cache, logger);
+            }
 
             // AudioMetadata extraction - conditionally extracted for performance optimization
             // Includes Album, Artists, AlbumArtists for music-related items
