@@ -1007,12 +1007,19 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             // Tracks (ItemId, UserId) pairs for which GetUserData returned null, to avoid repeated DB calls.
             public ConcurrentDictionary<(Guid ItemId, Guid UserId), byte> UserDataNegativeCache { get; } = new();
 
+            // Bumped by every InvalidateUserData, BEFORE the entry is removed. A read that sees it move
+            // overlapped a save, so UserDataCacheHelper must not leave that read's value cached.
+            private long _userDataEpoch;
+
+            internal long UserDataEpoch => Interlocked.Read(ref _userDataEpoch);
+
             /// <summary>
             /// Forgets the cached user data for one (item, user) pair so the next read goes to the
             /// user-data manager. See <see cref="RefreshQueueService.InvalidateUserData"/>.
             /// </summary>
             internal void InvalidateUserData(Guid itemId, Guid userId)
             {
+                Interlocked.Increment(ref _userDataEpoch);
                 UserDataCache.TryRemove((itemId, userId), out _);
                 UserDataNegativeCache.TryRemove((itemId, userId), out _);
             }

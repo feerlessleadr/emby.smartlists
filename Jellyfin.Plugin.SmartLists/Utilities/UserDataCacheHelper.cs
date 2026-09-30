@@ -30,6 +30,7 @@ namespace Jellyfin.Plugin.SmartLists.Utilities
                 return null;
             }
 
+            var epoch = refreshCache.UserDataEpoch;
             userData = userDataManager.GetUserData(user, item);
             if (userData != null)
             {
@@ -39,6 +40,14 @@ namespace Jellyfin.Plugin.SmartLists.Utilities
             {
                 // Memoize the miss so subsequent calls skip the DB round-trip
                 refreshCache.UserDataNegativeCache[cacheKey] = 0;
+            }
+
+            // A user-data save landed while this read was in flight, so the value may predate it.
+            // Checked AFTER storing: an invalidation that ran before the store could not remove it.
+            if (refreshCache.UserDataEpoch != epoch)
+            {
+                refreshCache.UserDataCache.TryRemove(cacheKey, out _);
+                refreshCache.UserDataNegativeCache.TryRemove(cacheKey, out _);
             }
 
             return userData;

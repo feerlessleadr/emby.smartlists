@@ -10,7 +10,7 @@ namespace Jellyfin.Plugin.SmartLists.Tests.Services.Shared;
 /// Pins the two predicates behind auto-refresh for the IsFavorite "Include parent favorites"
 /// option. Favoriting an album, series, season or folder fires UserDataSaved for that CONTAINER
 /// only, and the media-type caches route it to MusicAlbum/Series/Season lists - so an Audio or
-/// Episode list matching on an ancestor's favorite would never be queued. A user-data change on a
+/// Episode list matching on an ancestor's favorite would never be queued. A favorite change on a
 /// folder item therefore also queues every list that <see cref="AutoRefreshService.UsesParentFavorite(IEnumerable{ExpressionSet})"/>.
 /// </summary>
 public class AutoRefreshParentFavoriteTests
@@ -47,21 +47,51 @@ public class AutoRefreshParentFavoriteTests
     }
 
     [Fact]
-    public void IsParentFavoriteTrigger_OnlyForUserDataChangesOnFolders()
+    public void IsParentFavoriteTrigger_OnlyForFavoriteChangesOnFolders()
     {
         var album = TestItems.Album("Kind of Blue");
         var season = TestItems.SeasonOf("Season 1");
         var track = TestItems.Track("Kind of Blue", 1, 1);
-        var userId = Guid.NewGuid();
 
-        Assert.True(AutoRefreshService.IsParentFavoriteTrigger(album, userId));
-        Assert.True(AutoRefreshService.IsParentFavoriteTrigger(season, userId));
+        Assert.True(AutoRefreshService.IsParentFavoriteTrigger(album, favoriteMayHaveChanged: true));
+        Assert.True(AutoRefreshService.IsParentFavoriteTrigger(season, favoriteMayHaveChanged: true));
 
         // A leaf item is routed by its own media type already.
-        Assert.False(AutoRefreshService.IsParentFavoriteTrigger(track, userId));
+        Assert.False(AutoRefreshService.IsParentFavoriteTrigger(track, favoriteMayHaveChanged: true));
 
-        // A library change (no triggering user) is not a favorite change.
-        Assert.False(AutoRefreshService.IsParentFavoriteTrigger(album, null));
+        // Marking a season played, a play count change, etc. cannot change any parent-favorite state.
+        Assert.False(AutoRefreshService.IsParentFavoriteTrigger(season, favoriteMayHaveChanged: false));
+    }
+
+    [Fact]
+    public void FavoriteMayHaveChanged_WithPreviousState_IsExact()
+    {
+        var favorite = new UserDataState { IsFavorite = true };
+        var notFavorite = new UserDataState { IsFavorite = false };
+
+        Assert.True(AutoRefreshService.FavoriteMayHaveChanged(favorite, notFavorite, UserDataSaveReason.UpdateUserRating));
+        Assert.True(AutoRefreshService.FavoriteMayHaveChanged(notFavorite, favorite, UserDataSaveReason.UpdateUserRating));
+
+        // Played flipped, favorite didn't - whatever the save reason.
+        Assert.False(AutoRefreshService.FavoriteMayHaveChanged(new UserDataState { Played = true }, notFavorite, UserDataSaveReason.TogglePlayed));
+        Assert.False(AutoRefreshService.FavoriteMayHaveChanged(notFavorite, notFavorite, UserDataSaveReason.UpdateUserRating));
+    }
+
+    /// <summary>
+    /// First-seen events have no previous state: the saves that carry favorite toggles count
+    /// (Jellyfin's MarkFavorite saves with UpdateUserRating), mark-played and playback saves don't.
+    /// </summary>
+    [Fact]
+    public void FavoriteMayHaveChanged_FirstSeen_CountsFavoriteCarryingSaves()
+    {
+        var empty = new UserDataState();
+
+        Assert.True(AutoRefreshService.FavoriteMayHaveChanged(empty, null, UserDataSaveReason.UpdateUserRating));
+        Assert.True(AutoRefreshService.FavoriteMayHaveChanged(empty, null, UserDataSaveReason.UpdateUserData));
+        Assert.True(AutoRefreshService.FavoriteMayHaveChanged(new UserDataState { IsFavorite = true }, null, UserDataSaveReason.Import));
+
+        Assert.False(AutoRefreshService.FavoriteMayHaveChanged(empty, null, UserDataSaveReason.TogglePlayed));
+        Assert.False(AutoRefreshService.FavoriteMayHaveChanged(new UserDataState { Played = true }, null, UserDataSaveReason.PlaybackFinished));
     }
 
     /// <summary>
