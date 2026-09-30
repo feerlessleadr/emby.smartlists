@@ -1169,8 +1169,7 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                 }
 
                 // Check if the playlist (or its bumper rules) has user-specific rules that reference this user
-                if (HasUserSpecificExpression(playlist.ExpressionSets, userId) ||
-                    HasUserSpecificExpression(playlist.Bumpers?.ExpressionSets, userId))
+                if (PlaylistUserResolver.HasRulePinnedToAnyUser(playlist, [PlaylistUserResolver.NormalizeUserId(userId)]))
                 {
                     return true;
                 }
@@ -1231,36 +1230,6 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
         {
             return saveReason is UserDataSaveReason.UpdateUserRating or UserDataSaveReason.TogglePlayed or UserDataSaveReason.UpdateUserData ||
                    state.Played || state.PlayCount > 0 || state.IsFavorite || state.LastPlayedDate.HasValue;
-        }
-
-        /// <summary>
-        /// Checks whether any expression in the given sets is user-specific and references the given user.
-        /// </summary>
-        private static bool HasUserSpecificExpression(List<ExpressionSet>? expressionSets, Guid userId)
-        {
-            if (expressionSets == null)
-            {
-                return false;
-            }
-
-            var normalizedTriggeringUserId = userId.ToString("N");
-            foreach (var expressionSet in expressionSets)
-            {
-                if (expressionSet.Expressions == null) continue;
-
-                foreach (var expression in expressionSet.Expressions)
-                {
-                    // Check if this expression is user-specific and references our user explicitly
-                    // Normalize UserId to "N" format for comparison
-                    if (!string.IsNullOrEmpty(expression.UserId) &&
-                        NormalizeUserIdForComparison(expression.UserId) == normalizedTriggeringUserId)
-                    {
-                        return true;
-                    }
-                }
-            }
-
-            return false;
         }
 
         /// <summary>

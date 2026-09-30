@@ -486,10 +486,15 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                         .Select(PlaylistUserResolver.NormalizeUserId)
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
-                    userPlaylistsToProcess = dto.UserPlaylists
-                        .Where(mapping => !string.IsNullOrEmpty(mapping.UserId) &&
-                                          triggeringUserSet.Contains(PlaylistUserResolver.NormalizeUserId(mapping.UserId)))
-                        .ToList();
+                    // Only narrow to the triggering users' own copies when no rule is pinned to one of
+                    // them: a rule like "Is Favorite for user B" reads B's data for every user's copy.
+                    if (!PlaylistUserResolver.HasRulePinnedToAnyUser(dto, triggeringUserSet))
+                    {
+                        userPlaylistsToProcess = dto.UserPlaylists
+                            .Where(mapping => !string.IsNullOrEmpty(mapping.UserId) &&
+                                              triggeringUserSet.Contains(PlaylistUserResolver.NormalizeUserId(mapping.UserId)))
+                            .ToList();
+                    }
                 }
             }
 
