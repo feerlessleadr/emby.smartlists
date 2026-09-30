@@ -158,7 +158,17 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
                 {
                     UserId = normalizedUserId,
                     IncludeUnwatchedSeries = r.IncludeUnwatchedSeries,
+                    IncludeParentFavorite = r.IncludeParentFavorite,
+                    OnlyParentFavorite = r.OnlyParentFavorite,
                 };
+
+                // Parent-aware IsFavorite is handled HERE: user-specific fields return before
+                // BuildParentAwareListExpression below is ever reached.
+                var parentAwareFavorite = BuildParentAwareFavoriteExpression<T>(userSpecificExpression, param, logger);
+                if (parentAwareFavorite != null)
+                {
+                    return parentAwareFavorite;
+                }
 
                 return BuildUserSpecificExpression<T>(userSpecificExpression, param, logger);
             }
@@ -329,6 +339,57 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// IsFavorite counterpart of BuildParentAwareFieldExpression, with the same OR/AND convention
+        /// as BuildCombinedStringEnumerableExpression: a rule that WANTS favorites (Equal true /
+        /// NotEqual false) ORs the item's own flag with the ancestor flag, a rule that EXCLUDES
+        /// favorites (Equal false / NotEqual true) ANDs them. Returns null when neither flag is set,
+        /// so the plain per-user comparison is built instead.
+        /// </summary>
+        private static System.Linq.Expressions.Expression? BuildParentAwareFavoriteExpression<T>(Expression r, ParameterExpression param, ILogger? logger)
+        {
+            if (r.MemberName != "IsFavorite")
+            {
+                return null;
+            }
+
+            var onlyParent = r.OnlyParentFavorite == true;
+            var includeParent = r.IncludeParentFavorite == true;
+
+            if (onlyParent && !includeParent)
+            {
+                // Same as BuildParentAwareFieldExpression: OnlyParent with no parent source is
+                // always-false, so the engine does not fall back to the item's own flag.
+                logger?.LogDebug("SmartLists building IsFavorite expression: OnlyParentFavorite is true but IncludeParentFavorite is not set - returning always-false");
+                return System.Linq.Expressions.Expression.Constant(false);
+            }
+
+            if (!includeParent)
+            {
+                return null;
+            }
+
+            // BuildExpr only calls this with T = Operand and an already-normalized UserId
+            var method = typeof(T).GetMethod(nameof(Operand.GetParentIsFavoriteByUser), [typeof(string)])!;
+            var parentCall = System.Linq.Expressions.Expression.Call(param, method, System.Linq.Expressions.Expression.Constant(r.UserId));
+
+            // Validates the operator and the boolean target before anything is combined
+            var parentExpr = BuildUserSpecificBooleanExpression(r, parentCall, logger);
+            if (onlyParent)
+            {
+                logger?.LogDebug("SmartLists building IsFavorite expression with ONLY parent favorites");
+                return parentExpr;
+            }
+
+            var itemExpr = BuildUserSpecificExpression<T>(r, param, logger);
+            var wantsFavorite = (r.Operator == "Equal") == ValidateAndParseBooleanValue(r.TargetValue, r.MemberName, logger);
+
+            logger?.LogDebug("SmartLists building IsFavorite expression with parent favorites ({Logic})", wantsFavorite ? "OR" : "AND");
+            return wantsFavorite
+                ? System.Linq.Expressions.Expression.OrElse(itemExpr, parentExpr)
+                : System.Linq.Expressions.Expression.AndAlso(itemExpr, parentExpr);
         }
 
         /// <summary>

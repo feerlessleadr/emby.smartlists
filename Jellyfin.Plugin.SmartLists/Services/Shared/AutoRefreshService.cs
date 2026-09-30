@@ -15,6 +15,7 @@ using Jellyfin.Plugin.SmartLists.Services.Abstractions;
 using Jellyfin.Plugin.SmartLists.Utilities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Library;
+using MediaBrowser.Model.Entities;
 using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SmartLists.Services.Shared
@@ -78,6 +79,12 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
         // Collection caches (similar to playlist caches)
         private readonly ConcurrentDictionary<string, HashSet<string>> _ruleTypeToCollectionsCache = new();
         private readonly ConcurrentDictionary<string, HashSet<string>> _mediaTypeToCollectionsCache = new();
+
+        // Synthetic media-type key for lists whose rules use IsFavorite with the parent-favorite option.
+        // Favoriting an album, series, season or folder fires UserDataSaved for that CONTAINER only, and the
+        // media-type keys route it to MusicAlbum/Series/Season lists - so Audio/Episode lists that match on
+        // an ancestor's favorite would never be queued. A favorite change on a folder item also reads this key.
+        private const string ParentFavoriteRoute = "@ParentFavorite";
 
         private volatile bool _cacheInitialized = false;
         private readonly object _cacheInvalidationLock = new();
@@ -266,12 +273,17 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             if (_disposed) return;
             if (e.Item == null) return;
 
+            // Synchronous and before the refresh is queued: a refresh later in the current queue
+            // drain - including the one this change is about to trigger - must not read this
+            // (item, user) pair's pre-save user data from the per-drain cache.
+            _refreshQueueService.InvalidateUserData(e.Item.Id, e.UserId);
+
             // Handle playback status changes (IsPlayed, PlayCount, etc.)
             // Now uses batching like OnItemUpdated to handle bulk operations (e.g., marking series as watched)
             try
             {
                 // Check relevance first to avoid unnecessary DB calls for progress updates
-                if (IsRelevantUserDataChange(e))
+                if (IsRelevantUserDataChange(e, out var favoriteMayHaveChanged))
                 {
                     var item = _libraryManager.GetItemById(e.Item.Id);
                     if (item == null)
@@ -279,6 +291,8 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                         _logger.LogDebug("Item {ItemId} not found when processing user data change - item may have been deleted", e.Item.Id);
                         return;
                     }
+
+                    var parentFavoriteTrigger = IsParentFavoriteTrigger(item, favoriteMayHaveChanged);
 
                     _logger.LogDebug("Relevant user data change for item '{ItemName}' by user {UserId} - queuing for batched refresh",
                         item.Name, e.UserId);
@@ -289,7 +303,7 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                         {
                             // Use batched processing to handle bulk operations efficiently
                             // The triggeringUserId allows filtering to OnAllChanges playlists only
-                            await HandleLibraryChangeAsync(item, LibraryChangeType.Updated, triggeringUserId: e.UserId).ConfigureAwait(false);
+                            await HandleLibraryChangeAsync(item, LibraryChangeType.Updated, triggeringUserId: e.UserId, parentFavoriteTrigger: parentFavoriteTrigger).ConfigureAwait(false);
                         }
                         catch (Exception ex)
                         {
@@ -308,8 +322,9 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             }
         }
 
-        private bool IsRelevantUserDataChange(UserDataSaveEventArgs e)
+        private bool IsRelevantUserDataChange(UserDataSaveEventArgs e, out bool favoriteMayHaveChanged)
         {
+            favoriteMayHaveChanged = false;
             if (e.UserData == null) return false;
 
             try
@@ -345,6 +360,8 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                             itemId, previousState.Played, currentState.Played, previousState.PlayCount, currentState.PlayCount,
                             previousState.IsFavorite, currentState.IsFavorite);
 
+                        favoriteMayHaveChanged = FavoriteMayHaveChanged(currentState, previousState, e.SaveReason);
+
                         // Update cache with new state
                         _userDataStateCache[cacheKey] = currentState;
 
@@ -364,10 +381,10 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                     // First time seeing this item/user combo - always store state for future comparisons
                     _userDataStateCache[cacheKey] = currentState;
 
-                    // For first-time events, only trigger if it's a meaningful state (watched, favorite, etc.)
+                    // For first-time events, only trigger on explicit user edits or a meaningful state (watched, favorite, etc.)
                     // This avoids triggering on initial "empty" state loads
-                    var isMeaningfulState = currentState.Played || currentState.PlayCount > 0 ||
-                                          currentState.IsFavorite || currentState.LastPlayedDate.HasValue;
+                    var isMeaningfulState = IsRelevantFirstUserDataEvent(currentState, e.SaveReason);
+                    favoriteMayHaveChanged = isMeaningfulState && FavoriteMayHaveChanged(currentState, null, e.SaveReason);
 
                     if (isMeaningfulState)
                     {
@@ -381,6 +398,7 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error checking UserData relevance - assuming relevant");
+                favoriteMayHaveChanged = true;
                 return true; // Default to processing if we can't determine,
             }
         }
@@ -413,7 +431,7 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             }
         }
 
-        private async Task HandleLibraryChangeAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null)
+        private async Task HandleLibraryChangeAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null, bool parentFavoriteTrigger = false)
         {
             try
             {
@@ -431,11 +449,11 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                 }
 
                 // Find playlists that might be affected by this change
-                var affectedPlaylistIds = await GetAffectedPlaylistsAsync(item, changeType, triggeringUserId).ConfigureAwait(false);
+                var affectedPlaylistIds = await GetAffectedPlaylistsAsync(item, changeType, triggeringUserId, parentFavoriteTrigger).ConfigureAwait(false);
 
                 // Find collections that might be affected by this change
                 // Collections don't use user-specific fields, so no triggeringUserId needed
-                var affectedCollectionIds = await GetAffectedCollectionsAsync(item, changeType).ConfigureAwait(false);
+                var affectedCollectionIds = await GetAffectedCollectionsAsync(item, changeType, parentFavoriteTrigger).ConfigureAwait(false);
 
                 if (affectedPlaylistIds.Any() || affectedCollectionIds.Any())
                 {
@@ -535,7 +553,9 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                 return; // Skip playlists without ID
             }
 
-            foreach (var mediaType in mediaTypes)
+            // Parent-favorite lists are also registered under ParentFavoriteRoute (media-type cache only)
+            var routeKeys = UsesParentFavorite(playlist) ? mediaTypes.Append(ParentFavoriteRoute) : mediaTypes;
+            foreach (var mediaType in routeKeys)
             {
                 _mediaTypeToPlaylistsCache.AddOrUpdate(
                     mediaType,
@@ -783,7 +803,9 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                 return;
             }
 
-            foreach (var mediaType in mediaTypes)
+            // Parent-favorite lists are also registered under ParentFavoriteRoute (media-type cache only)
+            var routeKeys = UsesParentFavorite(collection.ExpressionSets) ? mediaTypes.Append(ParentFavoriteRoute) : mediaTypes;
+            foreach (var mediaType in routeKeys)
             {
                 _mediaTypeToCollectionsCache.AddOrUpdate(
                     mediaType,
@@ -867,19 +889,19 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             }
         }
 
-        private async Task<List<string>> GetAffectedPlaylistsAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null)
+        private async Task<List<string>> GetAffectedPlaylistsAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null, bool parentFavoriteTrigger = false)
         {
             // Use cache for performance optimization if available
             if (_cacheInitialized)
             {
-                return await GetAffectedPlaylistsFromCacheAsync(item, changeType, triggeringUserId).ConfigureAwait(false);
+                return await GetAffectedPlaylistsFromCacheAsync(item, changeType, triggeringUserId, parentFavoriteTrigger).ConfigureAwait(false);
             }
 
             // Fallback to checking all playlists if cache not ready
-            return await GetAffectedPlaylistsFallbackAsync(item, changeType, triggeringUserId).ConfigureAwait(false);
+            return await GetAffectedPlaylistsFallbackAsync(item, changeType, triggeringUserId, parentFavoriteTrigger).ConfigureAwait(false);
         }
 
-        private async Task<List<string>> GetAffectedPlaylistsFromCacheAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null)
+        private async Task<List<string>> GetAffectedPlaylistsFromCacheAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null, bool parentFavoriteTrigger = false)
         {
             var affectedPlaylists = new HashSet<string>();
 
@@ -904,6 +926,13 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                         // Snapshot to avoid concurrent modification during enumeration
                         affectedPlaylists.UnionWith(playlistIds.ToArray());
                     }
+
+                    // (Un)favoriting a container can flip the parent-favorite state of every item below it
+                    if (parentFavoriteTrigger &&
+                        _mediaTypeToPlaylistsCache.TryGetValue(ParentFavoriteRoute, out var parentFavoritePlaylistIds))
+                    {
+                        affectedPlaylists.UnionWith(parentFavoritePlaylistIds.ToArray());
+                    }
                 }
 
                 // Apply filtering based on change type and auto-refresh mode
@@ -926,11 +955,11 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error using cache to determine affected playlists for item {ItemName} - falling back", item.Name);
-                return await GetAffectedPlaylistsFallbackAsync(item, changeType, triggeringUserId).ConfigureAwait(false);
+                return await GetAffectedPlaylistsFallbackAsync(item, changeType, triggeringUserId, parentFavoriteTrigger).ConfigureAwait(false);
             }
         }
 
-        private async Task<List<string>> GetAffectedPlaylistsFallbackAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null)
+        private async Task<List<string>> GetAffectedPlaylistsFallbackAsync(BaseItem item, LibraryChangeType changeType, Guid? triggeringUserId = null, bool parentFavoriteTrigger = false)
         {
             var affectedPlaylists = new List<string>();
 
@@ -945,8 +974,10 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                     // Check if this playlist should be refreshed based on the change type
                     if (ShouldPlaylistRefreshForChangeType(playlist, changeType, triggeringUserId))
                     {
-                        // Additional filtering: check if the item type matches the playlist's media types
-                        if (IsItemRelevantToPlaylist(item, playlist))
+                        // Additional filtering: check if the item type matches the playlist's media types,
+                        // or a container's user data changed and the playlist matches on parent favorites
+                        if (IsItemRelevantToPlaylist(item, playlist) ||
+                            (parentFavoriteTrigger && UsesParentFavorite(playlist)))
                         {
                             // User-specific filtering for UserData events (playback status changes)
                             if (triggeringUserId.HasValue && !IsUserRelevantToPlaylist(triggeringUserId.Value, playlist))
@@ -975,19 +1006,19 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             return affectedPlaylists;
         }
 
-        private async Task<List<string>> GetAffectedCollectionsAsync(BaseItem item, LibraryChangeType changeType)
+        private async Task<List<string>> GetAffectedCollectionsAsync(BaseItem item, LibraryChangeType changeType, bool parentFavoriteTrigger = false)
         {
             // Use cache for performance optimization if available
             if (_cacheInitialized)
             {
-                return await GetAffectedCollectionsFromCacheAsync(item, changeType).ConfigureAwait(false);
+                return await GetAffectedCollectionsFromCacheAsync(item, changeType, parentFavoriteTrigger).ConfigureAwait(false);
             }
 
             // Fallback to checking all collections if cache not ready
-            return await GetAffectedCollectionsFallbackAsync(item, changeType).ConfigureAwait(false);
+            return await GetAffectedCollectionsFallbackAsync(item, changeType, parentFavoriteTrigger).ConfigureAwait(false);
         }
 
-        private async Task<List<string>> GetAffectedCollectionsFromCacheAsync(BaseItem item, LibraryChangeType changeType)
+        private async Task<List<string>> GetAffectedCollectionsFromCacheAsync(BaseItem item, LibraryChangeType changeType, bool parentFavoriteTrigger = false)
         {
             var affectedCollections = new HashSet<string>();
 
@@ -1024,6 +1055,13 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                                 item.Name, seriesCollectionIds.Count, episode.SeriesId);
                         }
                     }
+
+                    // (Un)favoriting a container can flip the parent-favorite state of every item below it
+                    if (parentFavoriteTrigger &&
+                        _mediaTypeToCollectionsCache.TryGetValue(ParentFavoriteRoute, out var parentFavoriteCollectionIds))
+                    {
+                        affectedCollections.UnionWith(parentFavoriteCollectionIds.ToArray());
+                    }
                 }
 
                 // Apply filtering based on change type and auto-refresh mode
@@ -1037,11 +1075,11 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error using cache to determine affected collections for item {ItemName} - falling back", item.Name);
-                return await GetAffectedCollectionsFallbackAsync(item, changeType).ConfigureAwait(false);
+                return await GetAffectedCollectionsFallbackAsync(item, changeType, parentFavoriteTrigger).ConfigureAwait(false);
             }
         }
 
-        private async Task<List<string>> GetAffectedCollectionsFallbackAsync(BaseItem item, LibraryChangeType changeType)
+        private async Task<List<string>> GetAffectedCollectionsFallbackAsync(BaseItem item, LibraryChangeType changeType, bool parentFavoriteTrigger = false)
         {
             var affectedCollections = new List<string>();
 
@@ -1056,8 +1094,10 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                     // Check if this collection should be refreshed based on the change type
                     if (ShouldCollectionRefreshForChangeType(collection, changeType))
                     {
-                        // Additional filtering: check if the item type matches the collection's media types
-                        if (IsItemRelevantToCollection(item, collection))
+                        // Additional filtering: check if the item type matches the collection's media types,
+                        // or a container's user data changed and the collection matches on parent favorites
+                        if (IsItemRelevantToCollection(item, collection) ||
+                            (parentFavoriteTrigger && UsesParentFavorite(collection.ExpressionSets)))
                         {
                             if (!string.IsNullOrEmpty(collection.Id))
                             {
@@ -1129,8 +1169,7 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
                 }
 
                 // Check if the playlist (or its bumper rules) has user-specific rules that reference this user
-                if (HasUserSpecificExpression(playlist.ExpressionSets, userId) ||
-                    HasUserSpecificExpression(playlist.Bumpers?.ExpressionSets, userId))
+                if (PlaylistUserResolver.HasRulePinnedToAnyUser(playlist, [PlaylistUserResolver.NormalizeUserId(userId)]))
                 {
                     return true;
                 }
@@ -1145,33 +1184,52 @@ namespace Jellyfin.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Checks whether any expression in the given sets is user-specific and references the given user.
+        /// Checks whether any rule in the given sets is an IsFavorite rule with the parent-favorite option.
         /// </summary>
-        private static bool HasUserSpecificExpression(List<ExpressionSet>? expressionSets, Guid userId)
+        internal static bool UsesParentFavorite(IEnumerable<ExpressionSet>? expressionSets)
         {
-            if (expressionSets == null)
-            {
-                return false;
-            }
+            return expressionSets?.Any(set => set?.Expressions?.Any(expr => expr != null && Core.SmartList.IsParentAwareFavoriteExpression(expr)) == true) == true;
+        }
 
-            var normalizedTriggeringUserId = userId.ToString("N");
-            foreach (var expressionSet in expressionSets)
-            {
-                if (expressionSet.Expressions == null) continue;
+        private static bool UsesParentFavorite(SmartPlaylistDto playlist)
+        {
+            return UsesParentFavorite(playlist.ExpressionSets) || UsesParentFavorite(playlist.Bumpers?.ExpressionSets);
+        }
 
-                foreach (var expression in expressionSet.Expressions)
-                {
-                    // Check if this expression is user-specific and references our user explicitly
-                    // Normalize UserId to "N" format for comparison
-                    if (!string.IsNullOrEmpty(expression.UserId) &&
-                        NormalizeUserIdForComparison(expression.UserId) == normalizedTriggeringUserId)
-                    {
-                        return true;
-                    }
-                }
-            }
+        /// <summary>
+        /// (Un)favoriting a container (album, series, season, folder) can flip the parent-favorite
+        /// state of everything beneath it. Other user-data changes on a container (played, play count)
+        /// cannot, so they don't queue the parent-favorite lists.
+        /// </summary>
+        internal static bool IsParentFavoriteTrigger(BaseItem item, bool favoriteMayHaveChanged)
+        {
+            return favoriteMayHaveChanged && item.IsFolder;
+        }
 
-            return false;
+        /// <summary>
+        /// Whether a relevant user-data event may have flipped the favorite flag. With a previous
+        /// state that is exact. A first-seen event has no previous state, so the saves that carry
+        /// favorite changes (favorite/rating toggle, API update) or a now-favorite state count.
+        /// </summary>
+        internal static bool FavoriteMayHaveChanged(UserDataState current, UserDataState? previous, UserDataSaveReason saveReason)
+        {
+            return previous != null
+                ? current.IsFavorite != previous.IsFavorite
+                : saveReason is UserDataSaveReason.UpdateUserRating or UserDataSaveReason.UpdateUserData || current.IsFavorite;
+        }
+
+        /// <summary>
+        /// Whether the first UserDataSaved event seen for an (item, user) pair is worth routing.
+        /// The state cache starts empty on every restart and is capped, so first-seen events are
+        /// common. An explicit user edit (favorite toggle, mark played/unplayed, API update) always
+        /// counts: un-favoriting an album or marking an item unplayed leaves an empty-looking state
+        /// that still changes list contents. Playback and import saves count only with a meaningful
+        /// state, which skips the initial empty loads.
+        /// </summary>
+        internal static bool IsRelevantFirstUserDataEvent(UserDataState state, UserDataSaveReason saveReason)
+        {
+            return saveReason is UserDataSaveReason.UpdateUserRating or UserDataSaveReason.TogglePlayed or UserDataSaveReason.UpdateUserData ||
+                   state.Played || state.PlayCount > 0 || state.IsFavorite || state.LastPlayedDate.HasValue;
         }
 
         /// <summary>

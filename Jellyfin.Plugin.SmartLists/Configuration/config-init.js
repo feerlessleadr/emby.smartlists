@@ -348,6 +348,9 @@
         if (SmartLists.updateAllGenresOptionsVisibility) {
             SmartLists.updateAllGenresOptionsVisibility(page);
         }
+        if (SmartLists.updateAllIsFavoriteOptionsVisibility) {
+            SmartLists.updateAllIsFavoriteOptionsVisibility(page);
+        }
         if (SmartLists.updateAllAudioLanguagesOptionsVisibility) {
             SmartLists.updateAllAudioLanguagesOptionsVisibility(page);
         }
@@ -2967,6 +2970,9 @@
         }
         if (SmartLists.updateAllGenresOptionsVisibility) {
             SmartLists.updateAllGenresOptionsVisibility(page);
+        }
+        if (SmartLists.updateAllIsFavoriteOptionsVisibility) {
+            SmartLists.updateAllIsFavoriteOptionsVisibility(page);
         }
         if (SmartLists.updateAllAudioLanguagesOptionsVisibility) {
             SmartLists.updateAllAudioLanguagesOptionsVisibility(page);

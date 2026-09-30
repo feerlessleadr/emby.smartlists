@@ -2,8 +2,10 @@ using System.Reflection;
 using Jellyfin.Plugin.SmartLists.Core.QueryEngine;
 using Jellyfin.Plugin.SmartLists.Services.Shared;
 using Jellyfin.Plugin.SmartLists.Tests.Support;
+using Jellyfin.Plugin.SmartLists.Utilities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
+using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Playlists;
 
 namespace Jellyfin.Plugin.SmartLists.Tests.Services.Shared;
@@ -186,5 +188,93 @@ public class RefreshCacheStalenessTests
         cache.OnContainerRemoved(boxSet.Id);
 
         Assert.Empty(ExtractCollections(movie, cache, depth: 1));
+    }
+
+    /// <summary>
+    /// A favorite set mid-drain (UserDataSaved) must not be shadowed by the value an earlier refresh
+    /// in that drain cached - parent-favorite refreshes read every album's user data on their way.
+    /// Only the saved (item, user) pair goes; other users and other items keep their entries.
+    /// </summary>
+    [Fact]
+    public void InvalidateUserData_DropsOnlyThatItemAndUsersEntry()
+    {
+        var album = TestItems.Album("Kind of Blue");
+        var otherAlbum = TestItems.Album("Blue Train");
+
+        var cache = new RefreshQueueService.RefreshCache();
+        TestItems.SeedUserData(cache, album, TestItems.User);
+        TestItems.SeedUserData(cache, album, TestItems.OtherUser);
+        TestItems.SeedUserData(cache, otherAlbum, TestItems.User);
+        TestItems.SeedNoUserData(cache, album, TestItems.User);
+
+        cache.InvalidateUserData(album.Id, TestItems.User.Id);
+
+        Assert.False(cache.UserDataCache.ContainsKey((album.Id, TestItems.User.Id)));
+        Assert.False(cache.UserDataNegativeCache.ContainsKey((album.Id, TestItems.User.Id)));
+        Assert.True(cache.UserDataCache.ContainsKey((album.Id, TestItems.OtherUser.Id)));
+        Assert.True(cache.UserDataCache.ContainsKey((otherAlbum.Id, TestItems.User.Id)));
+    }
+
+    /// <summary>
+    /// A save that lands while a cache-miss read is in flight must not leave that read's (possibly
+    /// pre-save) value cached: the invalidation ran before the read stored it, so nothing else would
+    /// ever remove it, and every later refresh in the drain would read the stale favorite state.
+    /// The value is still returned to the caller that raced the save.
+    /// </summary>
+    [Fact]
+    public void GetCachedUserData_SaveDuringRead_ReturnsButDoesNotCacheTheValue()
+    {
+        var album = TestItems.Album("Kind of Blue");
+        var cache = new RefreshQueueService.RefreshCache();
+        var stale = new UserItemData { Key = album.Id.ToString("N"), IsFavorite = false };
+        var manager = ReadingUserData(stale, () => cache.InvalidateUserData(album.Id, TestItems.User.Id));
+
+        var result = UserDataCacheHelper.GetCachedUserData(TestItems.User, album, cache, manager);
+
+        Assert.Same(stale, result);
+        Assert.False(cache.UserDataCache.ContainsKey((album.Id, TestItems.User.Id)));
+        Assert.False(cache.UserDataNegativeCache.ContainsKey((album.Id, TestItems.User.Id)));
+    }
+
+    [Fact]
+    public void GetCachedUserData_NoSaveDuringRead_CachesTheValue()
+    {
+        var album = TestItems.Album("Kind of Blue");
+        var cache = new RefreshQueueService.RefreshCache();
+        var data = new UserItemData { Key = album.Id.ToString("N"), IsFavorite = true };
+
+        UserDataCacheHelper.GetCachedUserData(TestItems.User, album, cache, ReadingUserData(data, () => { }));
+
+        Assert.Same(data, cache.UserDataCache[(album.Id, TestItems.User.Id)]);
+    }
+
+    /// <summary>
+    /// An <see cref="IUserDataManager"/> whose GetUserData runs <c>duringRead</c> (e.g. a concurrent
+    /// save's invalidation) before returning <c>value</c>.
+    /// </summary>
+    public class ReadingUserDataManager : DispatchProxy
+    {
+        public UserItemData? Value { get; set; }
+
+        public Action DuringRead { get; set; } = () => { };
+
+        protected override object? Invoke(MethodInfo? targetMethod, object?[]? args)
+        {
+            if (targetMethod?.Name == "GetUserData")
+            {
+                DuringRead();
+                return Value;
+            }
+
+            throw new NotSupportedException($"ReadingUserDataManager: {targetMethod?.Name} is not stubbed.");
+        }
+    }
+
+    private static IUserDataManager ReadingUserData(UserItemData? value, Action duringRead)
+    {
+        var proxy = DispatchProxy.Create<IUserDataManager, ReadingUserDataManager>();
+        ((ReadingUserDataManager)proxy).Value = value;
+        ((ReadingUserDataManager)proxy).DuringRead = duringRead;
+        return proxy;
     }
 }

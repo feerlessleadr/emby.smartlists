@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using Jellyfin.Extensions;
 using Jellyfin.Plugin.SmartLists.Utilities;
 using MediaBrowser.Controller.Entities;
@@ -104,6 +105,12 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
         }
     }
 
+    /// <summary>
+    /// The ONE ancestor walk. It serves both the ancestor-inherited Tags/Studios/Genres
+    /// (<see cref="Resolve"/>) and parent favorites (<see cref="ResolveAncestors"/>), so both
+    /// share a single set of boundary, cycle, depth-cap, truncation, owner-fallback and
+    /// library-union rules. Do NOT add a second walker next to this one.
+    /// </summary>
     internal static class AncestorValueResolver
     {
         // Runaway/cycle insurance ONLY; it must never bind. Measured real depth in the dev
@@ -140,6 +147,43 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
             ILibraryManager libraryManager,
             ConcurrentDictionary<Guid, AncestorValues> memo,
             ILogger? logger)
+            => Walk(item, libraryManager, memo, AncestorValues.Empty, static (acc, node) => acc.Union(node), logger);
+
+        /// <summary>
+        /// Every ancestor NODE of <paramref name="item"/> — the same walk as <see cref="Resolve"/>
+        /// with the same memo keying, EXCLUDING the item itself. Parent favorites need the nodes
+        /// rather than folded values because favorite state is per user and is read through the
+        /// per-refresh user-data cache. Order: library/top first, immediate parent last.
+        /// The returned lists are shared through the memo — never mutate them.
+        /// </summary>
+        /// <param name="item">The item whose ancestors are walked.</param>
+        /// <param name="libraryManager">Library manager used for the library (CollectionFolder) union.</param>
+        /// <param name="memo">Per-refresh memo keyed by ANCESTOR NODE id.</param>
+        /// <param name="logger">Optional logger.</param>
+        /// <returns>The ancestor nodes; never null.</returns>
+        internal static IReadOnlyList<BaseItem> ResolveAncestors(
+            BaseItem item,
+            ILibraryManager libraryManager,
+            ConcurrentDictionary<Guid, IReadOnlyList<BaseItem>> memo,
+            ILogger? logger)
+            => Walk<IReadOnlyList<BaseItem>>(item, libraryManager, memo, Array.Empty<BaseItem>(), AppendAncestor, logger);
+
+        /// <summary>
+        /// Returns a NEW list holding <paramref name="acc"/> plus <paramref name="node"/>, or
+        /// <paramref name="acc"/> unchanged when the node is null or already present (a library
+        /// found by both GetCollectionFolders and path matching contributes once).
+        /// </summary>
+        private static IReadOnlyList<BaseItem> AppendAncestor(IReadOnlyList<BaseItem> acc, BaseItem node)
+            => node is null || acc.Any(a => a.Id == node.Id) ? acc : [.. acc, node];
+
+        private static TAcc Walk<TAcc>(
+            BaseItem item,
+            ILibraryManager libraryManager,
+            ConcurrentDictionary<Guid, TAcc> memo,
+            TAcc empty,
+            Func<TAcc, BaseItem, TAcc> union,
+            ILogger? logger)
+            where TAcc : class
         {
             // MEMO-FIRST on the raw ParentId Guid — do NOT call GetParent() before this line.
             // GetParent() is `ParentId.IsEmpty() ? null : LibraryManager.GetItemById(ParentId)`,
@@ -158,12 +202,12 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
                 // still counts in both cases: GetCollectionFolders resolves independently of the
                 // parent chain, so returning Empty here would drop library values for these items
                 // exactly the way the old one-level extractors dropped season values in #495.
-                return GetLibraryValues(item, libraryManager, logger);
+                return GetLibraryValues(item, libraryManager, empty, union, logger);
             }
 
             var chain = new List<BaseItem>();
             var visited = new HashSet<Guid>();
-            AncestorValues? seed = null;
+            TAcc? seed = null;
             var truncated = false;
 
             while (node is not null && !IsWalkBoundary(node))
@@ -186,13 +230,13 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
                 // Library values are resolved from the deepest node reached. GetCollectionFolders
                 // walks independently of our chain, so it is valid (and required) even when the
                 // chain was truncated — dropping it on truncation would silently reproduce #495.
-                seed = GetLibraryValues(chain[^1], libraryManager, logger);
+                seed = GetLibraryValues(chain[^1], libraryManager, empty, union, logger);
             }
 
             var acc = seed;
             for (var i = chain.Count - 1; i >= 0; i--)
             {
-                acc = acc.Union(chain[i]);
+                acc = union(acc, chain[i]);
 
                 // NEVER memoize a truncated (partial) result. A truncated walk is missing the TOP
                 // of the chain, so caching it would make later walks return a value that depends on
@@ -206,12 +250,18 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
         private static bool IsWalkBoundary(BaseItem node)
             => node is AggregateFolder || node is UserRootFolder || node is UserView;
 
-        private static AncestorValues GetLibraryValues(BaseItem anchor, ILibraryManager libraryManager, ILogger? logger)
+        private static TAcc GetLibraryValues<TAcc>(
+            BaseItem anchor,
+            ILibraryManager libraryManager,
+            TAcc empty,
+            Func<TAcc, BaseItem, TAcc> union,
+            ILogger? logger)
+            where TAcc : class
         {
             try
             {
-                var acc = AncestorValues.Empty;
-                foreach (var folder in libraryManager.GetCollectionFolders(anchor)) { acc = acc.Union(folder); }
+                var acc = empty;
+                foreach (var folder in libraryManager.GetCollectionFolders(anchor)) { acc = union(acc, folder); }
 
                 // Symlinked and plugin-created virtual libraries: GetCollectionFolders can resolve to the
                 // SOURCE library instead of the virtual one, so it returns a wrong-but-non-empty result and
@@ -225,7 +275,7 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
                 // the chain-top folder, which lives under the same library location as its contents.
                 foreach (var folder in LibraryManagerHelper.GetLibraryFoldersForItemPath(libraryManager, anchor))
                 {
-                    acc = acc.Union(folder);
+                    acc = union(acc, folder);
                 }
 
                 return acc;
@@ -233,7 +283,7 @@ namespace Jellyfin.Plugin.SmartLists.Core.QueryEngine
             catch (Exception ex)
             {
                 logger?.LogWarning(ex, "SmartLists failed to resolve library values for '{Name}'", anchor.Name);
-                return AncestorValues.Empty;
+                return empty;
             }
         }
     }

@@ -69,7 +69,8 @@ namespace Jellyfin.Plugin.SmartLists.Core
         {
             return expr != null
                 && !FieldRegistry.IsExpensiveField(expr.MemberName)
-                && !IsParentAwareListExpression(expr);
+                && !IsParentAwareListExpression(expr)
+                && !IsParentAwareFavoriteExpression(expr);
         }
 
         internal static bool IsParentAwareListExpression(Expression expr)
@@ -77,6 +78,15 @@ namespace Jellyfin.Plugin.SmartLists.Core
             return (expr.MemberName == "Tags" && (expr.IncludeParentTagsEffective || expr.OnlyParentTags == true)) ||
                    (expr.MemberName == "Studios" && (expr.IncludeParentStudiosEffective || expr.OnlyParentStudios == true)) ||
                    (expr.MemberName == "Genres" && (expr.IncludeParentGenresEffective || expr.OnlyParentGenres == true));
+        }
+
+        // Kept separate from IsParentAwareListExpression on purpose: that one means Tags/Studios/Genres
+        // and is consumed by ParentValuesPrefilterResolver. IsFavorite is a CHEAP (UserData) field, so
+        // without this gate a parent-favorite rule would run in Phase 1 against an operand whose
+        // ParentIsFavoriteByUser was never filled, and silently match nothing.
+        internal static bool IsParentAwareFavoriteExpression(Expression expr)
+        {
+            return expr.MemberName == "IsFavorite" && (expr.IncludeParentFavorite == true || expr.OnlyParentFavorite == true);
         }
 
         public SmartList(SmartPlaylistDto dto)
@@ -522,6 +532,10 @@ namespace Jellyfin.Plugin.SmartLists.Core
                         hashBuilder.Append(expr.IncludeParentGenresEffective);
                         hashBuilder.Append(':');
                         hashBuilder.Append(expr.OnlyParentGenres?.ToString() ?? "null");
+                        hashBuilder.Append(':');
+                        hashBuilder.Append(expr.IncludeParentFavorite?.ToString() ?? "null");
+                        hashBuilder.Append(':');
+                        hashBuilder.Append(expr.OnlyParentFavorite?.ToString() ?? "null");
                         hashBuilder.Append(':');
                         hashBuilder.Append(expr.IncludeCollectionOnly?.ToString() ?? "null");
                         hashBuilder.Append(':');
@@ -3927,9 +3941,11 @@ namespace Jellyfin.Plugin.SmartLists.Core
                 // Only add each parent group when the folded IncludeParent*Effective flag is true.
                 // OnlyParent* alone does NOT trigger extraction: with no source it compiles to
                 // constant-false (Engine), so requesting the walk would be wasted work.
+                // IsFavorite follows the same rule with IncludeParentFavorite/OnlyParentFavorite.
                 AddParentGroupIfIncluded(requirements, expr.MemberName, "Tags",    expr.IncludeParentTagsEffective,    ExtractionGroup.ParentTags);
                 AddParentGroupIfIncluded(requirements, expr.MemberName, "Studios", expr.IncludeParentStudiosEffective, ExtractionGroup.ParentStudios);
                 AddParentGroupIfIncluded(requirements, expr.MemberName, "Genres",  expr.IncludeParentGenresEffective,  ExtractionGroup.ParentGenres);
+                AddParentGroupIfIncluded(requirements, expr.MemberName, "IsFavorite", expr.IncludeParentFavorite,     ExtractionGroup.ParentFavorite);
 
                 // Collect SimilarTo expressions for reference item lookup
                 if (expr.MemberName == "SimilarTo")

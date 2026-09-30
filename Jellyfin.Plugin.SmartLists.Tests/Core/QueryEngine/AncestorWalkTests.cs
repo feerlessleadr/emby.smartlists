@@ -413,6 +413,109 @@ public class AncestorWalkTests
     }
 
     // ---------------------------------------------------------------------------------------
+    // ResolveAncestors - the same walk, returning the nodes (parent favorites)
+    // ---------------------------------------------------------------------------------------
+
+    private static IReadOnlyList<BaseItem> Ancestors(BaseItem item, ConcurrentDictionary<Guid, IReadOnlyList<BaseItem>>? memo = null)
+        => AncestorValueResolver.ResolveAncestors(item, BaseItem.LibraryManager, memo ?? new(), null);
+
+    /// <summary>
+    /// Parent favorites walk EVERY ancestor - season, series, top folder AND the library, which is
+    /// only reachable through GetCollectionFolders - and never the item itself (its own favorite
+    /// is evaluated separately). Order is library/top first, immediate parent last.
+    /// </summary>
+    [Fact]
+    public void ResolveAncestors_ReturnsChainAndLibrary_ExcludingTheItem()
+    {
+        var library = TestItems.PhysicalFolder("Serier");
+        var top = TestItems.PhysicalFolder("shows");
+        TestLibraryManager.CollectionFolders[top.Id] = [library];
+
+        var series = TestItems.Show("The IT Crowd");
+        var season = TestItems.SeasonOf("Season 1");
+        var episode = TestItems.Ep("The IT Crowd", 1, 1, show: series);
+
+        TestItems.Under(series, top);
+        TestItems.Under(season, series);
+        TestItems.Under(episode, season);
+
+        var ancestors = Ancestors(episode);
+
+        Assert.Equal([library.Id, top.Id, series.Id, season.Id], ancestors.Select(a => a.Id).ToArray());
+        Assert.DoesNotContain(ancestors, a => a.Id == episode.Id);
+    }
+
+    /// <summary>
+    /// Same memo-first contract as <see cref="Resolve_MemoHitCostsNoLibraryCalls"/>: the second
+    /// track of an album resolves from the memo with zero ILibraryManager calls.
+    /// </summary>
+    [Fact]
+    public void ResolveAncestors_MemoHitCostsNoLibraryCalls()
+    {
+        var top = TestItems.PhysicalFolder("music");
+        var album = TestItems.Album("Kind of Blue");
+        var first = TestItems.Track("Kind of Blue", 1, 1);
+        var second = TestItems.Track("Kind of Blue", 1, 2);
+
+        TestItems.Under(album, top);
+        TestItems.Under(first, album);
+        TestItems.Under(second, album);
+
+        var memo = new ConcurrentDictionary<Guid, IReadOnlyList<BaseItem>>();
+        var firstAncestors = Ancestors(first, memo);
+
+        var before = TestLibraryManager.CallsFor(album.Id, top.Id, second.Id);
+        var secondAncestors = Ancestors(second, memo);
+        var after = TestLibraryManager.CallsFor(album.Id, top.Id, second.Id);
+
+        Assert.Equal(before, after);
+        Assert.Same(firstAncestors, secondAncestors);
+        Assert.Contains(secondAncestors, a => a.Id == album.Id);
+    }
+
+    /// <summary>
+    /// The AggregateFolder boundary is excluded, and an item directly under it with no library
+    /// has no ancestors at all.
+    /// </summary>
+    [Fact]
+    public void ResolveAncestors_StopsAtWalkBoundary()
+    {
+        var root = new AggregateFolder { Id = Guid.NewGuid(), Name = "root" };
+        root.SortName = "root";
+
+        var top = TestItems.PhysicalFolder("movies");
+        TestItems.Under(top, root);
+
+        var movie = TestItems.Under(TestItems.Mov("Boundary Movie"), top);
+        var ancestors = Ancestors(movie);
+
+        Assert.Equal([top.Id], ancestors.Select(a => a.Id).ToArray());
+
+        var direct = TestItems.Under(TestItems.Mov("Directly Under Root"), root);
+        Assert.Empty(Ancestors(direct));
+    }
+
+    /// <summary>
+    /// Extras reach their owner through GetOwner(), exactly as in the values walk.
+    /// </summary>
+    [Fact]
+    public void ResolveAncestors_ExtraResolvesViaOwner()
+    {
+        var top = TestItems.PhysicalFolder("shows");
+        var series = TestItems.Show("Modern Family");
+        TestItems.Under(series, top);
+
+        var extra = TestItems.Mov("Gag reel season 1");
+        extra.OwnerId = series.Id;
+        TestLibraryManager.Items[extra.Id] = extra;
+
+        var ancestors = Ancestors(extra);
+
+        Assert.Contains(ancestors, a => a.Id == series.Id);
+        Assert.Contains(ancestors, a => a.Id == top.Id);
+    }
+
+    // ---------------------------------------------------------------------------------------
     // Walk output fed through the compiled rule
     // ---------------------------------------------------------------------------------------
 
@@ -567,6 +670,60 @@ public class AncestorWalkTests
             Hash(new Expression("Tags", "Equal", "Anime") { IncludeParentTags = true, OnlyParentTags = true }));
     }
 
+    /// <summary>
+    /// IsFavorite is a CHEAP (UserData) field, so - exactly like parent Tags - this predicate is the
+    /// only thing that keeps a parent-favorite rule out of Phase 1, where ParentIsFavoriteByUser is
+    /// never filled and the rule would silently match nothing.
+    /// </summary>
+    [Fact]
+    public void IsNonExpensiveExpression_ClassifiesParentFavoriteRuleAsExpensive()
+    {
+        var method = typeof(SmartList).GetMethod(
+            "IsNonExpensiveExpression",
+            BindingFlags.NonPublic | BindingFlags.Static)!;
+
+        bool IsNonExpensive(Expression expression) => (bool)method.Invoke(null, [expression])!;
+
+        Assert.True(IsNonExpensive(new Expression("IsFavorite", "Equal", "true")));
+        Assert.False(IsNonExpensive(new Expression("IsFavorite", "Equal", "true") { IncludeParentFavorite = true }));
+        Assert.False(IsNonExpensive(new Expression("IsFavorite", "Equal", "true") { OnlyParentFavorite = true }));
+    }
+
+    [Fact]
+    public void GenerateRuleSetHash_DiffersWhenParentFavoriteToggles()
+    {
+        var plain = Hash(new Expression("IsFavorite", "Equal", "true"));
+        var include = Hash(new Expression("IsFavorite", "Equal", "true") { IncludeParentFavorite = true });
+        var only = Hash(new Expression("IsFavorite", "Equal", "true") { IncludeParentFavorite = true, OnlyParentFavorite = true });
+
+        Assert.NotEqual(plain, include);
+        Assert.NotEqual(plain, only);
+        Assert.NotEqual(include, only);
+    }
+
+    /// <summary>
+    /// The ParentFavorite extraction group - the one that routes a list into two-phase filtering
+    /// and makes Factory walk the ancestors - is requested only by an IsFavorite rule with
+    /// IncludeParentFavorite. OnlyParentFavorite alone compiles to constant false, so the walk
+    /// would be wasted work; the flag on another field means nothing.
+    /// </summary>
+    [Fact]
+    public void FieldRequirements_AddsParentFavoriteGroupOnlyWhenIncluded()
+    {
+        static bool HasBit(Expression expression)
+            => FieldRequirements.Analyze([new ExpressionSet { Expressions = [expression] }])
+                .RequiredGroups.HasFlag(ExtractionGroup.ParentFavorite);
+
+        Assert.False(HasBit(new Expression("IsFavorite", "Equal", "true")));
+        Assert.True(HasBit(new Expression("IsFavorite", "Equal", "true") { IncludeParentFavorite = true }));
+        Assert.True(HasBit(new Expression("IsFavorite", "Equal", "true") { IncludeParentFavorite = true, OnlyParentFavorite = true }));
+        Assert.False(HasBit(new Expression("IsFavorite", "Equal", "true") { OnlyParentFavorite = true }));
+        Assert.False(HasBit(new Expression("Tags", "Equal", "Anime") { IncludeParentFavorite = true }));
+
+        // The group is expensive (not in CheapExtractionGroups), which is what triggers two-phase filtering.
+        Assert.Equal(ExtractionGroup.None, ExtractionGroup.ParentFavorite & FieldRegistry.CheapExtractionGroups);
+    }
+
     private static string Hash(Expression expression)
     {
         var dto = new SmartPlaylistDto
@@ -610,5 +767,35 @@ public class AncestorWalkTests
         Assert.Contains("IncludeParentAlbumTags", roundTripped, StringComparison.Ordinal);
         Assert.DoesNotContain("Effective", roundTripped, StringComparison.Ordinal);
         Assert.DoesNotContain("IncludeParentTags", roundTripped, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Default off means nothing on disk: the parent-favorite keys are omitted when unset, so
+    /// re-saving an existing list writes exactly what it wrote before. When set they round-trip.
+    /// </summary>
+    [Fact]
+    public void Expression_ParentFavoriteFlags_OmittedWhenNullAndRoundTripWhenSet()
+    {
+        var plain = JsonSerializer.Serialize(new Expression("IsFavorite", "Equal", "true"), SmartListFileSystem.SharedJsonOptions);
+
+        Assert.DoesNotContain("ParentFavorite", plain, StringComparison.Ordinal);
+
+        var set = JsonSerializer.Serialize(
+            new Expression("IsFavorite", "Equal", "true") { IncludeParentFavorite = true, OnlyParentFavorite = true },
+            SmartListFileSystem.SharedJsonOptions);
+
+        Assert.Contains("IncludeParentFavorite", set, StringComparison.Ordinal);
+        Assert.Contains("OnlyParentFavorite", set, StringComparison.Ordinal);
+
+        var roundTripped = JsonSerializer.Deserialize<Expression>(set, SmartListFileSystem.SharedJsonOptions)!;
+
+        Assert.True(roundTripped.IncludeParentFavorite);
+        Assert.True(roundTripped.OnlyParentFavorite);
+
+        const string Json = """{"MemberName":"IsFavorite","Operator":"Equal","TargetValue":"true","IncludeParentFavorite":true}""";
+        var fromDisk = JsonSerializer.Deserialize<Expression>(Json, SmartListFileSystem.SharedJsonOptions)!;
+
+        Assert.True(fromDisk.IncludeParentFavorite);
+        Assert.Null(fromDisk.OnlyParentFavorite);
     }
 }

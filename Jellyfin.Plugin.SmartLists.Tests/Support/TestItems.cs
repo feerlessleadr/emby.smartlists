@@ -345,13 +345,15 @@ public static class TestItems
         BaseItem item,
         User user,
         bool played = false,
-        DateTime? lastPlayed = null)
+        DateTime? lastPlayed = null,
+        bool isFavorite = false)
     {
         cache.UserDataCache[(item.Id, user.Id)] = new UserItemData
         {
             Key = item.Id.ToString("N"),
             Played = played,
             LastPlayedDate = lastPlayed,
+            IsFavorite = isFavorite,
         };
     }
 
