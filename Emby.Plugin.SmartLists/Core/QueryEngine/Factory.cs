@@ -3747,76 +3747,13 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         }
 
         /// <summary>
-        /// Tries to get children using common reflection methods (GetChildren and GetLinkedChildren).
-        /// </summary>
-        private static BaseItem[]? TryGetChildrenViaReflection(BaseItem container, User user, ILogger? logger, string containerType)
-        {
-            // Approach 1: Try GetChildren method using reflection
-            try
-            {
-                var getChildrenMethod = container.GetType().GetMethod("GetChildren", [typeof(User), typeof(bool)]);
-                if (getChildrenMethod != null)
-                {
-                    var result = getChildrenMethod.Invoke(container, [user, true]);
-                    if (result is IEnumerable<BaseItem> childrenEnumerable)
-                    {
-                        BaseItem[] children = [.. childrenEnumerable];
-                        logger?.LogDebug("{ContainerType} '{ContainerName}' GetChildren() returned {ItemCount} items", containerType, container.Name, children.Length);
-                        return children;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.LogDebug(ex, "GetChildren method failed for {ContainerType} '{ContainerName}'", containerType, container.Name);
-            }
-
-            // Approach 2: Try GetLinkedChildren method using reflection
-            try
-            {
-                var getLinkedChildrenMethod = container.GetType().GetMethod("GetLinkedChildren", Type.EmptyTypes);
-                if (getLinkedChildrenMethod != null)
-                {
-                    var linkedChildren = getLinkedChildrenMethod.Invoke(container, null);
-                    if (linkedChildren is IEnumerable<BaseItem> linkedEnumerable)
-                    {
-                        BaseItem[] children = [.. linkedEnumerable];
-                        logger?.LogDebug("{ContainerType} '{ContainerName}' GetLinkedChildren() returned {ItemCount} items", containerType, container.Name, children.Length);
-                        return children;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.LogDebug(ex, "GetLinkedChildren method failed for {ContainerType} '{ContainerName}'", containerType, container.Name);
-            }
-
-            return null;
-        }
-
-        /// <summary>
-        /// Gets direct children of a container (collection or playlist) using reflection.
+        /// Gets the members of a container (collection or playlist) through Emby's typed APIs.
         /// </summary>
         private static BaseItem[] GetContainerDirectChildren(BaseItem container, User user, ILibraryManager libraryManager, ILogger? logger, string containerType)
         {
-            // Try common reflection methods first
-            var children = TryGetChildrenViaReflection(container, user, logger, containerType);
-            if (children != null && children.Length > 0)
-            {
-                return children;
-            }
-
-            // Fallback to ParentId query (direct children only, not recursive)
-            var query = new InternalItemsQuery(user)
-            {
-                ParentIds = [container.InternalId],
-                Recursive = false,
-            };
-
-            children = [.. libraryManager.GetItemsResult(query).Items];
-            logger?.LogDebug("{ContainerType} '{ContainerName}' ParentId query returned {ItemCount} items", containerType, container.Name, children.Length);
-
-            return children ?? [];
+            var children = ContainerMembers.Get(libraryManager, container, user, logger);
+            logger?.LogDebug("{ContainerType} '{ContainerName}' returned {ItemCount} members", containerType, container.Name, children.Length);
+            return children;
         }
 
         /// <summary>
@@ -3915,46 +3852,15 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
 
                     var allPlaylists = libraryManager.GetItemsResult(playlistQuery).Items;
 
-                    // Filter playlists to only include those the user owns or that are public
-                    var accessiblePlaylists = new List<BaseItem>();
+                    // Emby's user-scoped query already returns only the playlists this user can see (their own,
+                    // shared with them, or public), so no separate owner/public filtering is needed here. (Jellyfin
+                    // returned every playlist and this code had to filter by OwnerUserId / OpenAccess by reflection.)
+                    var accessiblePlaylists = new List<BaseItem>(allPlaylists.Length);
                     foreach (var playlist in allPlaylists)
                     {
-                        // Check if user owns the playlist
-                        bool isOwner = playlist.GetType().GetProperty("OwnerUserId")?.GetValue(playlist) is Guid ownerId
-                            && ownerId == user.Id;
-
-                        // Check if playlist is public
-                        bool isPublic = false;
-                        var openAccessProperty = playlist.GetType().GetProperty("OpenAccess");
-                        if (openAccessProperty != null)
-                        {
-                            isPublic = (bool)(openAccessProperty.GetValue(playlist) ?? false);
-                        }
-                        else
-                        {
-                            // Fallback to Shares check using reflection
-                            var sharesProperty = playlist.GetType().GetProperty("Shares");
-                            if (sharesProperty != null)
-                            {
-                                var sharesValue = sharesProperty.GetValue(playlist);
-                                if (sharesValue is System.Collections.IEnumerable shares)
-                                {
-                                    isPublic = shares.Cast<object>().Any();
-                                }
-                            }
-                        }
-
-                        if (isOwner || isPublic)
-                        {
-                            accessiblePlaylists.Add(playlist);
-                            logger?.LogDebug("Playlist '{PlaylistName}' accessible: Owner={IsOwner}, Public={IsPublic}",
-                                playlist.Name, isOwner, isPublic);
-                        }
-                        else
-                        {
-                            logger?.LogDebug("Playlist '{PlaylistName}' filtered out: not owned by user and not public",
-                                playlist.Name);
-                        }
+                        accessiblePlaylists.Add(playlist);
+                        logger?.LogDebug("Playlist '{PlaylistName}' accessible to user {UserId} (Public={IsPublic})",
+                            playlist.Name, user.Id, playlist.IsPublic);
                     }
 
                     cache.AllPlaylists = [.. accessiblePlaylists];
@@ -4158,58 +4064,10 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         }
 
         /// <summary>
-        /// Gets direct children of a playlist using reflection.
+        /// Gets the items of a playlist through Emby's typed API.
         /// </summary>
         private static BaseItem[] GetPlaylistDirectChildren(BaseItem playlist, User user, ILibraryManager libraryManager, ILogger? logger)
-        {
-            // Try common reflection methods first
-            var children = TryGetChildrenViaReflection(playlist, user, logger, "Playlist");
-            if (children != null && children.Length > 0)
-            {
-                return children;
-            }
-
-            // Fallback: Try accessing LinkedChildren property directly (playlist-specific)
-            try
-            {
-                var linkedChildrenProp = playlist.GetType().GetProperty("LinkedChildren");
-                if (linkedChildrenProp != null)
-                {
-                    var linkedChildrenValue = linkedChildrenProp.GetValue(playlist);
-                    if (linkedChildrenValue is Array linkedChildrenArray)
-                    {
-                        var itemIds = new List<Guid>();
-                        foreach (var linkedChild in linkedChildrenArray)
-                        {
-                            var itemIdProp = linkedChild.GetType().GetProperty("ItemId");
-                            if (itemIdProp != null)
-                            {
-                                var itemIdValue = itemIdProp.GetValue(linkedChild);
-                                if (itemIdValue is Guid guidValue)
-                                {
-                                    itemIds.Add(guidValue);
-                                }
-                            }
-                        }
-
-                        children = itemIds
-                            .Select(id => libraryManager.GetItemById(id))
-                            .Where(item => item != null)
-                            .Cast<BaseItem>()
-                            .ToArray();
-
-                        logger?.LogDebug("Playlist '{PlaylistName}' LinkedChildren property returned {ItemCount} items", playlist.Name, children.Length);
-                        return children;
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.LogDebug(ex, "LinkedChildren property access failed for playlist '{PlaylistName}'", playlist.Name);
-            }
-
-            return [];
-        }
+            => ContainerMembers.Get(libraryManager, playlist, user, logger);
 
         /// <summary>
         /// Gets a user by ID using the user manager.

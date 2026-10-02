@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Threading;
 
 using MediaBrowser.Model.Entities;
 using MediaBrowser.Controller.Entities;
@@ -773,6 +774,7 @@ namespace Emby.Plugin.SmartLists.Core
             User user, RefreshQueueService.RefreshCache refreshCache, IUserDataManager? userDataManager = null, ILogger? logger = null, Action<int, int>? progressCallback = null)
         {
             var stopwatch = Stopwatch.StartNew();
+            Interlocked.Exchange(ref _skippedItemErrors, 0);
 
             // Clear similarity scores from any previous runs
             _similarityScores.Clear();
@@ -934,7 +936,7 @@ namespace Emby.Plugin.SmartLists.Core
                 }
                 catch (Exception ex)
                 {
-                    logger?.LogDebug(ex, "Error merging SimilarTo comparison fields into expensive-field requirements");
+                    logger?.LogWarning(ex, "Error merging SimilarTo comparison fields into expensive-field requirements");
                 }
 
                 // Early validation of additional users to prevent exceptions during item processing
@@ -1055,7 +1057,7 @@ namespace Emby.Plugin.SmartLists.Core
                     {
                         referenceUniverse.AddRange(
                             containerCandidates
-                                .SelectMany(c => GetContainerMembers(c, user, refreshCache, logger))
+                                .SelectMany(c => GetContainerMembers(libraryManager, c, user, refreshCache, logger))
                                 .Where(m => m != null && !IsContainerKind(m)));
                     }
 
@@ -1362,7 +1364,7 @@ namespace Emby.Plugin.SmartLists.Core
                     }
                     catch (Exception ex)
                     {
-                        logger?.LogDebug(ex, "Error extracting Random Group Selection key '{GroupBy}' for item '{ItemName}'. Skipping item for grouping.", groupBy, item.Name);
+                        logger?.LogWarning(ex, "Error extracting Random Group Selection key '{GroupBy}' for item '{ItemName}'. Skipping item for grouping.", groupBy, item.Name);
                     }
                 }
 
@@ -1716,6 +1718,7 @@ namespace Emby.Plugin.SmartLists.Core
         /// <paramref name="visitedCollectionIds"/> still deduplicates the appended results.
         /// </summary>
         private static void AddCollectionWithNestedCollections(
+            ILibraryManager libraryManager,
             BaseItem collection,
             List<BaseItem> matchingCollections,
             HashSet<long> visitedCollectionIds,
@@ -1753,7 +1756,7 @@ namespace Emby.Plugin.SmartLists.Core
             // If we haven't reached max depth, look for nested collections
             if (currentDepth < maxDepth)
             {
-                var childItems = GetCollectionChildren(collection, user, logger);
+                var childItems = GetCollectionChildren(libraryManager, collection, user, logger);
                 foreach (var child in childItems)
                 {
                     // Check if child is a collection
@@ -1766,6 +1769,7 @@ namespace Emby.Plugin.SmartLists.Core
                         }
 
                         AddCollectionWithNestedCollections(
+                            libraryManager,
                             child,
                             matchingCollections,
                             visitedCollectionIds,
@@ -1782,42 +1786,10 @@ namespace Emby.Plugin.SmartLists.Core
         }
 
         /// <summary>
-        /// Gets children of a collection using reflection.
+        /// Gets the members of a collection or playlist through Emby's typed APIs.
         /// </summary>
-        private static BaseItem[] GetCollectionChildren(BaseItem collection, User user, ILogger? logger)
-        {
-            try
-            {
-                // Try GetChildren method
-                var getChildrenMethod = collection.GetType().GetMethod("GetChildren", [typeof(User), typeof(bool)]);
-                if (getChildrenMethod != null)
-                {
-                    var children = getChildrenMethod.Invoke(collection, [user, true]);
-                    if (children is IEnumerable<BaseItem> childrenEnumerable)
-                    {
-                        return [.. childrenEnumerable];
-                    }
-                }
-
-                // Try GetLinkedChildren method
-                var getLinkedChildrenMethod = collection.GetType().GetMethod("GetLinkedChildren", Type.EmptyTypes);
-                if (getLinkedChildrenMethod != null)
-                {
-                    var linkedChildren = getLinkedChildrenMethod.Invoke(collection, null);
-                    if (linkedChildren is IEnumerable<BaseItem> linkedEnumerable)
-                    {
-                        return [.. linkedEnumerable];
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger?.LogDebug(ex, "Error getting children for collection '{CollectionName}'", collection.Name);
-            }
-
-            return [];
-        }
-
+        private static BaseItem[] GetCollectionChildren(ILibraryManager libraryManager, BaseItem collection, User user, ILogger? logger)
+            => ContainerMembers.Get(libraryManager, collection, user, logger);
         /// <summary>
         /// True when the item is a container candidate kind (BoxSet or Playlist).
         /// </summary>
@@ -1857,7 +1829,7 @@ namespace Emby.Plugin.SmartLists.Core
                 var uniqueMembers = new Dictionary<long, BaseItem>();
                 foreach (var container in containerCandidates)
                 {
-                    var members = GetContainerMembers(container, user, refreshCache, logger)
+                    var members = GetContainerMembers(libraryManager, container, user, refreshCache, logger)
                         .Where(m => m != null && !IsContainerKind(m))
                         .ToArray();
                     membersByContainer[container.InternalId] = members;
@@ -2111,7 +2083,7 @@ namespace Emby.Plugin.SmartLists.Core
         /// Factory-built CollectionDirectChildren cache is only read, never seeded, because its
         /// builder treats a non-empty cache as fully built.
         /// </summary>
-        private static BaseItem[] GetContainerMembers(BaseItem container, User user, RefreshQueueService.RefreshCache refreshCache, ILogger? logger)
+        private static BaseItem[] GetContainerMembers(ILibraryManager libraryManager, BaseItem container, User user, RefreshQueueService.RefreshCache refreshCache, ILogger? logger)
         {
             if (container.GetClientTypeName() == ItemKinds.BoxSet)
             {
@@ -2125,7 +2097,7 @@ namespace Emby.Plugin.SmartLists.Core
                     return cachedChildren;
                 }
 
-                var children = GetCollectionChildren(container, user, logger);
+                var children = GetCollectionChildren(libraryManager, container, user, logger);
                 refreshCache.CollectionChildItems.TryAdd(container.InternalId, children);
                 return children;
             }
@@ -2135,8 +2107,8 @@ namespace Emby.Plugin.SmartLists.Core
                 return cachedMembers;
             }
 
-            // GetCollectionChildren's GetChildren/GetLinkedChildren reflection works for playlists too
-            var members = GetCollectionChildren(container, user, logger);
+            // GetCollectionChildren (ContainerMembers) handles playlists as well as collections
+            var members = GetCollectionChildren(libraryManager, container, user, logger);
             refreshCache.PlaylistChildItems.TryAdd(container.InternalId, members);
             return members;
         }
@@ -2200,6 +2172,7 @@ namespace Emby.Plugin.SmartLists.Core
                     var encounteredIds = trackGroups ? new HashSet<long>() : null;
 
                     AddCollectionWithNestedCollections(
+                        libraryManager,
                         root,
                         walked,
                         visitedCollectionIds,
@@ -2295,7 +2268,7 @@ namespace Emby.Plugin.SmartLists.Core
                     }
                     else
                     {
-                        children = GetCollectionChildren(collection, user, logger);
+                        children = GetCollectionChildren(libraryManager, collection, user, logger);
                         uncachedChildren.Add((collection.InternalId, children));
                     }
 
@@ -3147,7 +3120,7 @@ namespace Emby.Plugin.SmartLists.Core
                                 }
                                 catch (Exception ex)
                                 {
-                                    logger?.LogDebug(ex, "Error processing rule at set {SetIndex}, expression {ExprIndex}", setIndex, exprIndex);
+                                    logger?.LogWarning(ex, "Error processing rule at set {SetIndex}, expression {ExprIndex}", setIndex, exprIndex);
                                 }
                             }
 
@@ -3252,7 +3225,7 @@ namespace Emby.Plugin.SmartLists.Core
                             }
                             catch (Exception ex)
                             {
-                                logger?.LogDebug(ex, "Error processing item '{ItemName}' in expensive-only path. Skipping item.", item.Name);
+                                ReportSkippedItem(logger, ex, item.Name, "expensive-only path");
                                 // Skip this item and continue with others
                             }
                         }
@@ -3336,7 +3309,7 @@ namespace Emby.Plugin.SmartLists.Core
                                     }
                                     catch (Exception ex)
                                     {
-                                        logger?.LogDebug(ex, "Error evaluating non-expensive rules for item '{ItemName}' in set {SetIndex}. Assuming rules don't match.", item.Name, setIndex);
+                                        logger?.LogWarning(ex, "Error evaluating non-expensive rules for item '{ItemName}' in set {SetIndex}. Assuming rules don't match.", item.Name, setIndex);
                                         // Continue to next rule set
                                     }
                                 }
@@ -3357,7 +3330,7 @@ namespace Emby.Plugin.SmartLists.Core
                             }
                             catch (Exception ex)
                             {
-                                logger?.LogDebug(ex, "Error in Phase 1 filtering for item '{ItemName}'. Skipping item.", item.Name);
+                                ReportSkippedItem(logger, ex, item.Name, "Phase 1 filtering");
                             }
                         }
 
@@ -3485,7 +3458,7 @@ namespace Emby.Plugin.SmartLists.Core
                             }
                             catch (Exception ex)
                             {
-                                logger?.LogDebug(ex, "Error processing item '{ItemName}' in two-phase path. Skipping item.", item.Name);
+                                ReportSkippedItem(logger, ex, item.Name, "two-phase path");
                                 // Skip this item and continue with others
                             }
                         }
@@ -3523,6 +3496,34 @@ namespace Emby.Plugin.SmartLists.Core
         /// <summary>
         /// Simple item processing fallback method with error handling.
         /// </summary>
+        private const int MaxLoggedItemErrors = 5;
+
+        private int _skippedItemErrors;
+
+        /// <summary>
+        /// Reports an item that was skipped because evaluating it threw. The first few per refresh are logged at
+        /// Warning with the exception (a bug that hits every item would otherwise be invisible at Debug level, which
+        /// is how a null <c>MediaType</c> silently dropped every collection); after that they drop to Debug so a
+        /// systematic failure cannot flood the log.
+        /// </summary>
+        private void ReportSkippedItem(ILogger? logger, Exception ex, string itemName, string stage)
+        {
+            var count = Interlocked.Increment(ref _skippedItemErrors);
+            if (count <= MaxLoggedItemErrors)
+            {
+                logger?.LogWarning(ex, "Error processing item '{ItemName}' in {Stage}. Skipping item.", itemName, stage);
+            }
+            else
+            {
+                if (count == MaxLoggedItemErrors + 1)
+                {
+                    logger?.LogWarning("More items are failing to evaluate for smart list '{ListName}'; further per-item errors are logged at Debug level.", Name);
+                }
+
+                logger?.LogDebug(ex, "Error processing item '{ItemName}' in {Stage}. Skipping item.", itemName, stage);
+            }
+        }
+
         private List<BaseItem> ProcessItemsSimple(IEnumerable<BaseItem> items, ILibraryManager libraryManager,
             User user, IUserDataManager? userDataManager, ILogger? logger, FieldRequirements fieldReqs,
             IReadOnlyDictionary<int, OperandFactory.ReferenceMetadata>? groupReferenceMetadata, List<string> similarityComparisonFields,
@@ -3619,7 +3620,7 @@ namespace Emby.Plugin.SmartLists.Core
                     }
                     catch (Exception ex)
                     {
-                        logger?.LogDebug(ex, "Error processing item '{ItemName}' in simple path. Skipping item.", item.Name);
+                        ReportSkippedItem(logger, ex, item.Name, "simple path");
                         // Skip this item and continue with others
                     }
                 }
