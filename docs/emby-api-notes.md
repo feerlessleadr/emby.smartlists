@@ -224,3 +224,13 @@ Run with a throwaway plugin (`SmartListsEmbySpike`, net8.0, referencing only `Me
 - `BaseItem.Genres`/`Studios`/`Tags`/`Artists`/`Album` load lazily from the library (`EnsureTaggedItemsLoaded` -> `GetItemLinks`, then `IItemRepository.OnItemLinksFilled`). `MarkTaggedItemsLoaded()` marks them loaded. Performance implication on large libraries: unmeasured.
 - `BaseItem.UpdateRatingToItems(BaseItem[])` assigns nothing on a locked item (`IsLocked = true`); it ranks ratings with `ILocalizationManager.GetRatingLevel(string)`.
 - `IUserManager.Users` is obsolete; use `GetUserList(new UserQuery())` (all users when unfiltered). `ILibraryManager.GetCollectionFolders(BaseItem)` returns `Folder[]`; `GetItemList` returns `BaseItem[]`.
+
+## Phase 4 runtime results (real plugin services on Emby 4.10.1.0, via temporary debug endpoint)
+- Plugin loads; `IServerEntryPoint` constructor injection of ILogManager/ILibraryManager/IUserManager/IPlaylistManager/ICollectionManager/IUserDataManager/IProviderManager/IFileSystem/IServerApplicationPaths/IItemRepository all resolve. Plugin log lines appear in `embyserver.txt` as `SmartLists: <Class>: ...`.
+- Playlist create (155 Movies) and collection create (155 items) work; membership read back through REST matches (collection membership via `CollectionIds` verified indirectly: the service diff reports match REST children counts 10 -> 1 -> 0).
+- Playlist update in place (remove-all-then-add): counts 0 -> 9 -> 1 -> 10 correct, same playlist id.
+- Collection update via add/remove diff: 10 -> 1 -> 0 correct, same id.
+- `Public` flip true/false persists: visible to the second user when public, hidden again when private. Private playlist is not visible to non-owner.
+- Without a stored id the service creates a duplicate playlist each call (expected: lookup is by `JellyfinPlaylistId`/store; the store is not used by the debug endpoint).
+- Observed: newly created collection is named without the "[Smart]" suffix, then renamed with it on the first update (cosmetic; fix when real create path is wired).
+- Not yet verified: sort title persistence, per-user (AllUsers) playlists, ImageSharp image path, People prefilter.

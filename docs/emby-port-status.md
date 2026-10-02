@@ -100,3 +100,7 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 ### Checkpoint F — phase 4 step 2 (host composed, not yet run in Emby)
 - Added `Host/EmbyLoggerProvider.cs` (MEL → Emby `ILogger`, text passed as `"{0}"` arg; ReadOnlyMemory overloads are obsolete errors), `Host/SmartListsHost.cs` (hand-built composition root, `Instance`), `Host/StartupEntryPoint.cs` (`IServerEntryPoint`), `Host/DebugService.cs` (TEMPORARY `/SmartListsDebug/Refresh?Kind=&Name=&UserName=&MediaType=&Field=&Operator=&Value=&Public=`; remove in phase 6). External list service is null.
 - Plugin builds with 0 warnings. Next: step 3 — deploy to test Emby (needs user OK to restart, remove spike DLL), hit the debug endpoint, record results in `emby-api-notes.md`.
+
+### Checkpoint G — phase 4 step 3 (runtime verification) DONE for core paths
+- Deployed `Emby.Plugin.SmartLists.dll` + `SixLabors.ImageSharp.dll` to the test Emby plugins folder; spike DLL removed. Results in `emby-api-notes.md` ("Phase 4 runtime results"). Create/update/public flip for playlists and collections all pass. Test lists deleted afterwards.
+- Remaining phase 4 gaps: sort title, AllUsers playlists, images, People prefilter, collection "[Smart]" suffix on create. Next: phase 5 (auto-refresh/events, startup migration, scheduled tasks, backups).

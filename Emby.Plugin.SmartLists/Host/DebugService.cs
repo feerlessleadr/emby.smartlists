@@ -18,6 +18,8 @@ namespace Emby.Plugin.SmartLists.Host
 
         public string Name { get; set; } = "SL Debug";
 
+        public string Id { get; set; } = "00000000-0000-0000-0000-00000000d001";
+
         public string UserName { get; set; } = "kevin";
 
         public string MediaType { get; set; } = "Movie";
@@ -29,6 +31,8 @@ namespace Emby.Plugin.SmartLists.Host
         public string Value { get; set; } = string.Empty;
 
         public bool Public { get; set; }
+
+        public string? ExistingId { get; set; }
     }
 
     // Emby discovers service methods by reflection on instances, so Get cannot be static.
@@ -50,12 +54,12 @@ namespace Emby.Plugin.SmartLists.Host
             (bool Success, string Message, string Id) result;
             if (string.Equals(r.Kind, "collection", StringComparison.OrdinalIgnoreCase))
             {
-                var dto = new SmartCollectionDto { Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType] };
+                var dto = new SmartCollectionDto { JellyfinCollectionId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType] };
                 result = host.CollectionService.RefreshAsync(dto, null, CancellationToken.None).GetAwaiter().GetResult();
             }
             else
             {
-                var dto = new SmartPlaylistDto { Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public };
+                var dto = new SmartPlaylistDto { JellyfinPlaylistId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public };
                 result = host.PlaylistService.RefreshAsync(dto, null, CancellationToken.None).GetAwaiter().GetResult();
             }
 
