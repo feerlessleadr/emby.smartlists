@@ -1,5 +1,6 @@
 using System;
 using Emby.Plugin.SmartLists.Services.Collections;
+using Emby.Plugin.SmartLists.Services.ExternalList;
 using Emby.Plugin.SmartLists.Services.Playlists;
 using Emby.Plugin.SmartLists.Services.Shared;
 using MediaBrowser.Controller;
@@ -37,6 +38,10 @@ namespace Emby.Plugin.SmartLists.Host
             LibraryManager = libraryManager;
             UserManager = userManager;
             UserDataManager = userDataManager;
+            PlaylistManager = playlistManager;
+            CollectionManager = collectionManager;
+            ProviderManager = providerManager;
+            ApplicationPaths = applicationPaths;
             ItemRepository = itemRepository;
 
             _loggerFactory = new LoggerFactory([new EmbyLoggerProvider(logManager)]);
@@ -71,6 +76,9 @@ namespace Emby.Plugin.SmartLists.Host
                 itemRepository);
             RefreshStatus.SetRefreshQueueService(RefreshQueue);
             BackupService = new BackupService(FileSystem, Log<BackupService>());
+            ManualRefresh = new ManualRefreshService(
+                userManager, libraryManager, applicationPaths, playlistManager, collectionManager, userDataManager, providerManager, fileSystem,
+                Log<ManualRefreshService>(), _loggerFactory, RefreshQueue, new ExternalListService([], Log<ExternalListService>()), itemRepository);
         }
 
         /// <summary>
@@ -83,6 +91,18 @@ namespace Emby.Plugin.SmartLists.Host
         public IUserManager UserManager { get; }
 
         public IUserDataManager UserDataManager { get; }
+
+        public IPlaylistManager PlaylistManager { get; }
+
+        public ICollectionManager CollectionManager { get; }
+
+        public IProviderManager ProviderManager { get; }
+
+        public IServerApplicationPaths ApplicationPaths { get; }
+
+        public ILoggerFactory LoggerFactory => _loggerFactory;
+
+        public IManualRefreshService ManualRefresh { get; }
 
         public IItemRepository ItemRepository { get; }
 

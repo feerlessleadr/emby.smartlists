@@ -1,10 +1,6 @@
 using System;
 using System.IO;
 using System.Reflection;
-using Jellyfin.Data;
-using Jellyfin.Database.Implementations.Entities;
-using Jellyfin.Database.Implementations.Enums;
-using Jellyfin.Extensions;
 using MediaBrowser.Controller.Library;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;

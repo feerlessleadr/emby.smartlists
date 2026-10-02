@@ -79,18 +79,10 @@
     <FrameworkReference Include="Microsoft.AspNetCore.App" />
   </ItemGroup>
 
-  <!--
-    Deferred features (not in the Emby MVP). Excluded, not deleted, so they can be brought back:
-    the collage/badge helpers need ImageSharp, which Emby does not ship and which would have to be bundled.
-  -->
-  <!--
-    Jellyfin-only code awaiting its Emby rewrite. Excluded from the build so the rest can be ported first;
-    each file is still the source of truth for the logic its replacement must carry.
-      Api\**                        MVC controllers      -> Emby IService endpoints (port phase 6)
-
-  -->
+  <!-- The end-user page and its endpoints are outside the Emby MVP (admin page only). -->
   <ItemGroup>
-    <Compile Remove="Api\**" />
+    <Compile Remove="Api\Controllers\UserPagesController.cs" />
+    <Compile Remove="Api\Controllers\UserSmartListController.cs" />
   </ItemGroup>
 
   <!--

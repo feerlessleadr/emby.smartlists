@@ -9,10 +9,9 @@ using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Jellyfin.Data.Enums;
-using Jellyfin.Database.Implementations.Entities;
 using Emby.Plugin.SmartLists.Api.Filters;
 using Emby.Plugin.SmartLists.Core;
+using Emby.Plugin.SmartLists.Host;
 using Emby.Plugin.SmartLists.Core.Constants;
 using Emby.Plugin.SmartLists.Core.Models;
 using Emby.Plugin.SmartLists.Services.Playlists;
@@ -46,98 +45,55 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
     // This attribute rewrites them all to RFC 7807 ProblemDetails on the way out, so the wire
     // contract is always { title, detail, status }. See SmartListsProblemDetailsAttribute.
     [SmartListsProblemDetails]
-    public partial class SmartListController(
-        ILogger<SmartListController> logger,
-        ILoggerFactory loggerFactory,
-        IServerApplicationPaths applicationPaths,
-        IUserManager userManager,
-        ILibraryManager libraryManager,
-        IPlaylistManager playlistManager,
-        ICollectionManager collectionManager,
-        IUserDataManager userDataManager,
-        IProviderManager providerManager,
-        IManualRefreshService manualRefreshService,
-        RefreshStatusService refreshStatusService,
-        RefreshQueueService refreshQueueService,
-        SmartListImageService imageService,
-        IBackupService backupService) : ControllerBase
+    public partial class SmartListController : ControllerBase
     {
-        private readonly ILoggerFactory _loggerFactory = loggerFactory;
-        private readonly IServerApplicationPaths _applicationPaths = applicationPaths;
-        private readonly IUserManager _userManager = userManager;
-        private readonly ILibraryManager _libraryManager = libraryManager;
-        private readonly IPlaylistManager _playlistManager = playlistManager;
-        private readonly ICollectionManager _collectionManager = collectionManager;
-        private readonly IUserDataManager _userDataManager = userDataManager;
-        private readonly IProviderManager _providerManager = providerManager;
-        private readonly IManualRefreshService _manualRefreshService = manualRefreshService;
-        private readonly RefreshStatusService _refreshStatusService = refreshStatusService;
-        private readonly RefreshQueueService _refreshQueueService = refreshQueueService;
-        private readonly SmartListImageService _imageService = imageService;
-        private readonly IBackupService _backupService = backupService;
+        private readonly ILogger<SmartListController> logger;
+        private readonly SmartListsHost _host;
+        private readonly ILoggerFactory _loggerFactory;
+        private readonly IServerApplicationPaths _applicationPaths;
+        private readonly IUserManager _userManager;
+        private readonly ILibraryManager _libraryManager;
+        private readonly IPlaylistManager _playlistManager;
+        private readonly ICollectionManager _collectionManager;
+        private readonly IUserDataManager _userDataManager;
+        private readonly IProviderManager _providerManager;
+        private readonly IManualRefreshService _manualRefreshService;
+        private readonly RefreshStatusService _refreshStatusService;
+        private readonly RefreshQueueService _refreshQueueService;
+        private readonly SmartListImageService _imageService;
+        private readonly IBackupService _backupService;
 
-        private Services.Playlists.PlaylistStore GetPlaylistStore()
+        /// <summary>
+        /// Initializes a new instance of the <see cref="SmartListController"/> class. Emby has no MVC container, so the
+        /// controller is built by the Emby endpoint adapter from the plugin host's service graph.
+        /// </summary>
+        /// <param name="host">The plugin host.</param>
+        public SmartListController(SmartListsHost host)
         {
-            var fileSystem = new SmartListFileSystem(_applicationPaths);
-            var playlistLogger = _loggerFactory.CreateLogger<Services.Playlists.PlaylistStore>();
-            return new Services.Playlists.PlaylistStore(fileSystem, playlistLogger);
+            _host = host;
+            logger = host.CreateLogger<SmartListController>();
+            _loggerFactory = host.LoggerFactory;
+            _applicationPaths = host.ApplicationPaths;
+            _userManager = host.UserManager;
+            _libraryManager = host.LibraryManager;
+            _playlistManager = host.PlaylistManager;
+            _collectionManager = host.CollectionManager;
+            _userDataManager = host.UserDataManager;
+            _providerManager = host.ProviderManager;
+            _manualRefreshService = host.ManualRefresh;
+            _refreshStatusService = host.RefreshStatus;
+            _refreshQueueService = host.RefreshQueue;
+            _imageService = host.ImageService;
+            _backupService = host.BackupService;
         }
 
-        private Services.Collections.CollectionStore GetCollectionStore()
-        {
-            var fileSystem = new SmartListFileSystem(_applicationPaths);
-            var collectionLogger = _loggerFactory.CreateLogger<Services.Collections.CollectionStore>();
-            return new Services.Collections.CollectionStore(fileSystem, collectionLogger);
-        }
+        private Services.Playlists.PlaylistStore GetPlaylistStore() => _host.PlaylistStore;
 
-        private Services.Playlists.PlaylistService GetPlaylistService()
-        {
-            try
-            {
-                // Use a generic wrapper logger that implements ILogger<PlaylistService>
-                var playlistServiceLogger = new ServiceLoggerAdapter<Services.Playlists.PlaylistService>(logger);
-                return new Services.Playlists.PlaylistService(_userManager, _libraryManager, _playlistManager, _userDataManager, playlistServiceLogger, _imageService);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to create PlaylistService");
-                throw;
-            }
-        }
+        private Services.Collections.CollectionStore GetCollectionStore() => _host.CollectionStore;
 
-        private Services.Collections.CollectionService GetCollectionService()
-        {
-            try
-            {
-                // Use a generic wrapper logger that implements ILogger<CollectionService>
-                var collectionServiceLogger = new ServiceLoggerAdapter<Services.Collections.CollectionService>(logger);
-                return new Services.Collections.CollectionService(_libraryManager, _collectionManager, _userManager, _userDataManager, collectionServiceLogger, _providerManager, _imageService);
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Failed to create CollectionService");
-                throw;
-            }
-        }
+        private Services.Playlists.PlaylistService GetPlaylistService() => _host.PlaylistService;
 
-        // Generic wrapper class to adapt the controller logger for service-specific loggers
-        private sealed class ServiceLoggerAdapter<T>(ILogger logger) : ILogger<T>
-        {
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception? exception, Func<TState, Exception?, string> formatter)
-            {
-                logger.Log(logLevel, eventId, state, exception, formatter);
-            }
-
-            public bool IsEnabled(LogLevel logLevel)
-            {
-                return logger.IsEnabled(logLevel);
-            }
-
-            IDisposable? ILogger.BeginScope<TState>(TState state)
-            {
-                return logger.BeginScope(state);
-            }
-        }
+        private Services.Collections.CollectionService GetCollectionService() => _host.CollectionService;
 
         /// <summary>
         /// Gets the user ID for a playlist.
@@ -314,32 +270,11 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
         }
 
         /// <summary>
-        /// Gets the current user ID from Jellyfin claims.
+        /// Gets or sets the authenticated caller, filled in by the Emby endpoint adapter from the request's session.
         /// </summary>
-        /// <returns>The current user ID, or Guid.Empty if not found.</returns>
-        private Guid GetCurrentUserId()
-        {
-            try
-            {
-                logger.LogDebug("Attempting to determine current user ID from Jellyfin claims...");
+        public Guid CallerUserId { get; set; } = Guid.Empty;
 
-                // Use centralized extension method for claim parsing
-                var userId = User.GetUserId();
-                logger.LogDebug("User ID from claims: {UserId}", userId == Guid.Empty ? "not found" : userId.ToString());
-
-                if (userId == Guid.Empty)
-                {
-                    logger.LogWarning("Could not determine current user ID from Jellyfin-UserId claim");
-                }
-
-                return userId;
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error getting current user ID");
-                return Guid.Empty;
-            }
-        }
+        private Guid GetCurrentUserId() => CallerUserId;
 
         /// <summary>
         /// Validates the current user ID and retrieves the user object.
@@ -349,7 +284,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
         /// <param name="errorResult">The error response to return if validation fails</param>
         /// <param name="operationDescription">Description of the operation for error messages (default: "manage collections")</param>
         /// <returns>The User object if validation succeeds, null otherwise</returns>
-        private Jellyfin.Database.Implementations.Entities.User? ValidateAndGetCurrentUser(Guid currentUserId, out ActionResult? errorResult, string operationDescription = "manage collections")
+        private User? ValidateAndGetCurrentUser(Guid currentUserId, out ActionResult? errorResult, string operationDescription = "manage collections")
         {
             errorResult = null;
 
@@ -387,7 +322,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
         /// </summary>
         /// <param name="createdByUserId">The CreatedByUserId value supplied in the request body</param>
         /// <returns>The User object if the value resolves to a real user, null otherwise</returns>
-        private Jellyfin.Database.Implementations.Entities.User? ResolveCreatedByUser(string? createdByUserId)
+        private User? ResolveCreatedByUser(string? createdByUserId)
         {
             if (string.IsNullOrWhiteSpace(createdByUserId)
                 || !Guid.TryParse(createdByUserId, out var createdByGuid)
@@ -946,7 +881,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     }
 
                     collection.UserId = currentUser.Id.ToString("N").ToLowerInvariant();
-                    logger.LogDebug("Set default collection owner to currently logged-in user: {Username} ({UserId})", currentUser.Username, currentUser.Id);
+                    logger.LogDebug("Set default collection owner to currently logged-in user: {Username} ({UserId})", currentUser.Name, currentUser.Id);
                 }
                 else
                 {
@@ -958,7 +893,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     }
 
                     collection.UserId = creator.Id.ToString("N").ToLowerInvariant();
-                    logger.LogDebug("Set collection owner from request CreatedByUserId: {Username} ({UserId})", creator.Username, creator.Id);
+                    logger.LogDebug("Set collection owner from request CreatedByUserId: {Username} ({UserId})", creator.Name, creator.Id);
                 }
             }
             else
@@ -1258,7 +1193,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
 
                             // Normalize to canonical "N" format (no dashes) for collections
                             collectionDto.UserId = resolvedOwnerId.ToString("N").ToLowerInvariant();
-                            logger.LogDebug("Validated and normalized collection owner: {Username} ({UserId})", resolvedOwnerUser.Username, collectionDto.UserId);
+                            logger.LogDebug("Validated and normalized collection owner: {Username} ({UserId})", resolvedOwnerUser.Name, collectionDto.UserId);
                         }
                         
                         // Preserve creator information from original playlist
@@ -1839,7 +1774,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                             }
 
                             collection.UserId = currentUser.Id.ToString("N").ToLowerInvariant();
-                            logger.LogDebug("Existing collection had no owner; set to currently logged-in user during update: {Username} ({UserId})", currentUser.Username, currentUser.Id);
+                            logger.LogDebug("Existing collection had no owner; set to currently logged-in user during update: {Username} ({UserId})", currentUser.Name, currentUser.Id);
                         }
                         else
                         {
@@ -1851,7 +1786,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                             }
 
                             collection.UserId = creator.Id.ToString("N").ToLowerInvariant();
-                            logger.LogDebug("Existing collection had no owner; set from request CreatedByUserId during update: {Username} ({UserId})", creator.Username, creator.Id);
+                            logger.LogDebug("Existing collection had no owner; set from request CreatedByUserId during update: {Username} ({UserId})", creator.Name, creator.Id);
                         }
                     }
                 }
@@ -2166,7 +2101,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     .Select(u => new
                     {
                         u.Id,
-                        Name = u.Username,
+                        Name = u.Name,
                     })
                     .ToList();
 
@@ -2205,7 +2140,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 return Ok(new
                 {
                     user.Id,
-                    Name = user.Username,
+                    Name = user.Name,
                 });
             }
             catch (Exception ex)

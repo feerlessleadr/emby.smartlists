@@ -105,7 +105,7 @@ namespace Emby.Plugin.SmartLists.Api.Filters
         /// </summary>
         /// <param name="value">The value the controller put in the <see cref="ObjectResult"/>.</param>
         /// <returns>The message text, or null when the value is not a recognised error body.</returns>
-        private static string? ExtractDetail(object? value) => value switch
+        internal static string? ExtractDetail(object? value) => value switch
         {
             null => null,
             string text => text,
