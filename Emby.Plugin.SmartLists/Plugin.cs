@@ -20,10 +20,13 @@ namespace Emby.Plugin.SmartLists
             : base(applicationPaths, xmlSerializer)
         {
             Instance = this;
+            _pluginsPath = applicationPaths.PluginsPath;
 
             // Help .NET find the bundled ImageSharp DLL next to the plugin.
             AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
         }
+
+        private readonly string _pluginsPath;
 
         private Assembly? OnAssemblyResolve(object? sender, ResolveEventArgs args)
         {
@@ -33,10 +36,11 @@ namespace Emby.Plugin.SmartLists
                 return null;
             }
 
+            // Emby may load the plugin from memory, leaving Assembly.Location empty; fall back to its plugins folder.
             var pluginDirectory = System.IO.Path.GetDirectoryName(GetType().Assembly.Location);
             if (string.IsNullOrEmpty(pluginDirectory))
             {
-                return null;
+                pluginDirectory = _pluginsPath;
             }
 
             var imageSharpPath = System.IO.Path.Combine(pluginDirectory, "SixLabors.ImageSharp.dll");

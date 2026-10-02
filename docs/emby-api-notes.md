@@ -234,3 +234,12 @@ Run with a throwaway plugin (`SmartListsEmbySpike`, net8.0, referencing only `Me
 - Without a stored id the service creates a duplicate playlist each call (expected: lookup is by `JellyfinPlaylistId`/store; the store is not used by the debug endpoint).
 - Observed: newly created collection is named without the "[Smart]" suffix, then renamed with it on the first update (cosmetic; fix when real create path is wired).
 - Not yet verified: sort title persistence, per-user (AllUsers) playlists, ImageSharp image path, People prefilter.
+
+## Phase 4 close-out results (Emby 4.10.1.0)
+- **Sort title**: persists on playlists and collections (`SetSortNameDirect` + `SortName` lock). On *create*, Emby's own queued post-create refresh can revert it despite the lock, so both services re-assert it up to 3 times at 2 s intervals after creation (`ReassertSortTitleAsync`). Update paths are reliable.
+- **AllUsers playlists**: going through `RefreshQueueService` (store -> queue -> per-user fan-out) creates one private playlist per user, each owned by that user, with the sort title applied.
+- **Custom images**: playlist and collection Primary images are applied and served (verified by fetching `/Items/{id}/Images/Primary` and reading the pixels). Needed two fixes: the ImageSharp resolver now falls back to `IApplicationPaths.PluginsPath` (Emby loads plugins with an empty `Assembly.Location`), and BoxSets have no `ContainingFolderPath`, so images go to `GetInternalMetadataPath()` (`EmbyLibraryExtensions.GetItemImageFolder`).
+- **People rules** (NFO-fed test data on "Test Movie One"): Actors Contains / Equal, Directors Equal, People Contains and Actors NotContains all return the right counts (1, 1, 1, 1, 154 of 155). The People *prefilter* stays disabled; evaluation is per item, correct but not accelerated.
+- **Collection DisplayOrder**: `BoxSet.DisplayOrder` is a `CollectionDisplayOrder` enum with only PremiereDate/SortName; Jellyfin's "Default = order added" does not exist in Emby, so the reflective setter was removed.
+- **Create-name note corrected**: the "[Smart]" suffix is applied at create; only the success message printed the unformatted name.
+- Observed, not fixed: Emby's NFO saver sometimes throws an IOException on `collection.nfo` right after a collection is created (its own queued refresh racing the plugin's save). Non-fatal, logged by Emby.

@@ -601,7 +601,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                         // info can reference a library item's actual poster (smart list covers
                         // may point at an item's image directly) - deleting that would destroy
                         // media library artwork.
-                        if (File.Exists(actualImagePath) && Utilities.FileSystemHelper.IsPathInsideFolder(actualImagePath, jellyfinItem.ContainingFolderPath))
+                        if (File.Exists(actualImagePath) && Utilities.FileSystemHelper.IsPathInsideFolder(actualImagePath, jellyfinItem.GetItemImageFolder()))
                         {
                             cancellationToken.ThrowIfCancellationRequested();
                             try
@@ -625,8 +625,11 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 }
 
                 // Also try to delete files with our naming convention (in case ImageInfos doesn't have the path)
-                var itemPath = jellyfinItem.ContainingFolderPath;
-                DeleteJellyfinImageFilesForType(itemPath, jellyfinImageType, actualImagePath, cancellationToken);
+                var itemPath = jellyfinItem.GetItemImageFolder();
+                if (itemPath != null)
+                {
+                    DeleteJellyfinImageFilesForType(itemPath, jellyfinImageType, actualImagePath, cancellationToken);
+                }
             }
             catch (OperationCanceledException)
             {

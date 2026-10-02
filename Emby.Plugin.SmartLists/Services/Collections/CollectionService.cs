@@ -855,6 +855,14 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                     await retrievedItem.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
                 }
 
+                // Emby queues its own metadata refresh when a collection is created, and it can land after the
+                // custom sort title was written (verified on 4.10.1.0: the title was reverted despite the SortName
+                // lock). Re-assert it once that refresh has settled.
+                if (!string.IsNullOrWhiteSpace(dto.SortTitle))
+                {
+                    await ReassertSortTitleAsync(collectionId, dto, ownerUser, cancellationToken).ConfigureAwait(false);
+                }
+
                 return collectionId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
             else
@@ -864,6 +872,28 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             }
         }
 
+
+        private async Task ReassertSortTitleAsync(long collectionId, SmartCollectionDto dto, User ownerUser, CancellationToken cancellationToken)
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+
+                var current = _libraryManager.GetItemById(collectionId);
+                if (current == null)
+                {
+                    return;
+                }
+
+                if (string.Equals(current.SortName, dto.SortTitle, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                _logger.LogDebug("Collection {CollectionName} lost its custom sort title after creation; re-applying", current.Name);
+                await ApplyCustomMetadataAsync(current, dto, ownerUser, cancellationToken).ConfigureAwait(false);
+            }
+        }
 
         private Task ApplyCustomMetadataAsync(BaseItem item, SmartListDto dto, User ownerUser, CancellationToken cancellationToken)
             => MetadataHelper.ApplyCustomMetadataAsync(item, dto, _logger, cancellationToken, ownerUser, _userDataManager);
@@ -906,7 +936,6 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             // and blank in the Jellyfin UI. Change-tracked so a no-op refresh writes nothing.
             metadataChanged |= UpdateAggregateMetadata(collection, members);
 
-            metadataChanged |= SetCollectionDisplayOrder(collection);
             if (metadataChanged)
             {
                 await collection.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
@@ -1008,7 +1037,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
 
             try
             {
-                var itemPath = collection.ContainingFolderPath;
+                var itemPath = collection.GetItemImageFolder();
                 if (string.IsNullOrEmpty(itemPath) || !Directory.Exists(itemPath))
                 {
                     _logger.LogWarning("Cannot apply custom images: collection path is invalid: {Path}", itemPath);
@@ -2220,42 +2249,6 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             }
         }
 
-        /// <summary>
-        /// Sets the DisplayOrder property of a collection to "Default" using reflection.
-        /// This ensures that the collection respects the plugin's custom sort order.
-        /// "Default" corresponds to "Date Modified" in Jellyfin's internal logic for Collections,
-        /// which respects the order of items added to the collection.
-        /// </summary>
-        private bool SetCollectionDisplayOrder(BaseItem collection)
-        {
-            try
-            {
-                // Use reflection to set DisplayOrder property to avoid hard dependency on specific Jellyfin versions
-                var displayOrderProperty = collection.GetType().GetProperty("DisplayOrder");
-                if (displayOrderProperty != null && displayOrderProperty.CanWrite)
-                {
-                    if (displayOrderProperty.GetValue(collection) is string currentDisplayOrder &&
-                        string.Equals(currentDisplayOrder, "Default", StringComparison.Ordinal))
-                    {
-                        return false;
-                    }
-
-                    displayOrderProperty.SetValue(collection, "Default");
-                    _logger.LogDebug("Set DisplayOrder to 'Default' for collection {CollectionName}", collection.Name);
-                    return true;
-                }
-                else
-                {
-                    _logger.LogWarning("Cannot set DisplayOrder property on collection {CollectionName} - property not found or not writable", collection.Name);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to set DisplayOrder for collection {CollectionName}", collection.Name);
-            }
-
-            return false;
-        }
 
         /// <summary>
         /// The items behind the member ids just written to a collection, for refreshing the

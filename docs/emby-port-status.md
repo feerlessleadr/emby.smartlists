@@ -104,3 +104,8 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 ### Checkpoint G — phase 4 step 3 (runtime verification) DONE for core paths
 - Deployed `Emby.Plugin.SmartLists.dll` + `SixLabors.ImageSharp.dll` to the test Emby plugins folder; spike DLL removed. Results in `emby-api-notes.md` ("Phase 4 runtime results"). Create/update/public flip for playlists and collections all pass. Test lists deleted afterwards.
 - Remaining phase 4 gaps: sort title, AllUsers playlists, images, People prefilter, collection "[Smart]" suffix on create. Next: phase 5 (auto-refresh/events, startup migration, scheduled tasks, backups).
+
+### Checkpoint H — phase 4 closed out
+- Verified on the test Emby: sort title (with create-time re-assert), AllUsers via the queue, custom images (playlist + collection), People rules. Fixed along the way: ImageSharp resolve, BoxSet image folder, removed unsupported collection DisplayOrder. 1,732 tests pass.
+- Test data left in place: `C:\claude\Movies\Test Movie One (2001)\movie.nfo` (actors Jane Tester, Bob Sample; director Dan Directo). Debug endpoint still present (remove in phase 6).
+- Still open: People prefilter disabled; NFO saver IOException after collection create (Emby-side). Next: phase 5.

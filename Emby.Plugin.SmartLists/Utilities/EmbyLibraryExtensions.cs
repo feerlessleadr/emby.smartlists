@@ -19,6 +19,31 @@ namespace Emby.Plugin.SmartLists.Utilities
     public static class EmbyLibraryExtensions
     {
         /// <summary>
+        /// Gets the folder that holds an item's own image files. Items that live on disk (playlists) have a
+        /// containing folder; BoxSets are virtual and keep theirs under the server metadata path.
+        /// </summary>
+        /// <param name="item">The item.</param>
+        /// <returns>The folder path, or null when none can be resolved.</returns>
+        public static string? GetItemImageFolder(this BaseItem item)
+        {
+            ArgumentNullException.ThrowIfNull(item);
+            var path = item.ContainingFolderPath;
+            if (!string.IsNullOrEmpty(path) && System.IO.Directory.Exists(path))
+            {
+                return path;
+            }
+
+            path = item.GetInternalMetadataPath();
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
+
+            System.IO.Directory.CreateDirectory(path);
+            return path;
+        }
+
+        /// <summary>
         /// Counts the items matching <paramref name="query"/>.
         /// </summary>
         /// <param name="libraryManager">The library manager.</param>

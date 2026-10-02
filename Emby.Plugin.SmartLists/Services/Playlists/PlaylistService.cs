@@ -979,12 +979,41 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                     await newPlaylist.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
                 }
 
+                // Emby queues its own metadata refresh when a playlist is created; it can land after the custom
+                // sort title was written and revert it (seen on 4.10.1.0). Re-assert once it has settled.
+                if (!string.IsNullOrWhiteSpace(dto.SortTitle))
+                {
+                    await ReassertSortTitleAsync(newPlaylist.InternalId, dto, user, cancellationToken).ConfigureAwait(false);
+                }
+
                 return newPlaylist.InternalId.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
             else
             {
                 _logger.LogWarning("Failed to retrieve newly created playlist with ID {PlaylistId}", result.Id);
                 return string.Empty;
+            }
+        }
+
+        private async Task ReassertSortTitleAsync(long playlistId, SmartPlaylistDto dto, User user, CancellationToken cancellationToken)
+        {
+            for (var attempt = 0; attempt < 3; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromSeconds(2), cancellationToken).ConfigureAwait(false);
+
+                var current = _libraryManager.GetItemById(playlistId);
+                if (current == null)
+                {
+                    return;
+                }
+
+                if (string.Equals(current.SortName, dto.SortTitle, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                _logger.LogDebug("Playlist {PlaylistName} lost its custom sort title after creation; re-applying", current.Name);
+                await ApplyCustomMetadataAsync(current, dto, user, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -1004,7 +1033,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
 
             try
             {
-                var itemPath = playlist.ContainingFolderPath;
+                var itemPath = playlist.GetItemImageFolder();
                 if (string.IsNullOrEmpty(itemPath) || !Directory.Exists(itemPath))
                 {
                     _logger.LogWarning("Cannot apply custom images: playlist path is invalid: {Path}", itemPath);
@@ -1433,7 +1462,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         {
             try
             {
-                var itemPath = playlist.ContainingFolderPath;
+                var itemPath = playlist.GetItemImageFolder();
                 if (string.IsNullOrEmpty(itemPath) || !Directory.Exists(itemPath))
                 {
                     _logger.LogWarning("Cannot generate cover: playlist path is invalid: {Path}", itemPath);

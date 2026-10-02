@@ -33,6 +33,14 @@ namespace Emby.Plugin.SmartLists.Host
         public bool Public { get; set; }
 
         public string? ExistingId { get; set; }
+
+        public string? SortTitle { get; set; }
+
+        public bool AllUsers { get; set; }
+
+        public string? ImageFile { get; set; }
+
+        public bool Queue { get; set; }
     }
 
     // Emby discovers service methods by reflection on instances, so Get cannot be static.
@@ -51,15 +59,35 @@ namespace Emby.Plugin.SmartLists.Host
                 new() { Expressions = [new Expression(r.Field, r.Operator, r.Value)] },
             };
 
+            System.Collections.Generic.Dictionary<string, string>? images = null;
+            if (!string.IsNullOrEmpty(r.ImageFile))
+            {
+                using var stream = System.IO.File.OpenRead(r.ImageFile);
+                var stored = host.ImageService.SaveImageAsync(r.Id, "Primary", stream, System.IO.Path.GetFileName(r.ImageFile)).GetAwaiter().GetResult();
+                images = new() { ["Primary"] = stored };
+            }
+
             (bool Success, string Message, string Id) result;
             if (string.Equals(r.Kind, "collection", StringComparison.OrdinalIgnoreCase))
             {
-                var dto = new SmartCollectionDto { JellyfinCollectionId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType] };
+                var dto = new SmartCollectionDto { JellyfinCollectionId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], SortTitle = r.SortTitle, CustomImages = images };
                 result = host.CollectionService.RefreshAsync(dto, null, CancellationToken.None).GetAwaiter().GetResult();
             }
             else
             {
-                var dto = new SmartPlaylistDto { JellyfinPlaylistId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public };
+                var dto = new SmartPlaylistDto { JellyfinPlaylistId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public, AllUsers = r.AllUsers, SortTitle = r.SortTitle, CustomImages = images };
+                if (r.AllUsers)
+                {
+                    Utilities.PlaylistUserResolver.ExpandAllUsers(dto, host.UserManager);
+                }
+
+                if (r.Queue)
+                {
+                    var saved = host.PlaylistStore.SaveAsync(dto).GetAwaiter().GetResult();
+                    host.RefreshQueue.EnqueueOperation(new Services.Shared.RefreshQueueItem { ListId = saved.Id!, ListName = saved.Name, ListType = Core.Enums.SmartListType.Playlist, OperationType = Services.Shared.RefreshOperationType.Create, ListData = saved, TriggerType = Core.Enums.RefreshTriggerType.Manual });
+                    return "queued " + saved.Id;
+                }
+
                 result = host.PlaylistService.RefreshAsync(dto, null, CancellationToken.None).GetAwaiter().GetResult();
             }
 
