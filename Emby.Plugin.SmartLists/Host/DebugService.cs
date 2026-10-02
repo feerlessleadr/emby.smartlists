@@ -41,6 +41,8 @@ namespace Emby.Plugin.SmartLists.Host
         public string? ImageFile { get; set; }
 
         public bool Queue { get; set; }
+
+        public string? AutoRefresh { get; set; }
     }
 
     // Emby discovers service methods by reflection on instances, so Get cannot be static.
@@ -75,7 +77,7 @@ namespace Emby.Plugin.SmartLists.Host
             }
             else
             {
-                var dto = new SmartPlaylistDto { JellyfinPlaylistId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public, AllUsers = r.AllUsers, SortTitle = r.SortTitle, CustomImages = images };
+                var dto = new SmartPlaylistDto { JellyfinPlaylistId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public, AllUsers = r.AllUsers, SortTitle = r.SortTitle, CustomImages = images, AutoRefresh = Enum.TryParse<Core.Enums.AutoRefreshMode>(r.AutoRefresh, true, out var arm) ? arm : Core.Enums.AutoRefreshMode.Never };
                 if (r.AllUsers)
                 {
                     Utilities.PlaylistUserResolver.ExpandAllUsers(dto, host.UserManager);
@@ -85,6 +87,7 @@ namespace Emby.Plugin.SmartLists.Host
                 {
                     var saved = host.PlaylistStore.SaveAsync(dto).GetAwaiter().GetResult();
                     host.RefreshQueue.EnqueueOperation(new Services.Shared.RefreshQueueItem { ListId = saved.Id!, ListName = saved.Name, ListType = Core.Enums.SmartListType.Playlist, OperationType = Services.Shared.RefreshOperationType.Create, ListData = saved, TriggerType = Core.Enums.RefreshTriggerType.Manual });
+                    host.AutoRefresh?.UpdatePlaylistInCache(saved);
                     return "queued " + saved.Id;
                 }
 

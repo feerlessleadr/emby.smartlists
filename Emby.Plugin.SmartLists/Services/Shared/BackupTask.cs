@@ -1,4 +1,5 @@
 using System;
+using Emby.Plugin.SmartLists.Host;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,16 +14,12 @@ namespace Emby.Plugin.SmartLists.Services.Shared
     /// </summary>
     public class BackupTask : IScheduledTask
     {
-        private readonly IBackupService _backupService;
-        private readonly ILogger<BackupTask> _logger;
+        // Emby instantiates scheduled tasks itself, so the services come from the host on use.
+        private static SmartListsHost Host => SmartListsHost.Instance
+            ?? throw new InvalidOperationException("SmartLists is not running yet");
 
-        public BackupTask(
-            IBackupService backupService,
-            ILogger<BackupTask> logger)
-        {
-            _backupService = backupService;
-            _logger = logger;
-        }
+        private static IBackupService BackupService => Host.BackupService;
+        private static ILogger<BackupTask> Logger => Host.CreateLogger<BackupTask>();
 
         /// <summary>
         /// Gets the name of the task.
@@ -46,7 +43,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
         /// <summary>
         /// Gets the default triggers for this task.
-        /// Runs daily at 3:00 AM by default. Schedule can be changed in Jellyfin's Scheduled Tasks.
+        /// Runs daily at 3:00 AM by default. Schedule can be changed in Emby's Scheduled Tasks.
         /// </summary>
         public IEnumerable<TaskTriggerInfo> GetDefaultTriggers()
         {
@@ -54,7 +51,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             {
                 new TaskTriggerInfo
                 {
-                    Type = TaskTriggerInfoType.DailyTrigger,
+                    Type = "DailyTrigger",
                     TimeOfDayTicks = TimeSpan.FromHours(3).Ticks
                 }
             };
@@ -63,49 +60,49 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// <summary>
         /// Executes the backup task.
         /// </summary>
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
         {
             var config = Plugin.Instance?.Configuration;
 
             // Check if backups are enabled
             if (config == null || !config.BackupEnabled)
             {
-                _logger.LogDebug("SmartLists backup is disabled, skipping");
+                Logger.LogDebug("SmartLists backup is disabled, skipping");
                 progress.Report(100);
                 return;
             }
 
-            _logger.LogInformation("Starting SmartLists backup task");
+            Logger.LogInformation("Starting SmartLists backup task");
 
             try
             {
                 progress.Report(10);
 
                 // Create backup using the service
-                var result = await _backupService.CreateBackupAsync(cancellationToken).ConfigureAwait(false);
+                var result = await BackupService.CreateBackupAsync(cancellationToken).ConfigureAwait(false);
 
                 if (!result.Success)
                 {
-                    _logger.LogError("Backup task failed: {ErrorMessage}", result.ErrorMessage);
+                    Logger.LogError("Backup task failed: {ErrorMessage}", result.ErrorMessage);
                     throw new InvalidOperationException(result.ErrorMessage);
                 }
 
                 progress.Report(80);
 
                 // Cleanup old backups
-                _backupService.CleanupOldBackups(config.BackupRetentionCount, cancellationToken);
+                BackupService.CleanupOldBackups(config.BackupRetentionCount, cancellationToken);
 
                 progress.Report(100);
-                _logger.LogInformation("SmartLists backup completed: {BackupFile} ({ListCount} lists)", result.Filename, result.ListCount);
+                Logger.LogInformation("SmartLists backup completed: {BackupFile} ({ListCount} lists)", result.Filename, result.ListCount);
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("SmartLists backup task was cancelled");
+                Logger.LogInformation("SmartLists backup task was cancelled");
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during SmartLists backup task");
+                Logger.LogError(ex, "Error during SmartLists backup task");
                 throw;
             }
         }

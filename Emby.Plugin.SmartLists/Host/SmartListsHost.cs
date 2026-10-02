@@ -36,6 +36,7 @@ namespace Emby.Plugin.SmartLists.Host
         {
             LibraryManager = libraryManager;
             UserManager = userManager;
+            UserDataManager = userDataManager;
             ItemRepository = itemRepository;
 
             _loggerFactory = new LoggerFactory([new EmbyLoggerProvider(logManager)]);
@@ -69,6 +70,7 @@ namespace Emby.Plugin.SmartLists.Host
                 null,
                 itemRepository);
             RefreshStatus.SetRefreshQueueService(RefreshQueue);
+            BackupService = new BackupService(FileSystem, Log<BackupService>());
         }
 
         /// <summary>
@@ -79,6 +81,8 @@ namespace Emby.Plugin.SmartLists.Host
         public ILibraryManager LibraryManager { get; }
 
         public IUserManager UserManager { get; }
+
+        public IUserDataManager UserDataManager { get; }
 
         public IItemRepository ItemRepository { get; }
 
@@ -97,6 +101,13 @@ namespace Emby.Plugin.SmartLists.Host
         public CollectionService CollectionService { get; }
 
         public RefreshQueueService RefreshQueue { get; }
+
+        public IBackupService BackupService { get; }
+
+        /// <summary>
+        /// Gets the auto-refresh service (library/user-data events and the schedule timer), once started.
+        /// </summary>
+        public AutoRefreshService? AutoRefresh { get; private set; }
 
         /// <summary>
         /// Builds the graph and publishes it as <see cref="Instance"/>.
@@ -123,6 +134,8 @@ namespace Emby.Plugin.SmartLists.Host
         /// <inheritdoc />
         public void Dispose()
         {
+            AutoRefresh?.Dispose();
+            AutoRefresh = null;
             RefreshQueue.Dispose();
             _loggerFactory.Dispose();
             if (ReferenceEquals(Instance, this))
@@ -132,5 +145,21 @@ namespace Emby.Plugin.SmartLists.Host
         }
 
         private ILogger<T> Log<T>() => new Logger<T>(_loggerFactory);
+
+        /// <summary>
+        /// Creates a Microsoft-style logger that writes to the Emby server log.
+        /// </summary>
+        /// <typeparam name="T">The category type.</typeparam>
+        /// <returns>The logger.</returns>
+        public ILogger<T> CreateLogger<T>() => Log<T>();
+
+        /// <summary>
+        /// Starts the event-driven services. Called once the server is up so the stores and managers are ready.
+        /// </summary>
+        public void StartAutoRefresh()
+        {
+            AutoRefresh ??= new AutoRefreshService(
+                LibraryManager, Log<AutoRefreshService>(), PlaylistStore, PlaylistService, CollectionStore, CollectionService, UserDataManager, UserManager, RefreshQueue, RefreshStatus);
+        }
     }
 }

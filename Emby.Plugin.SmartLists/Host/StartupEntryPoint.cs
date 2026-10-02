@@ -40,7 +40,8 @@ namespace Emby.Plugin.SmartLists.Host
         /// <inheritdoc />
         public void Run()
         {
-            _log.Info("SmartLists started (Emby host composed).");
+            _host.StartAutoRefresh();
+            _log.Info("SmartLists started (auto-refresh listening).");
         }
 
         /// <inheritdoc />

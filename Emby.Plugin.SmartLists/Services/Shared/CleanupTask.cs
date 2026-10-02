@@ -9,6 +9,7 @@ using Emby.Plugin.SmartLists.Core.Constants;
 using Emby.Plugin.SmartLists.Core.Models;
 using Emby.Plugin.SmartLists.Services.Collections;
 using Emby.Plugin.SmartLists.Services.Playlists;
+using Emby.Plugin.SmartLists.Host;
 using Emby.Plugin.SmartLists.Utilities;
 using MediaBrowser.Controller.Entities;
 using MediaBrowser.Controller.Entities.Movies;
@@ -27,28 +28,17 @@ namespace Emby.Plugin.SmartLists.Services.Shared
     /// </summary>
     public class CleanupTask : IScheduledTask
     {
-        private readonly SmartListImageService _imageService;
-        private readonly ISmartListFileSystem _fileSystem;
-        private readonly ILibraryManager _libraryManager;
-        private readonly PlaylistStore _playlistStore;
-        private readonly CollectionStore _collectionStore;
-        private readonly ILogger<CleanupTask> _logger;
+        // Emby instantiates scheduled tasks itself and cannot inject the plugin's services, so everything is
+        // resolved from the host on use (the host exists once the server has started the entry point).
+        private static SmartListsHost Host => SmartListsHost.Instance
+            ?? throw new InvalidOperationException("SmartLists is not running yet");
 
-        public CleanupTask(
-            SmartListImageService imageService,
-            ISmartListFileSystem fileSystem,
-            ILibraryManager libraryManager,
-            PlaylistStore playlistStore,
-            CollectionStore collectionStore,
-            ILogger<CleanupTask> logger)
-        {
-            _imageService = imageService;
-            _fileSystem = fileSystem;
-            _libraryManager = libraryManager;
-            _playlistStore = playlistStore;
-            _collectionStore = collectionStore;
-            _logger = logger;
-        }
+        private static SmartListImageService ImageService => Host.ImageService;
+        private static ISmartListFileSystem FileSystem => Host.FileSystem;
+        private static ILibraryManager LibraryManager => Host.LibraryManager;
+        private static PlaylistStore PlaylistStore => Host.PlaylistStore;
+        private static CollectionStore CollectionStore => Host.CollectionStore;
+        private static ILogger<CleanupTask> Logger => Host.CreateLogger<CleanupTask>();
 
         /// <summary>
         /// Gets the name of the task.
@@ -81,7 +71,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 // Run weekly on Sunday at 4:00 AM
                 new TaskTriggerInfo
                 {
-                    Type = TaskTriggerInfoType.WeeklyTrigger,
+                    Type = "WeeklyTrigger",
                     DayOfWeek = DayOfWeek.Sunday,
                     TimeOfDayTicks = TimeSpan.FromHours(4).Ticks
                 }
@@ -91,15 +81,15 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// <summary>
         /// Executes the task.
         /// </summary>
-        public async Task ExecuteAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        public async Task Execute(CancellationToken cancellationToken, IProgress<double> progress)
         {
-            _logger.LogInformation("Starting Smart Lists cleanup task");
+            Logger.LogInformation("Starting Smart Lists cleanup task");
 
             try
             {
                 // Read the store once and hand the same snapshot to both phases below,
                 // so they agree on what "exists" means even if a save lands mid-run.
-                var (playlists, collections, skippedFiles) = await _fileSystem.GetAllSmartListsAsync().ConfigureAwait(false);
+                var (playlists, collections, skippedFiles) = await FileSystem.GetAllSmartListsAsync().ConfigureAwait(false);
 
                 // Clean up orphaned folders (folders without config.json). This phase owns
                 // progress 0-80; the tether sweep that follows is comparatively quick.
@@ -115,16 +105,16 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 CleanupLegacyImagesFolder();
 
                 progress.Report(100);
-                _logger.LogInformation("Smart Lists cleanup task completed");
+                Logger.LogInformation("Smart Lists cleanup task completed");
             }
             catch (OperationCanceledException)
             {
-                _logger.LogInformation("Cleanup task was cancelled");
+                Logger.LogInformation("Cleanup task was cancelled");
                 throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Error during cleanup task");
+                Logger.LogError(ex, "Error during cleanup task");
                 throw;
             }
         }
@@ -137,9 +127,9 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// after the snapshot was taken (deleting it would destroy a brand-new list) or a
         /// folder-name/config-ID mismatch (deleting risks data loss) - neither is a safe deletion.
         /// </summary>
-        private Task CleanupOrphanedFoldersAsync(IProgress<double> progress, CancellationToken cancellationToken)
+        private static Task CleanupOrphanedFoldersAsync(IProgress<double> progress, CancellationToken cancellationToken)
         {
-            var basePath = _fileSystem.BasePath;
+            var basePath = FileSystem.BasePath;
 
             if (!Directory.Exists(basePath))
             {
@@ -162,12 +152,12 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 })
                 .ToList();
 
-            _logger.LogDebug("Found {Count} GUID folders to check", guidFolders.Count);
+            Logger.LogDebug("Found {Count} GUID folders to check", guidFolders.Count);
 
             if (guidFolders.Count == 0)
             {
                 progress.Report(100);
-                _logger.LogInformation("No folders to clean up");
+                Logger.LogInformation("No folders to clean up");
                 return Task.CompletedTask;
             }
 
@@ -185,7 +175,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
                 if (isOrphaned)
                 {
-                    _logger.LogDebug("Cleaning up orphaned folder: {FolderPath}", folderPath);
+                    Logger.LogDebug("Cleaning up orphaned folder: {FolderPath}", folderPath);
                     try
                     {
                         Directory.Delete(folderPath, recursive: true);
@@ -193,7 +183,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to delete orphaned folder: {FolderPath}", folderPath);
+                        Logger.LogWarning(ex, "Failed to delete orphaned folder: {FolderPath}", folderPath);
                     }
                 }
 
@@ -201,7 +191,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 progress.Report((double)processedCount / guidFolders.Count * 100);
             }
 
-            _logger.LogInformation(
+            Logger.LogInformation(
                 "Folder cleanup completed. Checked {TotalCount} folders, removed {OrphanedCount} orphaned folders",
                 guidFolders.Count, orphanedCount);
 
@@ -219,7 +209,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// Stored Jellyfin IDs referencing a deleted item are cleared from the smart list DTOs
         /// after deletion, so this doesn't leave dangling pointers behind.
         /// </summary>
-        private async Task CleanupOrphanedTetheredItemsAsync(SmartPlaylistDto[] playlists, SmartCollectionDto[] collections, int skippedFiles, CancellationToken cancellationToken)
+        private static async Task CleanupOrphanedTetheredItemsAsync(SmartPlaylistDto[] playlists, SmartCollectionDto[] collections, int skippedFiles, CancellationToken cancellationToken)
         {
             // Items created during (or shortly before) the sweep are skipped as likely
             // mid-creation by a concurrent refresh. Jellyfin persists DateCreated as local
@@ -232,7 +222,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             if (skippedFiles > 0)
             {
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Skipping tethered item cleanup: {SkippedFiles} smart list file(s) failed to load; cannot safely distinguish deleted lists",
                     skippedFiles);
                 return;
@@ -244,27 +234,28 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             {
                 IncludeItemTypes = [ItemKinds.Playlist, ItemKinds.BoxSet],
                 Recursive = true,
-                // DB-side narrowing; the in-memory filter below remains the fail-safe.
-                HasAnyProviderId = new Dictionary<string, string> { [ProviderKeys.SmartLists] = string.Empty },
             };
 
-            var candidates = _libraryManager.GetItemsResult(query).Items
-                .Where(item => IsOrphanedTetheredItem(item, enabledCollectionIds, enabledPlaylistUsers))
+            var ownerGuids = Host.UserManager.GetUserList(new MediaBrowser.Model.Querying.UserQuery()).ToDictionary(u => u.InternalId, u => u.Id);
+#pragma warning disable CA2016 // Emby's item query has no cancellation support worth threading here.
+            var candidates = LibraryManager.GetItemList(query)
+                .Where(item => IsOrphanedTetheredItem(item, enabledCollectionIds, enabledPlaylistUsers, ownerGuids))
                 .ToList();
+#pragma warning restore CA2016
 
             if (candidates.Count == 0)
             {
-                _logger.LogDebug("No orphaned tethered Jellyfin items found");
+                Logger.LogDebug("No orphaned tethered Jellyfin items found");
                 return;
             }
 
             // TOCTOU guard: re-read the store immediately before deleting and re-check every
             // candidate against a fresh snapshot, so a save/enable that happened between the
             // initial read and now isn't misclassified as deleted.
-            var (freshPlaylists, freshCollections, freshSkippedFiles) = await _fileSystem.GetAllSmartListsAsync().ConfigureAwait(false);
+            var (freshPlaylists, freshCollections, freshSkippedFiles) = await FileSystem.GetAllSmartListsAsync().ConfigureAwait(false);
             if (freshSkippedFiles > 0)
             {
-                _logger.LogWarning(
+                Logger.LogWarning(
                     "Aborting tethered item cleanup: re-read found {SkippedFiles} smart list file(s) failed to load; cannot safely distinguish deleted lists",
                     freshSkippedFiles);
                 return;
@@ -285,7 +276,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     continue;
                 }
 
-                if (!IsOrphanedTetheredItem(candidate, freshEnabledCollectionIds, freshEnabledPlaylistUsers))
+                if (!IsOrphanedTetheredItem(candidate, freshEnabledCollectionIds, freshEnabledPlaylistUsers, ownerGuids))
                 {
                     reExemptedCount++;
                     continue;
@@ -296,7 +287,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             if (orphans.Count == 0)
             {
-                _logger.LogDebug("No orphaned tethered Jellyfin items remained after re-check");
+                Logger.LogDebug("No orphaned tethered Jellyfin items remained after re-check");
                 return;
             }
 
@@ -307,17 +298,17 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 cancellationToken.ThrowIfCancellationRequested();
                 try
                 {
-                    _logger.LogWarning(
+                    Logger.LogWarning(
                         "Deleting orphaned {ItemKind} '{ItemName}' ({ItemId}) tethered to missing or disabled smart list {SmartListId}",
                         orphan.GetClientTypeName(), orphan.Name, orphan.Id, orphan.GetProviderId(ProviderKeys.SmartLists));
-                    _libraryManager.DeleteItem(orphan, new DeleteOptions { DeleteFileLocation = true }, true);
+                    LibraryManager.DeleteItem(orphan, new DeleteOptions { DeleteFileLocation = true }, true);
                     deletedCount++;
                     deletedOrphanIds.Add(orphan.Id);
                 }
                 catch (Exception ex)
                 {
                     // Per-item catch so one failed deletion doesn't strand the rest
-                    _logger.LogWarning(ex, "Failed to delete orphaned tethered item '{ItemName}' ({ItemId}), continuing", orphan.Name, orphan.Id);
+                    Logger.LogWarning(ex, "Failed to delete orphaned tethered item '{ItemName}' ({ItemId}), continuing", orphan.Name, orphan.Id);
                 }
             }
 
@@ -329,10 +320,10 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 await ClearDanglingStoredIdsAsync(freshPlaylists, freshCollections, deletedOrphanIds).ConfigureAwait(false);
             }
 
-            _logger.LogInformation("Tethered item cleanup completed. Removed {DeletedCount} of {OrphanCount} orphaned items", deletedCount, orphans.Count);
+            Logger.LogInformation("Tethered item cleanup completed. Removed {DeletedCount} of {OrphanCount} orphaned items", deletedCount, orphans.Count);
             if (skippedRecentCount > 0 || reExemptedCount > 0)
             {
-                _logger.LogDebug(
+                Logger.LogDebug(
                     "Tethered item cleanup: skipped {SkippedRecentCount} recently-created item(s), re-exempted {ReExemptedCount} item(s) on re-check",
                     skippedRecentCount, reExemptedCount);
             }
@@ -394,7 +385,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// owner is still in that playlist's user set; a BoxSet is exempt if its tether matches
         /// an enabled collection; anything else is treated as not orphaned (defensive).
         /// </summary>
-        private static bool IsOrphanedTetheredItem(BaseItem item, HashSet<string> enabledCollectionIds, Dictionary<string, HashSet<Guid>> enabledPlaylistUsers)
+        private static bool IsOrphanedTetheredItem(BaseItem item, HashSet<string> enabledCollectionIds, Dictionary<string, HashSet<Guid>> enabledPlaylistUsers, Dictionary<long, Guid> ownerGuids)
         {
             var tether = item.GetProviderId(ProviderKeys.SmartLists);
             if (string.IsNullOrEmpty(tether))
@@ -404,7 +395,10 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             return item switch
             {
-                Playlist playlist => !(enabledPlaylistUsers.TryGetValue(tether, out var users) && users.Contains(playlist.OwnerUserId)),
+                Playlist playlist => !(enabledPlaylistUsers.TryGetValue(tether, out var users)
+                    && PlaylistOwnership.GetOwnerInternalId(Host.ItemRepository, playlist) is long ownerId
+                    && ownerGuids.TryGetValue(ownerId, out var ownerGuid)
+                    && users.Contains(ownerGuid)),
                 BoxSet => !enabledCollectionIds.Contains(tether),
                 _ => false,
             };
@@ -418,7 +412,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// the delete loop isn't overwritten. A failed save is logged but not retried - the
         /// dangling ID then persists until the list is next saved (accepted trade-off).
         /// </summary>
-        private async Task ClearDanglingStoredIdsAsync(SmartPlaylistDto[] playlists, SmartCollectionDto[] collections, HashSet<Guid> deletedOrphanIds)
+        private static async Task ClearDanglingStoredIdsAsync(SmartPlaylistDto[] playlists, SmartCollectionDto[] collections, HashSet<Guid> deletedOrphanIds)
         {
             foreach (var snapshotPlaylist in playlists)
             {
@@ -437,14 +431,14 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
                 if (!Guid.TryParse(snapshotPlaylist.Id, out var playlistGuid))
                 {
-                    _logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} has an unparsable ID", snapshotPlaylist.Id);
+                    Logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} has an unparsable ID", snapshotPlaylist.Id);
                     continue;
                 }
 
-                var playlist = await _playlistStore.GetByIdAsync(playlistGuid).ConfigureAwait(false);
+                var playlist = await PlaylistStore.GetByIdAsync(playlistGuid).ConfigureAwait(false);
                 if (playlist == null)
                 {
-                    _logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} was deleted meanwhile", snapshotPlaylist.Id);
+                    Logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} was deleted meanwhile", snapshotPlaylist.Id);
                     continue;
                 }
 
@@ -458,7 +452,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                             && Guid.TryParse(mapping.JellyfinPlaylistId, out var mappedId)
                             && deletedOrphanIds.Contains(mappedId))
                         {
-                            _logger.LogDebug(
+                            Logger.LogDebug(
                                 "Clearing dangling JellyfinPlaylistId {JellyfinPlaylistId} for user {UserId} on smart list {SmartListId}",
                                 mapping.JellyfinPlaylistId, mapping.UserId, playlist.Id);
                             mapping.JellyfinPlaylistId = null;
@@ -471,7 +465,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     && Guid.TryParse(playlist.JellyfinPlaylistId, out var legacyMappedIdReloaded)
                     && deletedOrphanIds.Contains(legacyMappedIdReloaded))
                 {
-                    _logger.LogDebug(
+                    Logger.LogDebug(
                         "Clearing dangling legacy JellyfinPlaylistId {JellyfinPlaylistId} on smart list {SmartListId}",
                         playlist.JellyfinPlaylistId, playlist.Id);
                     playlist.JellyfinPlaylistId = null;
@@ -482,11 +476,11 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 {
                     try
                     {
-                        await _playlistStore.SaveAsync(playlist).ConfigureAwait(false);
+                        await PlaylistStore.SaveAsync(playlist).ConfigureAwait(false);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to clear dangling stored playlist ID(s) for smart list {SmartListId}", playlist.Id);
+                        Logger.LogWarning(ex, "Failed to clear dangling stored playlist ID(s) for smart list {SmartListId}", playlist.Id);
                     }
                 }
             }
@@ -502,14 +496,14 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
                 if (!Guid.TryParse(snapshotCollection.Id, out var collectionGuid))
                 {
-                    _logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} has an unparsable ID", snapshotCollection.Id);
+                    Logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} has an unparsable ID", snapshotCollection.Id);
                     continue;
                 }
 
-                var collection = await _collectionStore.GetByIdAsync(collectionGuid).ConfigureAwait(false);
+                var collection = await CollectionStore.GetByIdAsync(collectionGuid).ConfigureAwait(false);
                 if (collection == null)
                 {
-                    _logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} was deleted meanwhile", snapshotCollection.Id);
+                    Logger.LogDebug("Skipping dangling ID clear: smart list {SmartListId} was deleted meanwhile", snapshotCollection.Id);
                     continue;
                 }
 
@@ -520,18 +514,18 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     continue;
                 }
 
-                _logger.LogDebug(
+                Logger.LogDebug(
                     "Clearing dangling JellyfinCollectionId {JellyfinCollectionId} on smart list {SmartListId}",
                     collection.JellyfinCollectionId, collection.Id);
                 collection.JellyfinCollectionId = null;
 
                 try
                 {
-                    await _collectionStore.SaveAsync(collection).ConfigureAwait(false);
+                    await CollectionStore.SaveAsync(collection).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to clear dangling stored collection ID for smart list {SmartListId}", collection.Id);
+                    Logger.LogWarning(ex, "Failed to clear dangling stored collection ID for smart list {SmartListId}", collection.Id);
                 }
             }
         }
@@ -539,9 +533,9 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// <summary>
         /// Cleans up the legacy images folder if it exists and is empty or contains only system files.
         /// </summary>
-        private void CleanupLegacyImagesFolder()
+        private static void CleanupLegacyImagesFolder()
         {
-            var legacyImagesPath = Path.Combine(_fileSystem.BasePath, "images");
+            var legacyImagesPath = Path.Combine(FileSystem.BasePath, "images");
 
             if (!Directory.Exists(legacyImagesPath))
             {
@@ -556,7 +550,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     if (FileSystemHelper.IsDirectoryEffectivelyEmpty(subDir))
                     {
                         Directory.Delete(subDir, recursive: true);
-                        _logger.LogDebug("Deleted empty legacy image folder: {FolderPath}", subDir);
+                        Logger.LogDebug("Deleted empty legacy image folder: {FolderPath}", subDir);
                     }
                 }
 
@@ -564,12 +558,12 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 if (FileSystemHelper.IsDirectoryEffectivelyEmpty(legacyImagesPath))
                 {
                     Directory.Delete(legacyImagesPath, recursive: true);
-                    _logger.LogInformation("Deleted empty legacy images folder: {FolderPath}", legacyImagesPath);
+                    Logger.LogInformation("Deleted empty legacy images folder: {FolderPath}", legacyImagesPath);
                 }
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to clean up legacy images folder: {FolderPath}", legacyImagesPath);
+                Logger.LogWarning(ex, "Failed to clean up legacy images folder: {FolderPath}", legacyImagesPath);
             }
         }
     }

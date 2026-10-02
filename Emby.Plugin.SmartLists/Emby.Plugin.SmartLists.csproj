@@ -87,18 +87,10 @@
     Jellyfin-only code awaiting its Emby rewrite. Excluded from the build so the rest can be ported first;
     each file is still the source of truth for the logic its replacement must carry.
       Api\**                        MVC controllers      -> Emby IService endpoints (port phase 6)
-      AutoRefreshHostedService      IHostedService       -> IServerEntryPoint shell (port phase 5)
-      StorageMigrationHostedService IHostedService       -> entry-point startup step (port phase 5)
-      PluginPagesRegistrationService Jellyfin Plugin Pages -> Emby page model (port phase 6)
-      CleanupTask / BackupTask      Jellyfin IScheduledTask -> Emby IScheduledTask (port phase 5)
+
   -->
   <ItemGroup>
     <Compile Remove="Api\**" />
-    <Compile Remove="Services\Shared\AutoRefreshHostedService.cs" />
-    <Compile Remove="Services\Shared\StorageMigrationHostedService.cs" />
-    <Compile Remove="Services\PluginPagesRegistrationService.cs" />
-    <Compile Remove="Services\Shared\CleanupTask.cs" />
-    <Compile Remove="Services\Shared\BackupTask.cs" />
   </ItemGroup>
 
   <!--
