@@ -42,12 +42,12 @@ jobs:
 
       - name: Build plugin
         run: >-
-          dotnet build Jellyfin.Plugin.SmartLists/Jellyfin.Plugin.SmartLists.csproj
+          dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj
           --configuration Release --no-restore
 
       - name: Run tests
         run: >-
-          dotnet test Jellyfin.Plugin.SmartLists.Tests/Jellyfin.Plugin.SmartLists.Tests.csproj
+          dotnet test Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj
           --configuration Release --no-restore
           --logger "trx;LogFileName=test-results.trx"
           --logger "console;verbosity=normal"

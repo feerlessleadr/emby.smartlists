@@ -1,0 +1,802 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using MediaBrowser.Controller.Entities;
+using Emby.Plugin.SmartLists.Services.Shared;
+using Emby.Plugin.SmartLists.Utilities;
+using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using Microsoft.Extensions.Logging;
+
+namespace Emby.Plugin.SmartLists.Core.Orders
+{
+    /// <summary>
+    /// Base class for all round-robin sort orders.
+    /// Groups items by a configurable field and interleaves them round-robin;
+    /// subclasses control only the group ordering strategy via <see cref="OrderGroupKeys"/>.
+    /// </summary>
+    public abstract class RoundRobinBase : Order
+    {
+        /// <summary>
+        /// The field used to group items (e.g., "SeriesName", "AlbumName", "Artist", "Genres", "Studios").
+        /// Set by SmartList before sorting.
+        /// </summary>
+        public string? GroupByField { get; set; }
+
+        /// <summary>
+        /// Item id → collection name, for GroupByField "Collections". Built by SmartList from the
+        /// unfiltered media pool (episodes resolve membership through their parent series) and set
+        /// before <see cref="PreComputePositions"/>. Items absent from the map fall back to
+        /// series-name/own-name grouping in <see cref="ExtractGroupKey"/>.
+        /// </summary>
+        public Dictionary<long, string>? CollectionGroupKeys { get; set; }
+
+        /// <summary>
+        /// When true, items within each group are ordered by air date (premiere date, day precision)
+        /// instead of natural season/episode order. Set from SortOption.WithinGroupOrder.
+        /// Ignored when <see cref="ShuffleWithinGroups"/> is true.
+        /// </summary>
+        public bool OrderWithinGroupsByAirDate { get; set; }
+
+        /// <summary>
+        /// Default window (days) for chaining episodes into air blocks.
+        /// </summary>
+        public const int DefaultAirBlockWindowDays = 3;
+
+        /// <summary>
+        /// Maximum allowed air-block window in days. The interleave and the mid-block hold both
+        /// clamp to the same bounds so they always agree on block boundaries.
+        /// </summary>
+        public const int MaxAirBlockWindowDays = 30;
+
+        /// <summary>
+        /// Window in days for chaining episodes of different shows into one interleave block,
+        /// active only when grouping by Collections with air-date within-group order.
+        /// 0 means same-day only. Set from SortOption.AirBlockWindowDays (null = default).
+        /// </summary>
+        public int AirBlockWindowDays { get; set; } = DefaultAirBlockWindowDays;
+
+        /// <summary>
+        /// When true, items within each group are shuffled instead of sorted in natural order.
+        /// </summary>
+        protected virtual bool ShuffleWithinGroups => false;
+
+        /// <summary>
+        /// True when this refresh interleaves air blocks: Collections grouping with air-date
+        /// within-group order (shuffle wins over air-date order, so shuffled variants never use
+        /// blocks) AND a resolved collection map, without which block grouping has nothing to
+        /// group by. Answers exactly the question <see cref="BuildInterleavedPositions"/> asks,
+        /// so a caller can trust this alone.
+        /// </summary>
+        internal bool UsesAirBlocks => ShouldUseAirBlocks(GroupByField, OrderWithinGroupsByAirDate, ShuffleWithinGroups, CollectionGroupKeys);
+
+        /// <summary>
+        /// The air-block gate itself, in one place. <see cref="UsesAirBlocks"/> reads it from
+        /// instance state; <see cref="BuildInterleavedPositions"/> reads it from its parameters.
+        /// Both must agree on whether a refresh uses blocks - if they drift, SmartList prepares
+        /// state for one mode while the interleave runs the other. Every condition lives here,
+        /// including the map presence, so there is no "and also check X" for callers to forget.
+        /// </summary>
+        internal static bool ShouldUseAirBlocks(string? groupByField, bool airDateWithinGroups, bool shuffleWithinGroups, Dictionary<long, string>? collectionGroupKeys) =>
+            groupByField == "Collections" && airDateWithinGroups && !shuffleWithinGroups && collectionGroupKeys != null;
+
+        /// <summary>
+        /// Pre-computed interleave positions for each item.
+        /// Set by <see cref="PreComputePositions"/> before sorting.
+        /// </summary>
+        public ConcurrentDictionary<long, int> ItemPositions { get; set; } = new();
+
+        /// <summary>
+        /// Determines how group keys are ordered before interleaving.
+        /// </summary>
+        protected abstract List<string> OrderGroupKeys(IEnumerable<string> keys);
+
+        /// <summary>
+        /// Pre-computes interleave positions for all items using the subclass group ordering strategy.
+        /// Groups items by the configured field, orders items within each group by natural order
+        /// (or shuffles them when <see cref="ShuffleWithinGroups"/> is true),
+        /// orders groups via <see cref="OrderGroupKeys"/>, then assigns positions via round-robin interleaving.
+        /// With Collections grouping and air-date order, each cycle emits one air block
+        /// (episodes that aired within <see cref="AirBlockWindowDays"/> days of each other) instead of one item.
+        /// </summary>
+        public virtual void PreComputePositions(IEnumerable<BaseItem> items, ILogger? logger = null)
+        {
+            ItemPositions = BuildInterleavedPositions(items, GroupByField, OrderGroupKeys, Name, logger, ShuffleWithinGroups, CollectionGroupKeys, OrderWithinGroupsByAirDate, AirBlockWindowDays);
+        }
+
+        public override IEnumerable<BaseItem> OrderBy(IEnumerable<BaseItem> items)
+        {
+            if (ItemPositions.Count == 0)
+            {
+                return items;
+            }
+
+            return items.OrderBy(item =>
+                ItemPositions.TryGetValue(item.InternalId, out var pos) ? pos : int.MaxValue);
+        }
+
+        public override IEnumerable<BaseItem> OrderBy(
+            IEnumerable<BaseItem> items,
+            User user,
+            IUserDataManager? userDataManager,
+            ILogger? logger,
+            RefreshQueueService.RefreshCache? refreshCache = null)
+        {
+            return OrderBy(items);
+        }
+
+        public override IComparable GetSortKey(
+            BaseItem item,
+            User user,
+            IUserDataManager? userDataManager,
+            ILogger? logger,
+            Dictionary<long, int>? itemRandomKeys = null,
+            RefreshQueueService.RefreshCache? refreshCache = null)
+        {
+            return ItemPositions.TryGetValue(item.InternalId, out var pos) ? pos : int.MaxValue;
+        }
+
+        /// <summary>
+        /// Shared algorithm for all round-robin variants: groups items, orders items within each
+        /// group by natural order (or shuffles them when <paramref name="shuffleWithinGroups"/> is true),
+        /// orders groups via the supplied strategy, then interleaves round-robin — one item per group
+        /// per cycle, or one air block per cycle when collection grouping uses air-date order
+        /// (see <see cref="ChunkIntoAirBlocks"/>).
+        /// </summary>
+        internal static ConcurrentDictionary<long, int> BuildInterleavedPositions(
+            IEnumerable<BaseItem> items,
+            string? groupByField,
+            Func<IEnumerable<string>, List<string>> orderGroupKeys,
+            string logPrefix,
+            ILogger? logger,
+            bool shuffleWithinGroups = false,
+            Dictionary<long, string>? collectionGroupKeys = null,
+            bool airDateWithinGroups = false,
+            int airBlockWindowDays = DefaultAirBlockWindowDays)
+        {
+            var positions = new ConcurrentDictionary<long, int>();
+
+            var itemsList = items.ToList();
+            if (itemsList.Count == 0 || string.IsNullOrEmpty(groupByField))
+            {
+                if (itemsList.Count > 0)
+                {
+                    logger?.LogWarning("{LogPrefix}: no GroupByField configured - items returned in original order", logPrefix);
+                }
+
+                return positions;
+            }
+
+            var groups = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in itemsList)
+            {
+                var key = ExtractGroupKey(item, groupByField, collectionGroupKeys);
+                if (!groups.TryGetValue(key, out var group))
+                {
+                    group = new List<BaseItem>();
+                    groups[key] = group;
+                }
+
+                group.Add(item);
+            }
+
+            logger?.LogDebug("{LogPrefix}: Grouped {ItemCount} items into {GroupCount} groups by '{Field}'",
+                logPrefix, itemsList.Count, groups.Count, groupByField);
+
+            foreach (var kvp in groups)
+            {
+                if (shuffleWithinGroups)
+                {
+                    Shuffle(kvp.Value, Random.Shared);
+                }
+                else if (airDateWithinGroups)
+                {
+                    kvp.Value.Sort((a, b) => CompareWithinGroupByAirDate(a, b));
+                }
+                else
+                {
+                    kvp.Value.Sort((a, b) => CompareWithinGroup(a, b));
+                }
+            }
+
+            var orderedKeys = orderGroupKeys(groups.Keys);
+
+            int position = 0;
+
+            // Air blocks apply only to collection grouping with air-date order; the plain
+            // per-item interleave stays allocation-free for every other round-robin variant.
+            // Same gate as UsesAirBlocks, evaluated from parameters instead of instance state,
+            // so the two cannot diverge.
+            bool useAirBlocks = ShouldUseAirBlocks(groupByField, airDateWithinGroups, shuffleWithinGroups, collectionGroupKeys);
+            if (!useAirBlocks)
+            {
+                int maxGroupSize = groups.Values.Max(g => g.Count);
+
+                for (int level = 0; level < maxGroupSize; level++)
+                {
+                    foreach (var groupKey in orderedKeys)
+                    {
+                        var group = groups[groupKey];
+                        if (level < group.Count)
+                        {
+                            positions[group[level].InternalId] = position++;
+                        }
+                    }
+                }
+            }
+            else
+            {
+                int windowDays = Math.Clamp(airBlockWindowDays, 0, MaxAirBlockWindowDays);
+                var groupBlocks = new Dictionary<string, List<List<BaseItem>>>(StringComparer.OrdinalIgnoreCase);
+                foreach (var kvp in groups)
+                {
+                    groupBlocks[kvp.Key] = ChunkIntoAirBlocks(kvp.Value, windowDays);
+                }
+
+                int maxBlockCount = groupBlocks.Values.Max(b => b.Count);
+
+                for (int level = 0; level < maxBlockCount; level++)
+                {
+                    foreach (var groupKey in orderedKeys)
+                    {
+                        var blocks = groupBlocks[groupKey];
+                        if (level < blocks.Count)
+                        {
+                            foreach (var item in blocks[level])
+                            {
+                                positions[item.InternalId] = position++;
+                            }
+                        }
+                    }
+                }
+            }
+
+            logger?.LogDebug("{LogPrefix}: Assigned {PositionCount} interleave positions across {GroupCount} groups",
+                logPrefix, positions.Count, groups.Count);
+
+            return positions;
+        }
+
+        /// <summary>
+        /// Chunks an air-date-sorted group into "air blocks": a block extends while the next
+        /// item aired within <paramref name="windowDays"/> days of the previous one AND belongs
+        /// to a show not already in the block. Same-night crossovers and franchise weeks stay
+        /// together; solo-era episodes and items with no air date form blocks of one.
+        /// </summary>
+        internal static List<List<BaseItem>> ChunkIntoAirBlocks(List<BaseItem> group, int windowDays)
+        {
+            var blocks = new List<List<BaseItem>>();
+            List<BaseItem>? current = null;
+            HashSet<string>? currentShows = null;
+            var prevDate = DateTime.MinValue;
+
+            foreach (var item in group)
+            {
+                var date = OrderUtilities.GetReleaseDate(item).Date;
+                var show = ExtractGroupKey(item, "SeriesName");
+
+                var chains = current != null
+                    && date > DateTime.MinValue
+                    && prevDate > DateTime.MinValue
+                    && (date - prevDate).TotalDays <= windowDays
+                    && !currentShows!.Contains(show);
+
+                if (!chains)
+                {
+                    current = new List<BaseItem>();
+                    currentShows = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    blocks.Add(current);
+                }
+
+                current!.Add(item);
+                currentShows!.Add(show);
+                prevDate = date;
+            }
+
+            return blocks;
+        }
+
+        /// <summary>
+        /// Extracts the group key from an item based on the configured GroupByField.
+        /// </summary>
+        internal static string ExtractGroupKey(BaseItem item, string? groupByField, Dictionary<long, string>? collectionGroupKeys = null)
+        {
+            if (string.IsNullOrEmpty(groupByField))
+            {
+                return string.Empty;
+            }
+
+            switch (groupByField)
+            {
+                case "SeriesName":
+                    if (item is Episode episode)
+                    {
+                        return episode.SeriesName ?? string.Empty;
+                    }
+
+                    return item.Name ?? string.Empty;
+
+                case "AlbumName":
+                    return item.Album ?? string.Empty;
+
+                case "Artist":
+                    if (item is Audio audio && audio.Artists != null && audio.Artists.Length > 0)
+                    {
+                        return audio.Artists[0];
+                    }
+
+                    return string.Empty;
+
+                case "Genres":
+                    if (item.Genres != null && item.Genres.Length > 0)
+                    {
+                        return item.Genres[0];
+                    }
+
+                    return string.Empty;
+
+                case "Studios":
+                    if (item.Studios != null && item.Studios.Length > 0)
+                    {
+                        return item.Studios[0];
+                    }
+
+                    return string.Empty;
+
+                case "Collections":
+                    if (collectionGroupKeys != null && collectionGroupKeys.TryGetValue(item.InternalId, out var collectionName))
+                    {
+                        return collectionName;
+                    }
+
+                    // Not in any collection: fall back to per-show grouping
+                    if (item is Episode collectionEpisode)
+                    {
+                        return collectionEpisode.SeriesName ?? string.Empty;
+                    }
+
+                    return item.Name ?? string.Empty;
+
+                default:
+                    return item.Name ?? string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Compares two items within the same group for natural ordering.
+        /// Episodes sort by season then episode number, audio by disc then track, others by name.
+        /// </summary>
+        internal static int CompareWithinGroup(BaseItem a, BaseItem b)
+        {
+            if (a is Episode && b is Episode)
+            {
+                var seasonCompare = OrderUtilities.GetSeasonNumber(a).CompareTo(OrderUtilities.GetSeasonNumber(b));
+                if (seasonCompare != 0) return seasonCompare;
+                return OrderUtilities.GetEpisodeNumber(a).CompareTo(OrderUtilities.GetEpisodeNumber(b));
+            }
+
+            if (a is Audio && b is Audio)
+            {
+                var discCompare = OrderUtilities.GetDiscNumber(a).CompareTo(OrderUtilities.GetDiscNumber(b));
+                if (discCompare != 0) return discCompare;
+                return OrderUtilities.GetTrackNumber(a).CompareTo(OrderUtilities.GetTrackNumber(b));
+            }
+
+            return OrderUtilities.SharedNaturalComparer.Compare(
+                a.SortName ?? a.Name ?? string.Empty,
+                b.SortName ?? b.Name ?? string.Empty);
+        }
+
+        /// <summary>
+        /// Compares two items within the same group by air date (premiere date, day precision).
+        /// Missing dates are DateTime.MinValue and sort first (Release Date sort convention).
+        /// Same-day ties put episodes before non-episodes, then episodes of different series
+        /// compare by series Sort Title (so users can order a crossover night), then fall back
+        /// to natural order.
+        /// </summary>
+        internal static int CompareWithinGroupByAirDate(BaseItem a, BaseItem b)
+        {
+            var dateCompare = OrderUtilities.GetReleaseDate(a).Date.CompareTo(OrderUtilities.GetReleaseDate(b).Date);
+            if (dateCompare != 0)
+            {
+                return dateCompare;
+            }
+
+            var episodeCompare = OrderUtilities.IsEpisode(b).CompareTo(OrderUtilities.IsEpisode(a));
+            if (episodeCompare != 0)
+            {
+                return episodeCompare;
+            }
+
+            // Same-day tie between episodes of different series: the series Sort Title decides.
+            // Air time is not in Jellyfin metadata (provider dates are day-precision), so users
+            // order a crossover night by editing the series' Sort Title.
+            if (a is Episode epA && b is Episode epB && epA.SeriesId != epB.SeriesId)
+            {
+                var seriesCompare = OrderUtilities.SharedNaturalComparer.Compare(GetSeriesSortName(epA), GetSeriesSortName(epB));
+                if (seriesCompare != 0)
+                {
+                    return seriesCompare;
+                }
+            }
+
+            return CompareWithinGroup(a, b);
+        }
+
+        /// <summary>
+        /// Gets the sort name of an episode's series (custom Sort Title when set, otherwise the
+        /// series' computed sort name), falling back to the denormalized series name.
+        /// </summary>
+        private static string GetSeriesSortName(Episode episode)
+        {
+            var sortName = episode.Series?.SortName;
+            return string.IsNullOrEmpty(sortName) ? episode.SeriesName ?? string.Empty : sortName;
+        }
+
+        /// <summary>
+        /// Fisher-Yates in-place shuffle.
+        /// </summary>
+        internal static void Shuffle<T>(IList<T> list, Random rng)
+        {
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+#pragma warning disable CA5394
+                int j = rng.Next(i + 1);
+#pragma warning restore CA5394
+                (list[i], list[j]) = (list[j], list[i]);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Sorts items by interleaving across groups defined by a configurable field.
+    /// Groups are ordered alphabetically (A→Z).
+    /// For example, grouping by SeriesName produces: Show A Ep1, Show B Ep1, Show C Ep1, Show A Ep2, ...
+    /// </summary>
+    public class RoundRobinOrder : RoundRobinBase
+    {
+        public override string Name => "Round Robin Ascending";
+
+        protected override List<string> OrderGroupKeys(IEnumerable<string> keys)
+        {
+            return keys.OrderBy(k => k, OrderUtilities.SharedNaturalComparer).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Round Robin sort with groups in descending (Z→A) order.
+    /// </summary>
+    public class RoundRobinOrderDesc : RoundRobinBase
+    {
+        public override string Name => "Round Robin Descending";
+
+        protected override List<string> OrderGroupKeys(IEnumerable<string> keys)
+        {
+            return keys.OrderByDescending(k => k, OrderUtilities.SharedNaturalComparer).ToList();
+        }
+    }
+
+    /// <summary>
+    /// Round Robin sort with groups in random order. Each refresh produces a different
+    /// group interleaving while preserving natural order within each group.
+    /// </summary>
+    public class RoundRobinRandomOrder : RoundRobinBase
+    {
+        public override string Name => "Random Round Robin";
+
+        protected override List<string> OrderGroupKeys(IEnumerable<string> keys)
+        {
+            var list = keys.ToList();
+            Shuffle(list, Random.Shared);
+            return list;
+        }
+    }
+
+    /// <summary>
+    /// Round Robin sort with groups in random order AND items shuffled within each group.
+    /// Each refresh produces a fully random rotation: random group interleaving and
+    /// random order inside every group ("turning on a TV at a random time").
+    /// </summary>
+    public class RoundRobinShuffledOrder : RoundRobinRandomOrder
+    {
+        public override string Name => "Shuffled Round Robin";
+
+        protected override bool ShuffleWithinGroups => true;
+    }
+
+    /// <summary>
+    /// Round Robin sort with groups ordered by how recently the user watched anything in them:
+    /// least recently watched first, never-watched groups first of all (alphabetical tie-break).
+    /// The rotation "continues where the user left off" with no persisted state - it is derived
+    /// entirely from per-user LastPlayedDate data, so it is deterministic for a given watch history.
+    /// </summary>
+    public class RoundRobinLeastRecentlyWatchedOrder : RoundRobinBase
+    {
+        public override string Name => "Least Recently Watched Round Robin";
+
+        /// <summary>
+        /// Group key → most recent per-user LastPlayedDate, computed from the UNFILTERED media
+        /// pool (rules like "Playback Status is Unwatched" remove watched items from the results,
+        /// so recency derived from filtered items would see every group as never watched).
+        /// Set by SmartList before <see cref="RoundRobinBase.PreComputePositions"/>.
+        /// Groups absent from the map are treated as never watched and sort first — including
+        /// groups held mid-block: with Collections grouping and air-date order, a group whose
+        /// most recently watched item sits in an air block (see
+        /// <see cref="RoundRobinBase.ChunkIntoAirBlocks"/>) that still has unwatched items
+        /// stays at the front until the block is finished.
+        /// </summary>
+        public Dictionary<string, DateTime> GroupRecency { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+
+        protected override List<string> OrderGroupKeys(IEnumerable<string> keys)
+        {
+            return keys
+                .OrderBy(k => HeldGroups.Contains(k) || !GroupRecency.TryGetValue(k, out var d) ? DateTime.MinValue : d)
+                .ThenBy(k => k, OrderUtilities.SharedNaturalComparer)
+                .ToList();
+        }
+
+        /// <summary>
+        /// Groups currently held mid-block: they sort as never watched (front of the rotation)
+        /// regardless of their recency. Recomputed from scratch on every
+        /// <see cref="PreComputePositions"/> call, so intermediate passes (e.g. per-group limits
+        /// sorting rule-group subsets) never leave a stale hold behind — the final pass over the
+        /// playlist's real item set wins.
+        /// </summary>
+        internal HashSet<string> HeldGroups { get; } = new(StringComparer.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// Per-group collection items the user has interacted with (Played flag set or a
+        /// LastPlayedDate), with their per-user LastPlayedDate and air date. Collected from the
+        /// UNFILTERED pool by <see cref="BuildGroupRecencyAndHoldState"/> when air blocks are
+        /// active; anchors the mid-block hold. In-progress items (a LastPlayedDate but no Played
+        /// flag) appear here AND in <see cref="UnwatchedCollectionItemIds"/>.
+        /// </summary>
+        internal Dictionary<string, List<(BaseItem Item, DateTime LastPlayed, DateTime Air)>>? WatchedByGroup { get; private set; }
+
+        /// <summary>
+        /// Ids of collection-member items that count as unwatched for the hold, from the
+        /// UNFILTERED pool. For regular items this matches the "Playback Status" rule semantics:
+        /// Played flag unset is unwatched, so imported watch states without a timestamp count as
+        /// watched and started-but-unfinished items count as unwatched. Folder items (Series and
+        /// other containers) with any aggregate watch activity count as watched instead — Jellyfin
+        /// does not reliably persist the Played flag on folder user-data rows, so a fully-watched
+        /// Series would otherwise hold its group forever.
+        /// </summary>
+        internal HashSet<long>? UnwatchedCollectionItemIds { get; private set; }
+
+        /// <summary>
+        /// Builds <see cref="GroupRecency"/> (group key → most recent per-user LastPlayedDate)
+        /// for one user across the given items. Container items (Series/Season/MusicAlbum) use
+        /// the aggregate-over-children date when the refresh cache has their children, mirroring
+        /// LastPlayedOrderBase. When air blocks are active (<see cref="RoundRobinBase.UsesAirBlocks"/>),
+        /// also collects the per-group watch state the mid-block hold needs; the hold itself runs
+        /// later, in <see cref="PreComputePositions"/>, once the playlist's filtered items are known.
+        /// </summary>
+        internal void BuildGroupRecencyAndHoldState(
+            IEnumerable<BaseItem> items,
+            User user,
+            IUserDataManager? userDataManager,
+            RefreshQueueService.RefreshCache? refreshCache,
+            ILogger? logger)
+        {
+            var recency = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            GroupRecency = recency;
+            WatchedByGroup = null;
+            UnwatchedCollectionItemIds = null;
+
+            if (string.IsNullOrEmpty(GroupByField) || userDataManager == null || user == null)
+            {
+                logger?.LogWarning("Least Recently Watched Round Robin: missing GroupByField or user context - groups fall back to alphabetical order");
+                return;
+            }
+
+            // UsesAirBlocks already requires CollectionGroupKeys, so the null-forgiving uses of it
+            // below are safe.
+            var collectHoldState = UsesAirBlocks;
+            if (collectHoldState)
+            {
+                WatchedByGroup = new Dictionary<string, List<(BaseItem Item, DateTime LastPlayed, DateTime Air)>>(StringComparer.OrdinalIgnoreCase);
+                UnwatchedCollectionItemIds = new HashSet<long>();
+            }
+
+            foreach (var item in items)
+            {
+                try
+                {
+                    var key = ExtractGroupKey(item, GroupByField, CollectionGroupKeys);
+
+                    // Fetch user data lazily: only when the aggregate date can't answer recency,
+                    // or when the item feeds the mid-block hold (Played flag needed).
+                    var isHoldMember = collectHoldState && CollectionGroupKeys!.ContainsKey(item.InternalId);
+                    var aggregateLastPlayed = LastPlayedOrderBase.GetAggregateLastPlayedDate(item, user, userDataManager, refreshCache);
+                    var userData = aggregateLastPlayed == null || isHoldMember
+                        ? (refreshCache != null
+                            ? UserDataCacheHelper.GetCachedUserData(user, item, refreshCache, userDataManager)
+                            : userDataManager.GetUserData(user, item))
+                        : null;
+
+                    var lastPlayed = aggregateLastPlayed
+                        ?? LastPlayedOrderBase.GetLastPlayedDateFromUserData(userData);
+
+                    // Only fully played items advance the rotation: Jellyfin stamps LastPlayedDate
+                    // on any playback, so a half-watched episode must not send its group to the
+                    // back. Folder items keep the aggregate date (their Played flag is unreliable).
+                    var countsForRecency = aggregateLastPlayed != null || userData?.Played == true;
+
+                    if (countsForRecency && lastPlayed > DateTime.MinValue &&
+                        (!recency.TryGetValue(key, out var existing) || lastPlayed > existing))
+                    {
+                        recency[key] = lastPlayed;
+                    }
+
+                    if (isHoldMember)
+                    {
+                        if (userData?.Played == true || lastPlayed > DateTime.MinValue)
+                        {
+                            if (!WatchedByGroup!.TryGetValue(key, out var list))
+                            {
+                                list = new List<(BaseItem Item, DateTime LastPlayed, DateTime Air)>();
+                                WatchedByGroup[key] = list;
+                            }
+
+                            list.Add((item, lastPlayed, OrderUtilities.GetReleaseDate(item).Date));
+                        }
+
+                        if (userData?.Played != true && !(item is Folder && lastPlayed > DateTime.MinValue))
+                        {
+                            UnwatchedCollectionItemIds!.Add(item.InternalId);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger?.LogWarning(ex, "Error reading last played date for item {ItemName}", item.Name);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Applies the mid-block hold against the playlist's filtered items, then computes
+        /// interleave positions as usual. A collection group mid-way through an air block keeps
+        /// its front-of-rotation spot only while the playlist can still play something from that
+        /// block.
+        /// </summary>
+        public override void PreComputePositions(IEnumerable<BaseItem> items, ILogger? logger = null)
+        {
+            var itemsList = items as List<BaseItem> ?? items.ToList();
+            ApplyMidBlockHold(itemsList, logger);
+            base.PreComputePositions(itemsList, logger);
+        }
+
+        /// <summary>
+        /// Recomputes <see cref="HeldGroups"/>: groups mid-way through an air block sort with the
+        /// never-watched groups at the front until the block is finished. Block topology is the
+        /// union of the playlist's FILTERED items and the user's watched items (watched items
+        /// anchor a block even when a "Playback Status" rule hides them), rebuilt with the
+        /// interleave's own pipeline (air-date sort +
+        /// <see cref="RoundRobinBase.ChunkIntoAirBlocks"/>). A hold fires only when the anchor's
+        /// block still has an unwatched item the playlist can actually show — items excluded by
+        /// other rules never pin a group. The anchor is the most recently played item, with ties
+        /// broken by latest air date so bulk-marked histories resolve deterministically.
+        /// </summary>
+        internal void ApplyMidBlockHold(List<BaseItem> filteredItems, ILogger? logger)
+        {
+            HeldGroups.Clear();
+
+            if (WatchedByGroup == null || WatchedByGroup.Count == 0 || UnwatchedCollectionItemIds == null || CollectionGroupKeys == null)
+            {
+                return;
+            }
+
+            // Visible items per group with watch data (single pass over the playlist items)
+            var visibleByGroup = new Dictionary<string, List<BaseItem>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var item in filteredItems)
+            {
+                if (CollectionGroupKeys.TryGetValue(item.InternalId, out var key) && WatchedByGroup.ContainsKey(key))
+                {
+                    if (!visibleByGroup.TryGetValue(key, out var list))
+                    {
+                        list = new List<BaseItem>();
+                        visibleByGroup[key] = list;
+                    }
+
+                    list.Add(item);
+                }
+            }
+
+            var windowDays = Math.Clamp(AirBlockWindowDays, 0, MaxAirBlockWindowDays);
+
+            foreach (var kvp in WatchedByGroup)
+            {
+                if (!GroupRecency.ContainsKey(kvp.Key) || !visibleByGroup.TryGetValue(kvp.Key, out var visible))
+                {
+                    continue; // no recency to override, or nothing this playlist can play
+                }
+
+                // Anchor: most recently played item, ties broken by latest air date, then by
+                // item id so equal timestamps AND air dates (bulk marks) stay deterministic.
+                BaseItem? anchor = null;
+                var bestPlayed = DateTime.MinValue;
+                var bestAir = DateTime.MinValue;
+                foreach (var (item, lastPlayed, air) in kvp.Value)
+                {
+                    if (lastPlayed == DateTime.MinValue)
+                    {
+                        continue; // no timestamp - never anchors
+                    }
+
+                    var cmp = lastPlayed.CompareTo(bestPlayed);
+                    if (cmp == 0)
+                    {
+                        cmp = air.CompareTo(bestAir);
+                    }
+
+                    if (cmp == 0 && anchor != null)
+                    {
+                        cmp = item.Id.CompareTo(anchor.Id);
+                    }
+
+                    if (anchor == null || cmp > 0)
+                    {
+                        anchor = item;
+                        bestPlayed = lastPlayed;
+                        bestAir = air;
+                    }
+                }
+
+                if (anchor == null || bestAir == DateTime.MinValue)
+                {
+                    continue; // no dated watch history - normal rotation
+                }
+
+                // Block topology: filtered items plus watched items, deduped by id
+                var unionIds = new HashSet<long>();
+                var union = new List<BaseItem>(visible.Count + kvp.Value.Count);
+                foreach (var item in visible)
+                {
+                    if (unionIds.Add(item.InternalId))
+                    {
+                        union.Add(item);
+                    }
+                }
+
+                foreach (var (item, _, _) in kvp.Value)
+                {
+                    if (unionIds.Add(item.InternalId))
+                    {
+                        union.Add(item);
+                    }
+                }
+
+                var visibleIds = new HashSet<long>();
+                foreach (var item in visible)
+                {
+                    visibleIds.Add(item.InternalId);
+                }
+
+                union.Sort((a, b) => CompareWithinGroupByAirDate(a, b));
+
+                var anchorId = anchor.Id;
+                foreach (var block in ChunkIntoAirBlocks(union, windowDays))
+                {
+                    if (!block.Exists(i => i.Id == anchorId))
+                    {
+                        continue;
+                    }
+
+                    if (block.Exists(i => visibleIds.Contains(i.InternalId) && UnwatchedCollectionItemIds.Contains(i.InternalId)))
+                    {
+                        HeldGroups.Add(kvp.Key);
+                        logger?.LogDebug(
+                            "Least Recently Watched Round Robin: holding group '{GroupKey}' at the front - its current air block still has unwatched item(s) in the playlist (window {Window})",
+                            kvp.Key, windowDays);
+                    }
+
+                    break;
+                }
+            }
+        }
+    }
+}

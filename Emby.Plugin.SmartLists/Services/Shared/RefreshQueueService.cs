@@ -1,0 +1,1279 @@
+using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+using MediaBrowser.Controller.Entities;
+using Emby.Plugin.SmartLists.Core.Enums;
+using Emby.Plugin.SmartLists.Core.Models;
+using Emby.Plugin.SmartLists.Core.QueryEngine;
+using Emby.Plugin.SmartLists.Services.Collections;
+using Emby.Plugin.SmartLists.Services.ExternalList;
+using Emby.Plugin.SmartLists.Services.Playlists;
+using Emby.Plugin.SmartLists.Utilities;
+using MediaBrowser.Controller;
+using MediaBrowser.Controller.Entities.Audio;
+using MediaBrowser.Controller.Entities.TV;
+using MediaBrowser.Controller.Library;
+using MediaBrowser.Controller.Playlists;
+using MediaBrowser.Controller.Collections;
+using MediaBrowser.Controller.Providers;
+using Microsoft.Extensions.Logging;
+
+namespace Emby.Plugin.SmartLists.Services.Shared
+{
+    /// <summary>
+    /// Type of operation in the refresh queue
+    /// </summary>
+    public enum RefreshOperationType
+    {
+        Refresh,
+        Create,
+        Edit
+    }
+
+    /// <summary>
+    /// Represents an item in the refresh queue
+    /// </summary>
+    public class RefreshQueueItem
+    {
+        public string ListId { get; set; } = string.Empty;
+        public string ListName { get; set; } = string.Empty;
+        public SmartListType ListType { get; set; }
+        public RefreshOperationType OperationType { get; set; }
+        public SmartListDto? ListData { get; set; }
+        public string? UserId { get; set; }
+        public List<string>? TriggeringUserIds { get; set; }
+        public RefreshTriggerType TriggerType { get; set; }
+        public DateTime QueuedAt { get; set; }
+    }
+
+    /// <summary>
+    /// Service that manages a global queue for refresh operations.
+    /// Processes operations sequentially in FIFO order with deduplication.
+    /// </summary>
+    public class RefreshQueueService : IDisposable
+    {
+        private readonly ILogger<RefreshQueueService> _logger;
+        private readonly IUserManager _userManager;
+        private readonly ILibraryManager _libraryManager;
+        private readonly IPlaylistManager _playlistManager;
+        private readonly ICollectionManager _collectionManager;
+        private readonly IUserDataManager _userDataManager;
+        private readonly IProviderManager _providerManager;
+        private readonly MediaBrowser.Model.IO.IFileSystem _fileSystem;
+        private readonly IServerApplicationPaths _applicationPaths;
+        private readonly RefreshStatusService _refreshStatusService;
+        private readonly Microsoft.Extensions.Logging.ILoggerFactory _loggerFactory;
+        private readonly SmartListImageService? _imageService;
+        private readonly ExternalListService? _externalListService;
+        private readonly MediaBrowser.Controller.Persistence.IItemRepository? _itemRepository;
+
+        // Queue data structures
+        private readonly ConcurrentQueue<RefreshQueueItem> _queue = new();
+        private readonly ConcurrentDictionary<string, RefreshQueueItem> _queuedItems = new(); // For deduplication by ListId
+        private readonly SemaphoreSlim _processingLock = new(1, 1); // Single-threaded processing
+
+        // Cache management - per-user caches to avoid rebuilding when switching between users
+        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<MediaTypesKey, Lazy<BaseItem[]>>> _userCaches = new();
+        
+        // Per-user RefreshCache for expensive operations (People, Collections, Series metadata, UserData, MediaStreams)
+        private readonly ConcurrentDictionary<Guid, RefreshCache> _refreshCaches = new();
+
+        // Background processing
+        private readonly CancellationTokenSource _cancellationTokenSource = new();
+        private Task? _processingTask;
+        private volatile bool _disposed = false;
+        private volatile RefreshQueueItem? _currentlyProcessing;
+
+        public RefreshQueueService(
+            ILogger<RefreshQueueService> logger,
+            IUserManager userManager,
+            ILibraryManager libraryManager,
+            IPlaylistManager playlistManager,
+            ICollectionManager collectionManager,
+            IUserDataManager userDataManager,
+            IProviderManager providerManager,
+            MediaBrowser.Model.IO.IFileSystem fileSystem,
+            IServerApplicationPaths applicationPaths,
+            RefreshStatusService refreshStatusService,
+            Microsoft.Extensions.Logging.ILoggerFactory loggerFactory,
+            SmartListImageService? imageService = null,
+            ExternalListService? externalListService = null,
+            MediaBrowser.Controller.Persistence.IItemRepository? itemRepository = null)
+        {
+            _logger = logger;
+            _userManager = userManager;
+            _libraryManager = libraryManager;
+            _playlistManager = playlistManager;
+            _collectionManager = collectionManager;
+            _userDataManager = userDataManager;
+            _providerManager = providerManager;
+            _fileSystem = fileSystem;
+            _applicationPaths = applicationPaths;
+            _refreshStatusService = refreshStatusService;
+            _loggerFactory = loggerFactory;
+            _imageService = imageService;
+            _externalListService = externalListService;
+            _itemRepository = itemRepository;
+
+            // Start background processing task
+            _processingTask = Task.Run(ProcessQueueAsync, _cancellationTokenSource.Token);
+            _logger.LogInformation("RefreshQueueService initialized and started");
+        }
+
+        /// <summary>
+        /// Enqueues an operation. If the list is already queued, skips adding it again (deduplication).
+        /// </summary>
+        public void EnqueueOperation(RefreshQueueItem item)
+        {
+            if (_disposed)
+            {
+                _logger.LogWarning("Attempted to enqueue operation after disposal");
+                return;
+            }
+
+            // Deduplication: Use TryAdd as atomic gate to prevent race conditions
+            if (!_queuedItems.TryAdd(item.ListId, item))
+            {
+                _logger.LogDebug("List {ListId} ({ListName}) is already queued, skipping duplicate", item.ListId, item.ListName);
+                return;
+            }
+
+            item.QueuedAt = DateTime.UtcNow;
+            _queue.Enqueue(item);
+
+            _logger.LogDebug("Enqueued {OperationType} operation for list {ListId} ({ListName}) of type {ListType}",
+                item.OperationType, item.ListId, item.ListName, item.ListType);
+        }
+
+        /// <summary>
+        /// Gets the count of items waiting in the queue (excludes currently processing item).
+        /// </summary>
+        /// <summary>
+        /// Takes the queue's processing lock and returns a scope that releases it on dispose, so the
+        /// caller cannot interleave with an operation that is already materializing a list. Deletes need
+        /// this: the queue reloads a list from the store before building it, and a delete landing after
+        /// that reload leaves the operation recreating what was just deleted. Holding the lock makes the
+        /// delete wait for the in-flight operation instead. The queue never deletes lists itself, so this
+        /// cannot deadlock.
+        /// </summary>
+        public async Task<IDisposable> AcquireProcessingLockAsync(CancellationToken cancellationToken = default)
+        {
+            await _processingLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+            return new ProcessingLockScope(_processingLock);
+        }
+
+        private sealed class ProcessingLockScope : IDisposable
+        {
+            private SemaphoreSlim? _semaphore;
+
+            public ProcessingLockScope(SemaphoreSlim semaphore)
+            {
+                _semaphore = semaphore;
+            }
+
+            public void Dispose()
+            {
+                // Exchange so a double dispose cannot release the semaphore twice.
+                Interlocked.Exchange(ref _semaphore, null)?.Release();
+            }
+        }
+
+        public int GetQueueCount()
+        {
+            return _queue.Count;
+        }
+
+        /// <summary>
+        /// Gets the item currently being processed, if any.
+        /// </summary>
+        public RefreshQueueItem? GetCurrentlyProcessing()
+        {
+            return _currentlyProcessing;
+        }
+
+        /// <summary>
+        /// Background task that continuously processes the queue
+        /// </summary>
+        private async Task ProcessQueueAsync()
+        {
+            _logger.LogInformation("Queue processor started");
+
+            while (!_cancellationTokenSource.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    // Wait for an item to be available
+                    while (_queue.IsEmpty && !_cancellationTokenSource.Token.IsCancellationRequested)
+                    {
+                        await Task.Delay(100, _cancellationTokenSource.Token);
+                    }
+
+                    if (_cancellationTokenSource.Token.IsCancellationRequested)
+                        break;
+
+                    // Process items one at a time
+                    if (_queue.TryDequeue(out var item))
+                    {
+                        // Remove from deduplication dictionary
+                        _queuedItems.TryRemove(item.ListId, out _);
+
+                        // Acquire processing lock (single-threaded)
+                        await _processingLock.WaitAsync(_cancellationTokenSource.Token);
+
+                        try
+                        {
+                            _currentlyProcessing = item;
+                            await ProcessQueueItemAsync(item, _cancellationTokenSource.Token);
+                        }
+                        finally
+                        {
+                            _currentlyProcessing = null;
+                            _processingLock.Release();
+                        }
+
+                        // Clear all user caches when queue is empty to free memory
+                        if (_queue.IsEmpty)
+                        {
+                            ClearCache();
+                        }
+                    }
+                }
+                catch (OperationCanceledException)
+                {
+                    // Expected when shutting down
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in queue processor");
+                    // Continue processing other items
+                }
+            }
+
+            _logger.LogInformation("Queue processor stopped");
+        }
+
+        /// <summary>
+        /// Processes a single queue item
+        /// </summary>
+        private async Task ProcessQueueItemAsync(RefreshQueueItem item, CancellationToken cancellationToken)
+        {
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+            var listId = item.ListId;
+            var operationStarted = false;
+
+            try
+            {
+                _logger.LogInformation("Processing {OperationType} operation for list {ListId} ({ListName})",
+                    item.OperationType, item.ListId, item.ListName);
+
+                // Start status tracking
+                operationStarted = true;
+                _refreshStatusService.StartOperation(
+                    listId,
+                    item.ListName,
+                    item.ListType,
+                    item.TriggerType,
+                    0);
+
+                // Process based on operation type
+                if (item.OperationType == RefreshOperationType.Refresh)
+                {
+                    await ProcessRefreshAsync(item, cancellationToken);
+                }
+                else if (item.OperationType == RefreshOperationType.Create)
+                {
+                    await ProcessCreateAsync(item, cancellationToken);
+                }
+                else if (item.OperationType == RefreshOperationType.Edit)
+                {
+                    await ProcessEditAsync(item, cancellationToken);
+                }
+
+                stopwatch.Stop();
+                var elapsedTime = stopwatch.Elapsed;
+
+                // Collect any warnings from refresh caches (e.g., external list issues)
+                var warnings = _refreshCaches.Values
+                    .SelectMany(c => c.Warnings)
+                    .Distinct()
+                    .ToList();
+                var warningMessage = warnings.Count > 0 ? string.Join("; ", warnings) : null;
+
+                // Clear warnings after collecting to prevent stale messages leaking into subsequent operations
+                foreach (var cache in _refreshCaches.Values)
+                {
+                    cache.Warnings.Clear();
+                }
+
+                _refreshStatusService.CompleteOperation(listId, true, elapsedTime, warningMessage);
+
+                _logger.LogInformation("Completed {OperationType} operation for list {ListId} ({ListName}) in {ElapsedMs}ms",
+                    item.OperationType, item.ListId, item.ListName, elapsedTime.TotalMilliseconds);
+            }
+            catch (OperationCanceledException)
+            {
+                stopwatch.Stop();
+                if (operationStarted)
+                {
+                    _refreshStatusService.CompleteOperation(listId, false, stopwatch.Elapsed, "Operation was cancelled");
+                }
+                _logger.LogInformation("Operation cancelled for list {ListId} ({ListName})", item.ListId, item.ListName);
+            }
+            catch (Exception ex)
+            {
+                stopwatch.Stop();
+                if (operationStarted)
+                {
+                    _refreshStatusService.CompleteOperation(listId, false, stopwatch.Elapsed, ex.Message);
+                }
+                _logger.LogError(ex, "Error processing {OperationType} operation for list {ListId} ({ListName})",
+                    item.OperationType, item.ListId, item.ListName);
+            }
+            finally
+            {
+                // Bound ancestor-memo staleness to a single list refresh. RefreshCache itself is
+                // per-user and survives until the whole queue drains, but each AncestorValuesById
+                // entry embeds every value above it, so a season/library retag would otherwise
+                // stay invisible across an entire batch. Rebuilding costs one walk per container.
+                foreach (var cache in _refreshCaches.Values)
+                {
+                    cache.AncestorValuesById.Clear();
+                    cache.AncestorItemsById.Clear();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Processes a refresh operation
+        /// </summary>
+        private async Task ProcessRefreshAsync(RefreshQueueItem item, CancellationToken cancellationToken)
+        {
+            if (item.ListData == null)
+            {
+                throw new InvalidOperationException($"ListData is required for refresh operation on list {item.ListId}");
+            }
+
+            // Reload the DTO from the store to get the latest version
+            // This is important because the DTO may have been updated (e.g., CustomImages added)
+            // after the queue item was created but before processing started
+            var fileSystem = new SmartListFileSystem(_applicationPaths);
+
+            // Each branch below reloads the DTO from the store: a list deleted after this operation was
+            // queued is gone from the store, and must not be resurrected from the stale enqueued DTO.
+            // A delete landing after the reload but during materialization is still possible; closing that
+            // window would require the delete path to take the queue's _processingLock.
+            if (item.ListType == SmartListType.Playlist)
+            {
+                var playlistStore = new PlaylistStore(fileSystem);
+                if (Guid.TryParse(item.ListId, out var listGuid))
+                {
+                    var latestDto = await playlistStore.GetByIdAsync(listGuid);
+                    if (latestDto == null)
+                    {
+                        // GetByIdAsync returns null both for a list that was deleted and for one whose config
+                        // file cannot be read or deserialized, so ask the file system which case this is.
+                        if (fileSystem.GetSmartListFilePath(item.ListId) == null)
+                        {
+                            // Genuinely deleted after this operation was queued. Falling back to the DTO captured
+                            // at enqueue time would rebuild the playlist and rewrite its config.json, resurrecting
+                            // a list the user deleted.
+                            _logger.LogInformation("Skipping {OperationType} operation for playlist '{ListName}' ({ListId}) - it no longer exists in the store.",
+                                item.OperationType, item.ListName, item.ListId);
+                            return;
+                        }
+
+                        // The config file is still there but could not be loaded. Refresh from the queued copy
+                        // rather than silently skipping, and surface the storage failure.
+                        _logger.LogWarning("Could not load playlist '{ListName}' ({ListId}) from its config file; refreshing from the copy captured when the operation was queued.",
+                            item.ListName, item.ListId);
+                        await ProcessPlaylistRefreshAsync((SmartPlaylistDto)item.ListData, item.TriggeringUserIds, cancellationToken);
+                        return;
+                    }
+                    _logger.LogDebug("Reloaded playlist '{PlaylistName}' from store (CustomImages: {HasImages})",
+                        latestDto.Name, latestDto.CustomImages?.Count > 0);
+                    await ProcessPlaylistRefreshAsync(latestDto, item.TriggeringUserIds, cancellationToken);
+                    return;
+                }
+                // Only reached when the list id is not a valid Guid - a deleted list returns above.
+                await ProcessPlaylistRefreshAsync((SmartPlaylistDto)item.ListData, item.TriggeringUserIds, cancellationToken);
+            }
+            else if (item.ListType == SmartListType.Collection)
+            {
+                var collectionStore = new CollectionStore(fileSystem);
+                if (Guid.TryParse(item.ListId, out var listGuid))
+                {
+                    var latestDto = await collectionStore.GetByIdAsync(listGuid);
+                    if (latestDto == null)
+                    {
+                        // GetByIdAsync returns null both for a list that was deleted and for one whose config
+                        // file cannot be read or deserialized, so ask the file system which case this is.
+                        if (fileSystem.GetSmartListFilePath(item.ListId) == null)
+                        {
+                            // Genuinely deleted after this operation was queued. Falling back to the DTO captured
+                            // at enqueue time would rebuild the collection and rewrite its config.json, resurrecting
+                            // a list the user deleted.
+                            _logger.LogInformation("Skipping {OperationType} operation for collection '{ListName}' ({ListId}) - it no longer exists in the store.",
+                                item.OperationType, item.ListName, item.ListId);
+                            return;
+                        }
+
+                        // The config file is still there but could not be loaded. Refresh from the queued copy
+                        // rather than silently skipping, and surface the storage failure.
+                        _logger.LogWarning("Could not load collection '{ListName}' ({ListId}) from its config file; refreshing from the copy captured when the operation was queued.",
+                            item.ListName, item.ListId);
+                        await ProcessCollectionRefreshAsync((SmartCollectionDto)item.ListData, cancellationToken);
+                        return;
+                    }
+                    _logger.LogDebug("Reloaded collection '{CollectionName}' from store (CustomImages: {HasImages})",
+                        latestDto.Name, latestDto.CustomImages?.Count > 0);
+                    await ProcessCollectionRefreshAsync(latestDto, cancellationToken);
+                    return;
+                }
+                // Only reached when the list id is not a valid Guid - a deleted list returns above.
+                await ProcessCollectionRefreshAsync((SmartCollectionDto)item.ListData, cancellationToken);
+            }
+            else
+            {
+                _logger.LogWarning("Unknown list type {ListType} for list '{ListName}'", item.ListType, item.ListName);
+            }
+        }
+
+        /// <summary>
+        /// Processes a create operation
+        /// </summary>
+        private async Task ProcessCreateAsync(RefreshQueueItem item, CancellationToken cancellationToken)
+        {
+            if (item.ListData == null)
+            {
+                throw new InvalidOperationException($"ListData is required for create operation on list {item.ListId}");
+            }
+
+            // For create operations, we refresh the newly created list
+            // The list should already be saved by the controller
+            await ProcessRefreshAsync(item, cancellationToken);
+        }
+
+        /// <summary>
+        /// Processes an edit operation
+        /// </summary>
+        private async Task ProcessEditAsync(RefreshQueueItem item, CancellationToken cancellationToken)
+        {
+            if (item.ListData == null)
+            {
+                throw new InvalidOperationException($"ListData is required for edit operation on list {item.ListId}");
+            }
+
+            // For edit operations, we refresh the updated list
+            await ProcessRefreshAsync(item, cancellationToken);
+        }
+
+        /// <summary>
+        /// Processes a playlist refresh with caching support
+        /// </summary>
+        private async Task ProcessPlaylistRefreshAsync(SmartPlaylistDto dto, List<string>? triggeringUserIds, CancellationToken cancellationToken)
+        {
+            List<SmartPlaylistDto.UserPlaylistMapping>? userPlaylistsToProcess = null;
+            if (dto.AllUsers)
+            {
+                PlaylistUserResolver.ExpandAllUsers(dto, _userManager);
+
+                if (triggeringUserIds != null && triggeringUserIds.Count > 0 && dto.UserPlaylists != null)
+                {
+                    var triggeringUserSet = triggeringUserIds
+                        .Where(userId => !string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out _))
+                        .Select(PlaylistUserResolver.NormalizeUserId)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+                    // Only narrow to the triggering users' own copies when no rule is pinned to one of
+                    // them: a rule like "Is Favorite for user B" reads B's data for every user's copy.
+                    if (!PlaylistUserResolver.HasRulePinnedToAnyUser(dto, triggeringUserSet))
+                    {
+                        userPlaylistsToProcess = dto.UserPlaylists
+                            .Where(mapping => !string.IsNullOrEmpty(mapping.UserId) &&
+                                              triggeringUserSet.Contains(PlaylistUserResolver.NormalizeUserId(mapping.UserId)))
+                            .ToList();
+                    }
+                }
+            }
+
+            // Multi-user playlists: Process each user in the UserPlaylists array
+            var userPlaylists = userPlaylistsToProcess ?? dto.UserPlaylists;
+            if (userPlaylistsToProcess != null && userPlaylistsToProcess.Count == 0)
+            {
+                _logger.LogDebug("Skipping all-users playlist '{PlaylistName}' because no triggering users matched current users", dto.Name);
+                return;
+            }
+
+            if (userPlaylists != null && userPlaylists.Count > 0)
+            {
+                _logger.LogDebug("Processing multi-user playlist '{PlaylistName}' with {UserCount} users", dto.Name, userPlaylists.Count);
+                
+                var validUserCount = 0;
+                foreach (var userMapping in userPlaylists)
+                {
+                    if (string.IsNullOrEmpty(userMapping.UserId) || !Guid.TryParse(userMapping.UserId, out var userId) || userId == Guid.Empty)
+                    {
+                        _logger.LogWarning("Skipping invalid user ID in UserPlaylists for playlist {PlaylistName}", dto.Name);
+                        continue;
+                    }
+
+                    var user = _userManager.GetUserById(userId);
+                    if (user == null)
+                    {
+                        _logger.LogWarning("User {UserId} not found for playlist {PlaylistName}, skipping", userId, dto.Name);
+                        continue;
+                    }
+
+                    _logger.LogDebug("Processing playlist '{PlaylistName}' for user '{Username}'", dto.Name, user.Name);
+                    await ProcessPlaylistForUserAsync(dto, user, cancellationToken);
+                    validUserCount++;
+                }
+
+                // Warn if no valid users were processed
+                if (validUserCount == 0)
+                {
+                    _logger.LogWarning("Playlist '{PlaylistName}' had no valid users to refresh (all {UserCount} users were invalid or missing)", 
+                        dto.Name, userPlaylists.Count);
+                }
+            }
+            // Single-user playlist (backwards compatibility): Use top-level UserId
+            // DEPRECATED: This check is for backwards compatibility with old single-user playlists.
+            // It is planned to be removed in version 10.12. Use UserPlaylists array instead.
+            else if (!string.IsNullOrEmpty(dto.UserId) && Guid.TryParse(dto.UserId, out var userId) && userId != Guid.Empty)
+            {
+                var user = _userManager.GetUserById(userId);
+                if (user == null)
+                {
+                    _logger.LogWarning("User {UserId} not found for playlist {PlaylistName}, skipping refresh for this user", userId, dto.Name);
+                    return; // Exit early instead of throwing
+                }
+
+                _logger.LogDebug("Processing single-user playlist '{PlaylistName}' for user '{Username}'", dto.Name, user.Name);
+                await ProcessPlaylistForUserAsync(dto, user, cancellationToken);
+            }
+            else
+            {
+                throw new InvalidOperationException($"Invalid user ID for playlist {dto.Name}");
+            }
+        }
+
+        /// <summary>
+        /// Processes a playlist for a single user
+        /// </summary>
+        private async Task ProcessPlaylistForUserAsync(SmartPlaylistDto dto, User user, CancellationToken cancellationToken)
+        {
+            // Get or create cache for this user
+            var userCache = EnsureCacheForUser(user, dto);
+            _logger.LogDebug("Processing playlist '{PlaylistName}' with user cache ({CacheEntryCount} entries)", dto.Name, userCache.Count);
+
+            // Get or create RefreshCache for this user (before media fetch so extras can populate the reverse map)
+            var refreshCache = GetOrCreateRefreshCacheForUser(user.Id);
+
+            // Get media for this playlist using cache
+            var mediaTypesForClosure = dto.MediaTypes?.ToList() ?? [];
+            var mediaTypesKey = MediaTypesKey.Create(mediaTypesForClosure, dto);
+            var extraOwnerMap = refreshCache.ExtraOwnerSeriesId;
+
+            var playlistSpecificMedia = userCache.GetOrAdd(mediaTypesKey, _ =>
+                new Lazy<BaseItem[]>(() =>
+                {
+                    _logger.LogDebug("Cache miss for MediaTypes [{MediaTypes}] for playlist '{PlaylistName}', fetching media", mediaTypesKey, dto.Name);
+                    var playlistService = GetPlaylistService();
+                    var media = playlistService.GetAllUserMediaForPlaylist(user, mediaTypesForClosure, dto, extraOwnerMap).ToArray();
+                    _logger.LogDebug("Cached {MediaCount} items for MediaTypes [{MediaTypes}] for user '{Username}'",
+                        media.Length, mediaTypesKey, user.Name);
+                    return media;
+                }, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)
+            ).Value;
+
+            _logger.LogDebug("Retrieved {MediaCount} items from cache for playlist '{PlaylistName}'", playlistSpecificMedia.Length, dto.Name);
+
+            // Update status with media count
+            var listId = dto.Id ?? Guid.NewGuid().ToString();
+            _refreshStatusService.UpdateProgress(listId, 0, playlistSpecificMedia.Length);
+
+            // Create progress callback
+            Action<int, int>? progressCallback = (processed, total) =>
+            {
+                _refreshStatusService.UpdateProgress(listId, processed, total);
+            };
+
+            // Get playlist service and store
+            var playlistService = GetPlaylistService();
+            var fileSystem = new SmartListFileSystem(_applicationPaths);
+            var playlistStore = new PlaylistStore(fileSystem);
+
+            _logger.LogDebug("Using RefreshCache for user '{Username}' (shared across playlists/collections)", user.Name);
+
+            // Process refresh
+            var (success, message, playlistId) = await playlistService.ProcessPlaylistRefreshWithCachedMediaAsync(
+                dto,
+                user,
+                playlistSpecificMedia,
+                refreshCache,
+                async (updatedDto) => await playlistStore.SaveAsync(updatedDto),
+                progressCallback,
+                cancellationToken);
+
+            // The refresh wrote (or deleted) this list's Jellyfin playlist, so cached media for
+            // Playlist-typed lists is now stale. Drop those entries so later container lists in
+            // the same drain re-query - matching the per-refresh query the legacy include-only
+            // path performed. No-op when no list uses the Playlist media type.
+            InvalidateContainerMediaCaches(Core.Constants.MediaTypes.Playlist);
+
+            if (!success)
+            {
+                throw new InvalidOperationException($"Playlist refresh failed for user {user.Name}: {message}");
+            }
+        }
+
+        /// <summary>
+        /// Processes a collection refresh with caching support
+        /// </summary>
+        private async Task ProcessCollectionRefreshAsync(SmartCollectionDto dto, CancellationToken cancellationToken)
+        {
+            // Get owner user for this collection
+            if (string.IsNullOrEmpty(dto.UserId) || !Guid.TryParse(dto.UserId, out var ownerUserId) || ownerUserId == Guid.Empty)
+            {
+                _logger.LogError("Invalid owner user ID for collection '{CollectionName}': {UserId}", dto.Name, dto.UserId);
+                throw new InvalidOperationException($"Invalid owner user ID for collection {dto.Name}");
+            }
+
+            var ownerUser = _userManager.GetUserById(ownerUserId);
+            if (ownerUser == null)
+            {
+                _logger.LogError("Owner user {OwnerUserId} not found for collection '{CollectionName}'", ownerUserId, dto.Name);
+                throw new InvalidOperationException($"Owner user {ownerUserId} not found for collection {dto.Name}");
+            }
+
+            // Get or create cache for this user (will share with playlists if same user/media types)
+            var userCache = EnsureCacheForUser(ownerUser, dto);
+            _logger.LogDebug("Processing collection '{CollectionName}' with user cache ({CacheEntryCount} entries)", dto.Name, userCache.Count);
+
+            // Get or create RefreshCache for this user (before media fetch so extras can populate the reverse map)
+            var refreshCache = GetOrCreateRefreshCacheForUser(ownerUserId);
+
+            // Get media for this collection using cache
+            var mediaTypesForClosure = dto.MediaTypes?.ToList() ?? [];
+            var mediaTypesKey = MediaTypesKey.Create(mediaTypesForClosure, dto);
+            var extraOwnerMap = refreshCache.ExtraOwnerSeriesId;
+
+            var collectionSpecificMedia = userCache.GetOrAdd(mediaTypesKey, _ =>
+                new Lazy<BaseItem[]>(() =>
+                {
+                    _logger.LogDebug("Cache miss for MediaTypes [{MediaTypes}] for collection '{CollectionName}', fetching media", mediaTypesKey, dto.Name);
+                    var collectionService = GetCollectionService();
+                    var media = collectionService.GetAllUserMediaForPlaylist(ownerUser, mediaTypesForClosure, dto, extraOwnerMap).ToArray();
+                    _logger.LogDebug("Cached {MediaCount} items for MediaTypes [{MediaTypes}] for user '{Username}' (collection '{CollectionName}')",
+                        media.Length, mediaTypesKey, ownerUser.Name, dto.Name);
+                    return media;
+                }, System.Threading.LazyThreadSafetyMode.ExecutionAndPublication)
+            ).Value;
+
+            _logger.LogDebug("Retrieved {MediaCount} items from cache for collection '{CollectionName}'", collectionSpecificMedia.Length, dto.Name);
+
+            // Update status with media count
+            var listId = dto.Id ?? Guid.NewGuid().ToString();
+            _refreshStatusService.UpdateProgress(listId, 0, collectionSpecificMedia.Length);
+
+            // Create progress callback
+            Action<int, int>? progressCallback = (processed, total) =>
+            {
+                _refreshStatusService.UpdateProgress(listId, processed, total);
+            };
+
+            // Get collection service and store
+            var collectionService = GetCollectionService();
+            var fileSystem = new SmartListFileSystem(_applicationPaths);
+            var collectionStore = new CollectionStore(fileSystem);
+
+            _logger.LogDebug("Using RefreshCache for user '{Username}' (shared across playlists/collections)", ownerUser.Name);
+
+            // Process refresh with cached media
+            var (success, message, collectionId) = await collectionService.ProcessPlaylistRefreshWithCachedMediaAsync(
+                dto,
+                ownerUser,
+                collectionSpecificMedia,
+                refreshCache,
+                async (updatedDto) => await collectionStore.SaveAsync(updatedDto),
+                progressCallback,
+                cancellationToken);
+
+            // The refresh wrote (or deleted) this list's Jellyfin collection, so cached media for
+            // Collection-typed lists is now stale. Drop those entries so later container lists in
+            // the same drain re-query - matching the per-refresh query the legacy include-only
+            // path performed. No-op when no list uses the Collection media type.
+            InvalidateContainerMediaCaches(Core.Constants.MediaTypes.Collection);
+
+            if (!success)
+            {
+                throw new InvalidOperationException($"Collection refresh failed: {message}");
+            }
+        }
+
+        /// <summary>
+        /// Removes cached base-media entries whose media types include the given container type,
+        /// across every user's cache (a written container is visible to all users' queries).
+        /// The entry lazily re-queries on next use, so the cost is one query per subsequent
+        /// container-typed list refresh, and zero when no such list exists.
+        /// </summary>
+        private void InvalidateContainerMediaCaches(string containerMediaType)
+        {
+            foreach (var userCache in _userCaches.Values)
+            {
+                foreach (var key in userCache.Keys)
+                {
+                    if (key.ContainsType(containerMediaType))
+                    {
+                        userCache.TryRemove(key, out _);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Ensures cache exists for the given user, creating if needed. Returns the user's cache.
+        /// </summary>
+        private ConcurrentDictionary<MediaTypesKey, Lazy<BaseItem[]>> EnsureCacheForUser(User user, SmartListDto dto)
+        {
+            var userCache = _userCaches.GetOrAdd(user.Id, _ =>
+            {
+                _logger.LogDebug("Created cache for user '{Username}'", user.Name);
+                return new ConcurrentDictionary<MediaTypesKey, Lazy<BaseItem[]>>();
+            });
+
+            // Log if we're reusing an existing cache (for debugging)
+            if (userCache.Count > 0)
+            {
+                _logger.LogDebug("Reusing existing cache for user '{Username}' ({CacheCount} entries)", user.Name, userCache.Count);
+            }
+
+            return userCache;
+        }
+
+        /// <summary>
+        /// Gets or creates a RefreshCache for the specified user
+        /// </summary>
+        private RefreshCache GetOrCreateRefreshCacheForUser(Guid userId)
+        {
+            return _refreshCaches.GetOrAdd(userId, _ => new RefreshCache { LibraryManager = _libraryManager });
+        }
+
+        /// <summary>
+        /// Clears all user caches
+        /// </summary>
+        private void ClearCache()
+        {
+            if (_userCaches.Count > 0)
+            {
+                var userCount = _userCaches.Count;
+                foreach (var cache in _userCaches.Values)
+                {
+                    cache.Clear();
+                }
+                _userCaches.Clear();
+                _logger.LogDebug("Cleared all user caches ({UserCount} users)", userCount);
+            }
+
+            if (_refreshCaches.Count > 0)
+            {
+                var refreshCacheCount = _refreshCaches.Count;
+                _refreshCaches.Clear();
+                _logger.LogDebug("Cleared all refresh caches ({RefreshCacheCount} users)", refreshCacheCount);
+            }
+        }
+
+        /// <summary>
+        /// Creates a PlaylistService instance
+        /// </summary>
+        private PlaylistService GetPlaylistService()
+        {
+            var playlistServiceLogger = _loggerFactory.CreateLogger<PlaylistService>();
+            return new PlaylistService(
+                _userManager,
+                _libraryManager,
+                _playlistManager,
+                _userDataManager,
+                playlistServiceLogger,
+                _imageService,
+                _externalListService,
+                _itemRepository);
+        }
+
+        /// <summary>
+        /// Creates a CollectionService instance
+        /// </summary>
+        private CollectionService GetCollectionService()
+        {
+            var collectionServiceLogger = _loggerFactory.CreateLogger<CollectionService>();
+            return new CollectionService(
+                _libraryManager,
+                _collectionManager,
+                _userManager,
+                _userDataManager,
+                collectionServiceLogger,
+                _providerManager,
+                _fileSystem,
+                _imageService,
+                _externalListService,
+                _itemRepository);
+        }
+
+        public void Dispose()
+        {
+            if (_disposed)
+                return;
+
+            _disposed = true;
+            _cancellationTokenSource.Cancel();
+
+            try
+            {
+                _processingTask?.Wait(TimeSpan.FromSeconds(5));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error waiting for processing task to complete");
+            }
+
+            _cancellationTokenSource.Dispose();
+            _processingLock.Dispose();
+            ClearCache();
+
+            _logger.LogInformation("RefreshQueueService disposed");
+        }
+
+        /// <summary>
+        /// Drops the cached child lists of the containers a changed item belongs to, across every
+        /// user's cache.
+        ///
+        /// A <see cref="RefreshCache"/> lives for a whole queue drain - it is only cleared once the
+        /// queue empties - so without this a Series/Season/MusicAlbum that gains or loses a child
+        /// mid-drain keeps being scored against its old child list. That includes the very refresh
+        /// the change itself queued, which is the case most likely to be noticed.
+        ///
+        /// Called from the library Added/Removed events, which are the only ones that change
+        /// membership; Updated fires constantly during metadata scans and would evict for nothing.
+        /// </summary>
+        public void InvalidateContainerChildCaches(BaseItem item)
+        {
+            if (item == null || _refreshCaches.IsEmpty)
+            {
+                return;
+            }
+
+            var invalidated = 0;
+            foreach (var cache in _refreshCaches.Values)
+            {
+                invalidated += cache.InvalidateContainerChildren(item);
+            }
+
+            if (invalidated > 0)
+            {
+                _logger.LogDebug(
+                    "Dropped {EntryCount} cached container child list(s) after '{ItemName}' was added to or removed from the library",
+                    invalidated, item.Name);
+            }
+        }
+
+        /// <summary>
+        /// Drops one (item, user) user-data entry, positive or negative, across every user's cache.
+        ///
+        /// Same per-drain lifetime problem as <see cref="InvalidateContainerChildCaches"/>: without
+        /// this, a favorite or playback change made mid-drain stays invisible to every later refresh
+        /// in that drain. Parent favorites make it routine - a parent-favorite refresh reads the
+        /// user data of every album, season and series on its way, so favoriting albums one after
+        /// another would leave the refresh queued by the second one reading the first run's value.
+        /// </summary>
+        public void InvalidateUserData(long itemId, Guid userId)
+        {
+            foreach (var cache in _refreshCaches.Values)
+            {
+                cache.InvalidateUserData(itemId, userId);
+            }
+        }
+
+        /// <summary>
+        /// Per-refresh cache for expensive operations within single playlist processing.
+        /// Uses ConcurrentDictionary for thread-safety during parallel processing.
+        /// </summary>
+        public sealed class RefreshCache
+        {
+            /// <summary>
+            /// Library manager used to populate the *ForAggregation child caches on a miss, set when
+            /// the cache is created. Null in unit tests, which seed those dictionaries directly - a
+            /// miss then stays a miss instead of reaching for a database that isn't there.
+            /// </summary>
+            public ILibraryManager? LibraryManager { get; set; }
+
+            /// <summary>
+            /// Cached episode list for a Series, scoped to a SPECIFIC user's current library/parental
+            /// visibility. Used by NextUnwatched and by the per-user PlaybackStatus/LastPlayedDate
+            /// rule-field calculations, where visibility legitimately matters. Aggregate
+            /// PlayCount/LastPlayedDate scoring must NOT read this - see
+            /// <see cref="SeriesEpisodesForAggregation"/>. Keyed by the query shape
+            /// (<c>IsVirtualItem</c>) as well as series/user id: NextUnwatched fetches with no
+            /// <c>IsVirtualItem</c> filter while the rule-field path excludes virtual episodes, so the
+            /// two shapes must never share an entry.
+            /// </summary>
+            public ConcurrentDictionary<(long SeriesId, Guid UserId, bool? IsVirtualItem), BaseItem[]> SeriesEpisodes { get; } = new();
+
+            /// <summary>
+            /// ALL episodes of a Series, deliberately UNFILTERED by any user's parental-rating/
+            /// library-access restrictions, for aggregate PlayCount/LastPlayedDate/PlaybackStatus
+            /// scoring. A user's stored playback history can outlive their current visibility of an
+            /// item (a restriction added after they watched it, a revoked library grant, ...), so the
+            /// structural child set must be visibility-agnostic - per-user playback is still read
+            /// separately, per child, via <see cref="UserDataCache"/>. Keyed by series id only: the
+            /// result is the same for every user, unlike <see cref="SeriesEpisodes"/>.
+            /// </summary>
+            public ConcurrentDictionary<long, BaseItem[]> SeriesEpisodesForAggregation { get; } = new();
+
+            /// <summary>
+            /// Cached episode list for a Season, scoped to a SPECIFIC user's current library/parental
+            /// visibility. Used by the per-user PlaybackStatus/PlayCount/LastPlayedDate rule-field
+            /// calculations, where visibility legitimately matters. Aggregate PlayCount/LastPlayedDate
+            /// scoring must NOT read this - see <see cref="SeasonEpisodesForAggregation"/>.
+            /// </summary>
+            public ConcurrentDictionary<(long SeasonId, Guid UserId), BaseItem[]> SeasonEpisodes { get; } = new();
+
+            /// <summary>
+            /// ALL episodes of a Season for aggregate PlayCount/LastPlayedDate scoring, deliberately
+            /// unfiltered by any user's parental-rating/library-access restrictions (see
+            /// <see cref="SeriesEpisodesForAggregation"/> for why). Keyed by season id only, unlike
+            /// <see cref="SeasonEpisodes"/>.
+            /// </summary>
+            public ConcurrentDictionary<long, BaseItem[]> SeasonEpisodesForAggregation { get; } = new();
+
+            /// <summary>
+            /// Cached track list for a MusicAlbum, scoped to a SPECIFIC user's current library/parental
+            /// visibility. Used by the per-user PlaybackStatus/PlayCount/LastPlayedDate rule-field
+            /// calculations, where visibility legitimately matters. Aggregate PlayCount/LastPlayedDate
+            /// scoring must NOT read this - see <see cref="AlbumTracksForAggregation"/>.
+            /// </summary>
+            public ConcurrentDictionary<(long AlbumId, Guid UserId), BaseItem[]> AlbumTracks { get; } = new();
+
+            /// <summary>
+            /// ALL tracks of a MusicAlbum for aggregate PlayCount/LastPlayedDate scoring, deliberately
+            /// unfiltered by any user's parental-rating/library-access restrictions (see
+            /// <see cref="SeriesEpisodesForAggregation"/> for why). Keyed by album id only, unlike
+            /// <see cref="AlbumTracks"/>.
+            /// </summary>
+            public ConcurrentDictionary<long, BaseItem[]> AlbumTracksForAggregation { get; } = new();
+            public ConcurrentDictionary<(long SeriesId, Guid UserId, bool IncludeUnwatchedSeries), (long? NextEpisodeId, int Season, int Episode)> NextUnwatched { get; } = new();
+            public BaseItem[]? AllCollections { get; set; } = null;
+            public ConcurrentDictionary<long, HashSet<long>> CollectionMembershipCache { get; } = new();
+
+            /// <summary>
+            /// Playlist names an item belongs to, ALREADY FILTERED for the list being built (a list never
+            /// sees itself). The origin key is therefore part of the key: this cache is per-user and lives
+            /// until the whole refresh queue drains, so without it a later list in the same drain would
+            /// inherit an earlier list's exclusions and silently go blind to that playlist.
+            /// </summary>
+            public ConcurrentDictionary<(long ItemId, string OriginKey), List<string>> ItemPlaylists { get; } = new();
+
+            public BaseItem[]? AllPlaylists { get; set; } = null;
+            public ConcurrentDictionary<long, HashSet<long>> PlaylistMembershipCache { get; } = new();
+            public ConcurrentDictionary<long, string> SeriesNameById { get; } = new();
+            public ConcurrentDictionary<long, string> SeriesSortNameById { get; } = new();
+
+            /// <summary>
+            /// SeriesName bulk-warmup state: null = not attempted, true = SeriesNameById and
+            /// SeriesSortNameById cover every in-scope series (dump completed), false = the dump
+            /// failed and only per-miss lazy entries exist. Written only on the sequential refresh
+            /// path (see OperandFactory.WarmSeriesNameCache).
+            /// </summary>
+            public bool? SeriesNameWarmupSucceeded { get; set; }
+
+            /// <summary>
+            /// Ancestor-inherited Tags/Studios/Genres, keyed by the ANCESTOR NODE id (season id,
+            /// album id, folder id) — never the item id — so every episode of a season is a single
+            /// lookup and the walk itself runs once per container. Each entry is the COMPLETE union
+            /// for that node and everything above it INCLUDING the library CollectionFolder, so a
+            /// memo hit needs no further work. Cleared per queue item (see ProcessQueueItemAsync)
+            /// rather than per queue drain: entries embed everything above them, so a stale entry
+            /// after a retag would otherwise affect a whole subtree until the queue emptied.
+            /// </summary>
+            public ConcurrentDictionary<long, AncestorValues> AncestorValuesById { get; } = new();
+
+            /// <summary>
+            /// Ancestor NODES for parent favorites - the same walk and the same ANCESTOR-NODE keying
+            /// as AncestorValuesById, but it stores the nodes themselves: favorite state is per user
+            /// and is read through UserDataCache, so it cannot be folded into a user-agnostic value.
+            /// Cleared per queue item alongside AncestorValuesById (see ProcessQueueItemAsync).
+            /// </summary>
+            public ConcurrentDictionary<long, IReadOnlyList<BaseItem>> AncestorItemsById { get; } = new();
+
+            public ConcurrentDictionary<long, CategorizedPeople> ItemPeople { get; } = new();
+            
+            // User-specific data cache - keyed by (ItemId, UserId) to support playlist user + additional users in rules
+            public ConcurrentDictionary<(long ItemId, Guid UserId), MediaBrowser.Controller.Entities.UserItemData> UserDataCache { get; } = new();
+            // Tracks (ItemId, UserId) pairs for which GetUserData returned null, to avoid repeated DB calls.
+            public ConcurrentDictionary<(long ItemId, Guid UserId), byte> UserDataNegativeCache { get; } = new();
+
+            // Bumped by every InvalidateUserData, BEFORE the entry is removed. A read that sees it move
+            // overlapped a save, so UserDataCacheHelper must not leave that read's value cached.
+            private long _userDataEpoch;
+
+            internal long UserDataEpoch => Interlocked.Read(ref _userDataEpoch);
+
+            /// <summary>
+            /// Forgets the cached user data for one (item, user) pair so the next read goes to the
+            /// user-data manager. See <see cref="RefreshQueueService.InvalidateUserData"/>.
+            /// </summary>
+            internal void InvalidateUserData(long itemId, Guid userId)
+            {
+                Interlocked.Increment(ref _userDataEpoch);
+                UserDataCache.TryRemove((itemId, userId), out _);
+                UserDataNegativeCache.TryRemove((itemId, userId), out _);
+            }
+            
+            // Media streams cache - keyed by ItemId only (user-agnostic)
+            public ConcurrentDictionary<long, IEnumerable<object>> MediaStreamsCache { get; } = new();
+
+            /// <summary>
+            /// Removes every cached child list for the containers <paramref name="item"/> belongs to
+            /// (or, when it is itself a container, for the item), and returns how many entries went.
+            /// Covers both the visibility-unfiltered aggregation caches and their per-user twins,
+            /// plus NextUnwatched, which is derived from the same episode list.
+            /// </summary>
+            internal int InvalidateContainerChildren(BaseItem item)
+            {
+                var removed = 0;
+                foreach (var containerId in GetAffectedContainerIds(item))
+                {
+                    removed += SeriesEpisodesForAggregation.TryRemove(containerId, out _) ? 1 : 0;
+                    removed += SeasonEpisodesForAggregation.TryRemove(containerId, out _) ? 1 : 0;
+                    removed += AlbumTracksForAggregation.TryRemove(containerId, out _) ? 1 : 0;
+
+                    // The per-user twins carry the user id (and, for series, the query shape) in
+                    // their key, so they need a scan rather than a keyed removal.
+                    removed += RemoveByContainerId(SeriesEpisodes, k => k.SeriesId, containerId);
+                    removed += RemoveByContainerId(SeasonEpisodes, k => k.SeasonId, containerId);
+                    removed += RemoveByContainerId(AlbumTracks, k => k.AlbumId, containerId);
+                    removed += RemoveByContainerId(NextUnwatched, k => k.SeriesId, containerId);
+                }
+
+                return removed;
+            }
+
+            /// <summary>
+            /// The containers whose child list a change to <paramref name="item"/> invalidates. Read
+            /// straight off the item - no database round trip in a library event handler.
+            /// </summary>
+            private static IEnumerable<long> GetAffectedContainerIds(BaseItem item)
+            {
+                var ids = new List<long>(2);
+
+                switch (item)
+                {
+                    case Episode episode:
+                        // Emby has no SeasonId; the season folder is the episode's parent.
+                        ids.Add(episode.ParentId);
+                        ids.Add(episode.SeriesId);
+                        break;
+                    case Audio audio:
+                        // Direct parent is normally the album. Tracks nested in a sub-folder are not covered here
+                        // (Jellyfin resolved AlbumEntity for them; Emby has no equivalent).
+                        ids.Add(audio.ParentId);
+                        break;
+                    case Season or Series or MusicAlbum:
+                        // The container itself appeared or disappeared.
+                        ids.Add(item.InternalId);
+                        break;
+                }
+
+                return ids.Where(id => id != 0L).Distinct();
+            }
+
+            private static int RemoveByContainerId<TKey, TValue>(
+                ConcurrentDictionary<TKey, TValue> cache,
+                Func<TKey, long> containerIdOf,
+                long containerId)
+                where TKey : notnull
+            {
+                var removed = 0;
+                foreach (var key in cache.Keys)
+                {
+                    if (containerIdOf(key) == containerId && cache.TryRemove(key, out _))
+                    {
+                        removed++;
+                    }
+                }
+
+                return removed;
+            }
+
+            // Child items cache for sorting collections by child values
+            // Maps Collection/Playlist ID → array of child BaseItems (with full item data for property access)
+            public ConcurrentDictionary<long, BaseItem[]> CollectionChildItems { get; } = new();
+            public ConcurrentDictionary<long, BaseItem[]> PlaylistChildItems { get; } = new();
+
+            // Direct children cache for collections (used for recursive traversal)
+            // Maps Collection ID → array of direct child BaseItems
+            public ConcurrentDictionary<long, BaseItem[]> CollectionDirectChildren { get; } = new();
+
+            // Membership cache by depth level for collections (supports different recursion depths)
+            // Outer key is recursion depth, inner maps Collection ID → set of all member IDs at that depth
+            public ConcurrentDictionary<int, Dictionary<long, HashSet<long>>> CollectionMembershipCacheByDepth { get; } = new();
+
+            // Item membership cache for collections - maps (ItemId, Depth, OriginKey) → list of collection names.
+            // Like ItemPlaylists, the stored names are already filtered for the list being built, so the origin
+            // MUST be part of the key: this cache is per-user and lives until the whole refresh queue drains.
+            public ConcurrentDictionary<(long ItemId, int Depth, string OriginKey), List<string>> ItemCollectionsWithDepth { get; } = new();
+
+            // Last episode air date cache for Series items - maps SeriesId → Unix timestamp of most recent episode
+            public ConcurrentDictionary<long, double> LastEpisodeAirDateById { get; } = new();
+
+            // Library name cache - maps item identity/path → library names (from GetCollectionFolders API)
+            public ConcurrentDictionary<(long ItemId, string Path, string FolderPath), IReadOnlyList<string>> LibraryNamesByItemKey { get; } = new();
+
+            // Extra → owning Series ID cache (reverse lookup from extra ID to its parent Series)
+            // Populated by PlaylistService/CollectionService when fetching extras
+            public ConcurrentDictionary<long, long> ExtraOwnerSeriesId { get; } = new();
+
+            // External list caches - pre-fetched list data and per-item membership
+            // Maps external list URL → fetched provider ID sets (populated by ExternalListService before filtering)
+            public ConcurrentDictionary<string, ExternalListResult> ExternalListData { get; } = new(StringComparer.OrdinalIgnoreCase);
+            // Maps ItemId → list of external list URLs this item appears in (per-item cache)
+            public ConcurrentDictionary<long, List<string>> ItemExternalLists { get; } = new();
+            // Maps ItemId → best (lowest) position across all matched external lists (for External List Order sorting)
+            public ConcurrentDictionary<long, int> ExternalListPositions { get; } = new();
+
+            // Maps ItemId → (external list URL → matched track position) for music items.
+            // Used by SmartList to keep a single library item per external-list track.
+            public ConcurrentDictionary<long, Dictionary<string, int>> MusicListPositionsByUrl { get; } = new();
+
+            // Warnings collected during processing (e.g., missing API keys, fetch failures)
+            public ConcurrentBag<string> Warnings { get; } = [];
+
+            /// <summary>
+            /// Re-points this drain's view of a collection at the contents just written to it.
+            ///
+            /// AllCollections and the membership caches are built once per queue drain, so without
+            /// this a list refreshed later in the same drain evaluates its Collections rules against
+            /// the membership this collection had BEFORE the drain started - one refresh behind, for
+            /// as long as lists keep refreshing together. Chained lists ("everything not already in
+            /// a smart collection") are the common victim.
+            ///
+            /// Patching costs no queries: the caller already holds the members, and the derived
+            /// caches below rebuild from CollectionDirectChildren in memory.
+            /// </summary>
+            /// <param name="collection">The collection that was just written.</param>
+            /// <param name="members">Its new direct children.</param>
+            public void OnCollectionWritten(BaseItem collection, IReadOnlyList<BaseItem> members)
+            {
+                ArgumentNullException.ThrowIfNull(collection);
+                ArgumentNullException.ThrowIfNull(members);
+
+                // A collection created during this drain is missing from the snapshot entirely.
+                if (AllCollections != null && Array.FindIndex(AllCollections, c => c.Id == collection.Id) < 0)
+                {
+                    AllCollections = [.. AllCollections, collection];
+                }
+
+                // Only patch an already-built cache. Seeding a single entry into an empty one would
+                // make it look built (the builder is guarded on Count == 0) and strand every other
+                // collection with no children.
+                if (!CollectionDirectChildren.IsEmpty)
+                {
+                    CollectionDirectChildren[collection.InternalId] = [.. members];
+                }
+
+                CollectionChildItems.TryRemove(collection.InternalId, out _);
+
+                // Derived from the above; cheaper to drop than to patch, and rebuilt without queries.
+                CollectionMembershipCacheByDepth.Clear();
+                ItemCollectionsWithDepth.Clear();
+            }
+
+            /// <summary>
+            /// The playlist counterpart of <see cref="OnCollectionWritten"/>.
+            /// </summary>
+            /// <param name="playlist">The playlist that was just written.</param>
+            /// <param name="memberIds">Ids of its new members.</param>
+            public void OnPlaylistWritten(BaseItem playlist, IReadOnlyList<long> memberIds)
+            {
+                ArgumentNullException.ThrowIfNull(playlist);
+                ArgumentNullException.ThrowIfNull(memberIds);
+
+                if (AllPlaylists != null && Array.FindIndex(AllPlaylists, p => p.Id == playlist.Id) < 0)
+                {
+                    AllPlaylists = [.. AllPlaylists, playlist];
+                }
+
+                if (!PlaylistMembershipCache.IsEmpty)
+                {
+                    PlaylistMembershipCache[playlist.InternalId] = [.. memberIds];
+                }
+
+                PlaylistChildItems.TryRemove(playlist.InternalId, out _);
+                ItemPlaylists.Clear();
+            }
+
+            /// <summary>
+            /// Drops a collection/playlist that was deleted during this drain (for example by
+            /// "hide when empty"), so lists refreshed after it stop seeing a container that is gone.
+            /// </summary>
+            /// <param name="containerId">The deleted collection or playlist id.</param>
+            public void OnContainerRemoved(long containerId)
+            {
+                if (AllCollections != null)
+                {
+                    AllCollections = [.. Array.FindAll(AllCollections, c => c.InternalId != containerId)];
+                }
+
+                if (AllPlaylists != null)
+                {
+                    AllPlaylists = [.. Array.FindAll(AllPlaylists, p => p.InternalId != containerId)];
+                }
+
+                CollectionDirectChildren.TryRemove(containerId, out _);
+                PlaylistMembershipCache.TryRemove(containerId, out _);
+                CollectionChildItems.TryRemove(containerId, out _);
+                PlaylistChildItems.TryRemove(containerId, out _);
+
+                CollectionMembershipCacheByDepth.Clear();
+                ItemCollectionsWithDepth.Clear();
+                ItemPlaylists.Clear();
+            }
+        }
+
+        /// <summary>
+        /// Holds categorized people data for an item.
+        /// </summary>
+        public sealed class CategorizedPeople
+        {
+            public List<string> AllPeople { get; set; } = [];
+            public List<string> Actors { get; set; } = [];
+            public List<string> ActorRoles { get; set; } = []; // Character/role names
+            public List<string> Directors { get; set; } = [];
+            public List<string> Composers { get; set; } = [];
+            public List<string> Writers { get; set; } = [];
+            public List<string> GuestStars { get; set; } = [];
+            public List<string> Producers { get; set; } = [];
+            public List<string> Conductors { get; set; } = [];
+            public List<string> Lyricists { get; set; } = [];
+            public List<string> Arrangers { get; set; } = [];
+            public List<string> SoundEngineers { get; set; } = [];
+            public List<string> Mixers { get; set; } = [];
+            public List<string> Remixers { get; set; } = [];
+            public List<string> Creators { get; set; } = [];
+            public List<string> PersonArtists { get; set; } = []; // Person role "Artist" (different from music Artists field)
+            public List<string> PersonAlbumArtists { get; set; } = []; // Person role "Album Artist" (different from music AlbumArtists field)
+            public List<string> Authors { get; set; } = [];
+            public List<string> Illustrators { get; set; } = [];
+            public List<string> Pencilers { get; set; } = [];
+            public List<string> Inkers { get; set; } = [];
+            public List<string> Colorists { get; set; } = [];
+            public List<string> Letterers { get; set; } = [];
+            public List<string> CoverArtists { get; set; } = [];
+            public List<string> Editors { get; set; } = [];
+            public List<string> Translators { get; set; } = [];
+        }
+    }
+}

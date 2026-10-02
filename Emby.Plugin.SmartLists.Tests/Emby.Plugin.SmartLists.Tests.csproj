@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!--
+      The plugin targets net8.0 (Emby 4.10.1.0). The tests run on net10.0: the plugin DLL loads fine there, and the
+      ASP.NET Core 8 shared framework is not installed on every dev machine. Emby's own assemblies are copied next to the tests (xUnit reflects over the test types before any test code runs, so they must be in the app folder), and anything else they need is resolved
+      at runtime from EmbySystemDir (see Support/EmbyAssemblyResolver.cs).
+    -->
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Emby.Plugin.SmartLists.Tests</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <IsPackable>false</IsPackable>
+    <EmbySystemDir Condition="'$(EmbySystemDir)' == ''">$(EMBY_SYSTEM_DIR)</EmbySystemDir>
+
+    <!--
+      The plugin project builds under TreatWarningsAsErrors + AnalysisMode=Recommended.
+      Tests deliberately do things production code must not (pass null, assert on
+      obsolete paths, use magic numbers), so that strictness is relaxed here on purpose.
+      There is no Directory.Build.props in this repo, so nothing re-imposes it.
+    -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+    <AnalysisMode>None</AnalysisMode>
+    <EnableNETAnalyzers>false</EnableNETAnalyzers>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageReference Include="xunit" Version="2.9.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="3.1.4" />
+    <PackageReference Include="coverlet.collector" Version="6.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Emby.Plugin.SmartLists\Emby.Plugin.SmartLists.csproj" />
+    <Reference Include="MediaBrowser.Common"><HintPath>$(EmbySystemDir)\MediaBrowser.Common.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="MediaBrowser.Controller"><HintPath>$(EmbySystemDir)\MediaBrowser.Controller.dll</HintPath><Private>true</Private></Reference>
+    <Reference Include="MediaBrowser.Model"><HintPath>$(EmbySystemDir)\MediaBrowser.Model.dll</HintPath><Private>true</Private></Reference>
+  </ItemGroup>
+
+  <!-- Tests for code that is excluded from the plugin build until its Emby rewrite (port phase 6). -->
+  <ItemGroup>
+    <Compile Remove="Api\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Xunit" />
+  </ItemGroup>
+
+  <!-- Tells the test host where Emby's assemblies live, without hard-coding a path in source. -->
+  <ItemGroup>
+    <AssemblyAttribute Include="System.Reflection.AssemblyMetadataAttribute">
+      <_Parameter1>EmbySystemDir</_Parameter1>
+      <_Parameter2>$(EmbySystemDir)</_Parameter2>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+</Project>

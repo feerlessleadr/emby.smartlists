@@ -1,0 +1,715 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Emby.Plugin.SmartLists.Core.Models;
+using Emby.Plugin.SmartLists.Core.QueryEngine;
+
+namespace Emby.Plugin.SmartLists.Utilities
+{
+    /// <summary>
+    /// Provides input validation methods to prevent security vulnerabilities
+    /// including injection attacks, XSS, path traversal, and ReDoS attacks.
+    /// </summary>
+    public static class InputValidator
+    {
+        // Constants for validation limits
+        private const int MaxNameLength = 500;
+        private const int MaxStringValueLength = 2000;
+        private const int MaxRegexPatternLength = 1000;
+        private const int MaxFieldNameLength = 100;
+        private const int MaxOperatorLength = 50;
+        private const int MaxExpressionSetsCount = 100;
+        private const int MaxExpressionsPerSet = 100;
+        private const int MaxMediaTypesCount = 50;
+        private const int MaxSchedulesCount = 100;
+        private const int MaxTagsCount = 100;
+        private const int MaxTagLength = 100;
+
+        // Dangerous patterns
+        private static readonly string[] SqlInjectionPatterns = new[]
+        {
+            @"(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE|UNION|DECLARE|CAST|CONVERT)\b)",
+            @"(--|;|\/\*|\*\/|xp_|sp_)",
+            @"('(\s*OR\s+|\s*AND\s+)?'?\s*=\s*')",
+        };
+
+        private static readonly string[] XssPatterns = new[]
+        {
+            @"<script[^>]*>.*?</script>",
+            @"javascript:",
+            @"on\w+\s*=",
+            @"<iframe",
+            @"<object",
+            @"<embed",
+        };
+
+        private static readonly string[] PathTraversalPatterns = new[]
+        {
+            @"\.\./",
+            @"\.\.\\",
+            @"%2e%2e/",
+            @"%2e%2e\\",
+        };
+
+        // Pre-compiled regex patterns for better performance
+        private static readonly Regex[] CompiledSqlInjectionPatterns = SqlInjectionPatterns
+            .Select(p => new Regex(p, RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)))
+            .ToArray();
+
+        private static readonly Regex[] CompiledXssPatterns = XssPatterns
+            .Select(p => new Regex(p, RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)))
+            .ToArray();
+
+        private static readonly Regex[] CompiledPathTraversalPatterns = PathTraversalPatterns
+            .Select(p => new Regex(p, RegexOptions.IgnoreCase | RegexOptions.Compiled, TimeSpan.FromMilliseconds(100)))
+            .ToArray();
+
+        // \z rather than $: in .NET, $ also matches before a single trailing newline, so
+        // "Genres\n" would pass a check whose message promises letters/numbers/underscores only.
+        private static readonly Regex FieldNameRegex = new Regex(
+            @"^[a-zA-Z_][a-zA-Z0-9_]*\z",
+            RegexOptions.Compiled
+        );
+
+        private static readonly Regex OperatorRegex = new Regex(
+            @"^[a-zA-Z0-9_\-\s]+$",
+            RegexOptions.Compiled
+        );
+
+        // Mirrors Jellyfin core's ManagedFileSystem._invalidPathCharacters
+        // (Emby.Server.Implementations/IO/ManagedFileSystem.cs). Core replaces each of these with a
+        // space when it derives the FOLDER name for a collection or playlist
+        // (CollectionManager.CreateCollectionAsync, PlaylistManager.CreatePlaylist) while storing the
+        // raw name as the item's display name. That list is a hardcoded literal in core, not
+        // Path.GetInvalidFileNameChars(), so it is identical on Linux and Windows - which is why this
+        // plugin neither rejects nor sanitizes these characters itself: doing so would double-sanitize,
+        // and since the display name is re-asserted after every refresh it would also make the
+        // sanitized form the user-visible name. The punctuation is spelled out here as a literal
+        // array; control characters (also in core's list) are handled via char.IsControl in
+        // SanitizedFolderName below, because collection restore (SmartListController.RestoreCollection...)
+        // saves names without going through ValidateName, so a restored name can still contain them.
+        private static readonly char[] JellyfinSanitizedChars = new[] { '"', '<', '>', '|', ':', '*', '?', '\\', '/' };
+
+        /// <summary>
+        /// Validates a smart list name.
+        /// </summary>
+        public static SmartListValidationResult ValidateName(string? name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return SmartListValidationResult.Failure("List name cannot be empty");
+            }
+
+            if (name.Length > MaxNameLength)
+            {
+                return SmartListValidationResult.Failure($"List name cannot exceed {MaxNameLength} characters");
+            }
+
+            // Check for path traversal attempts
+            if (ContainsPathTraversal(name))
+            {
+                return SmartListValidationResult.Failure("List name contains invalid characters");
+            }
+
+            // Check for control characters (block all control characters including tabs and newlines)
+            if (name.Any(c => char.IsControl(c)))
+            {
+                return SmartListValidationResult.Failure("List name contains invalid control characters");
+            }
+
+            // Everything below validates the name core will actually put on disk, not the raw input:
+            // checking the raw string misses names that only become degenerate after core rewrites
+            // them (e.g. "..:" sanitizes to ".." and escapes to the parent directory).
+            var folderName = SanitizedFolderName(name);
+
+            if (folderName.Length == 0)
+            {
+                return SmartListValidationResult.Failure("List name must contain at least one character that is valid in a file name");
+            }
+
+            // "." and ".." are relative path segments rather than names: core concatenates the
+            // sanitized name straight into Path.Combine, so a playlist named ".." would resolve to
+            // the parent directory. The traversal patterns above are separator-anchored and miss the
+            // bare form.
+            if (string.Equals(folderName, ".", StringComparison.Ordinal) || string.Equals(folderName, "..", StringComparison.Ordinal))
+            {
+                return SmartListValidationResult.Failure("List name cannot be '.' or '..'");
+            }
+
+            // Windows also drops trailing dots from a path segment, so a name like "...." would
+            // create nothing at all there.
+            if (folderName.TrimEnd('.').Trim().Length == 0)
+            {
+                return SmartListValidationResult.Failure("List name must contain at least one character that is valid in a file name");
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Reproduces the folder name Jellyfin core derives from a list name: every character core
+        /// treats as invalid becomes a space (ManagedFileSystem.GetValidFilename), and the result is
+        /// trimmed because a path segment cannot begin or end in whitespace on Windows.
+        /// </summary>
+        private static string SanitizedFolderName(string name)
+        {
+            var chars = name.ToCharArray();
+            for (var i = 0; i < chars.Length; i++)
+            {
+                if (Array.IndexOf(JellyfinSanitizedChars, chars[i]) >= 0 || char.IsControl(chars[i]))
+                {
+                    chars[i] = ' ';
+                }
+            }
+
+            return new string(chars).Trim();
+        }
+
+        /// <summary>
+        /// Returns true when two already-formatted list names would resolve to the same folder on disk.
+        /// Jellyfin core replaces every character it treats as invalid with a space when it derives a
+        /// collection's folder name, and derives the item's id from that path - so two names differing
+        /// only in those characters silently share one BoxSet.
+        /// </summary>
+        internal static bool NamesResolveToSameFolder(string first, string second)
+        {
+            return string.Equals(SanitizedFolderName(first), SanitizedFolderName(second), StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Builds the validation message for a collection name conflict. Names that are already equal get
+        /// the plain duplicate message; names that collide only after core's sanitization need to say why,
+        /// because the two names visibly differ on screen.
+        /// </summary>
+        internal static string BuildCollectionNameConflictDetail(string candidateFormatted, string existingFormatted)
+        {
+            if (string.Equals(candidateFormatted, existingFormatted, StringComparison.OrdinalIgnoreCase))
+            {
+                return $"A collection named '{candidateFormatted}' already exists. Jellyfin does not allow multiple collections with the same name.";
+            }
+
+            return $"A collection named '{existingFormatted}' already exists, and Jellyfin replaces the characters \" < > | : * ? \\ / with spaces when it creates the collection folder - so '{candidateFormatted}' would end up sharing that same collection. Choose a name that differs by more than those characters.";
+        }
+
+        /// <summary>
+        /// Validates a string value (used in expressions).
+        /// </summary>
+        /// <summary>
+        /// Validates a string value used in filters and rules.
+        /// Note: Does not check for SQL injection or XSS patterns since these values
+        /// are used for filtering media content (e.g., searching for movies with "SELECT" in the title).
+        /// The actual query execution is handled safely by Jellyfin's query engine.
+        /// </summary>
+        public static SmartListValidationResult ValidateStringValue(string? value, string fieldName = "Value")
+        {
+            if (value == null)
+            {
+                return SmartListValidationResult.Success(); // Null values are allowed
+            }
+
+            if (value.Length > MaxStringValueLength)
+            {
+                return SmartListValidationResult.Failure($"{fieldName} cannot exceed {MaxStringValueLength} characters");
+            }
+
+            // No SQL injection or XSS checks here - these values are used for filtering media content
+            // where titles may legitimately contain SQL keywords (e.g., "The SELECT Few", "Operation: DELETE")
+            // The query engine handles these safely without direct SQL execution
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates a regex pattern to prevent ReDoS attacks.
+        /// </summary>
+        public static SmartListValidationResult ValidateRegexPattern(string? pattern)
+        {
+            if (string.IsNullOrWhiteSpace(pattern))
+            {
+                return SmartListValidationResult.Failure("Regex pattern cannot be empty");
+            }
+
+            if (pattern.Length > MaxRegexPatternLength)
+            {
+                return SmartListValidationResult.Failure($"Regex pattern cannot exceed {MaxRegexPatternLength} characters");
+            }
+
+            // Try to compile the regex with a timeout to detect ReDoS vulnerabilities
+            try
+            {
+                var regex = new Regex(pattern, RegexOptions.None, TimeSpan.FromMilliseconds(1000));
+                // Test with a simple string to ensure it compiles correctly
+                _ = regex.IsMatch("test");
+            }
+            catch (ArgumentException ex)
+            {
+                return SmartListValidationResult.Failure($"Invalid regex pattern: {ex.Message}");
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return SmartListValidationResult.Failure("Regex pattern is too complex and may cause performance issues");
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates a field name.
+        /// </summary>
+        public static SmartListValidationResult ValidateFieldName(string? fieldName)
+        {
+            if (string.IsNullOrWhiteSpace(fieldName))
+            {
+                return SmartListValidationResult.Failure("Field name cannot be empty");
+            }
+
+            if (fieldName.Length > MaxFieldNameLength)
+            {
+                return SmartListValidationResult.Failure($"Field name cannot exceed {MaxFieldNameLength} characters");
+            }
+
+            // Field names should only contain alphanumeric characters and underscores
+            if (!FieldNameRegex.IsMatch(fieldName))
+            {
+                return SmartListValidationResult.Failure("Field name must contain only letters, numbers, and underscores, and start with a letter or underscore");
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates an operator string.
+        /// </summary>
+        public static SmartListValidationResult ValidateOperator(string? operatorValue)
+        {
+            if (string.IsNullOrWhiteSpace(operatorValue))
+            {
+                return SmartListValidationResult.Failure("Operator cannot be empty");
+            }
+
+            if (operatorValue.Length > MaxOperatorLength)
+            {
+                return SmartListValidationResult.Failure($"Operator cannot exceed {MaxOperatorLength} characters");
+            }
+
+            // Operators should be simple strings without special characters
+            if (!OperatorRegex.IsMatch(operatorValue))
+            {
+                return SmartListValidationResult.Failure("Operator contains invalid characters");
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates an integer value within a specified range.
+        /// </summary>
+        public static SmartListValidationResult ValidateInteger(int? value, int? min = null, int? max = null, string fieldName = "Value")
+        {
+            if (value == null)
+            {
+                return SmartListValidationResult.Success(); // Null values are allowed
+            }
+
+            if (min.HasValue && value < min.Value)
+            {
+                return SmartListValidationResult.Failure($"{fieldName} must be at least {min.Value}");
+            }
+
+            if (max.HasValue && value > max.Value)
+            {
+                return SmartListValidationResult.Failure($"{fieldName} cannot exceed {max.Value}");
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates a complete smart list DTO.
+        /// </summary>
+        public static SmartListValidationResult ValidateSmartList(SmartListDto? list)
+        {
+            if (list == null)
+            {
+                return SmartListValidationResult.Failure("List data is required");
+            }
+
+            // Validate name
+            var nameResult = ValidateName(list.Name);
+            if (!nameResult.IsValid)
+            {
+                return nameResult;
+            }
+
+            // Validate media types count
+            if (list.MediaTypes != null && list.MediaTypes.Count > MaxMediaTypesCount)
+            {
+                return SmartListValidationResult.Failure($"Cannot select more than {MaxMediaTypesCount} media types");
+            }
+
+            // Validate media types values
+            var mediaTypesResult = ValidateMediaTypeValues(list.MediaTypes, "media type");
+            if (!mediaTypesResult.IsValid)
+            {
+                return mediaTypesResult;
+            }
+
+            // Container media types (Collection/Playlist) are collection-only: Jellyfin playlists
+            // can only contain media items, so container results would be silently dropped.
+            // Gated on the Type discriminator rather than the CLR type: the user page binds every
+            // create body as a SmartPlaylistDto and only converts to a collection DTO after
+            // validation has run, so a CLR-type check rejects legitimate smart collections there.
+            if (list.Type != Core.Enums.SmartListType.Collection)
+            {
+                var containerType = list.MediaTypes?.FirstOrDefault(Core.Constants.MediaTypes.IsContainerType);
+                if (containerType != null)
+                {
+                    return SmartListValidationResult.Failure($"{containerType} media type is not supported for playlists. Jellyfin playlists can only contain media items - use a smart collection instead.");
+                }
+            }
+
+            // Grouping emits BoxSets, which Jellyfin playlists cannot contain. Gated on the Type
+            // discriminator rather than the CLR type: the user page binds every create body as a
+            // SmartPlaylistDto and only converts to a collection DTO after validation has run.
+            if (list.Type != Core.Enums.SmartListType.Collection && list.GroupIntoCollections)
+            {
+                return SmartListValidationResult.Failure("Group results into collections is not supported for playlists. Jellyfin playlists can only contain media items - use a smart collection instead.");
+            }
+
+            // Validate expression sets
+            var ruleGroupsResult = ValidateRuleGroups(list.ExpressionSets, string.Empty);
+            if (!ruleGroupsResult.IsValid)
+            {
+                return ruleGroupsResult;
+            }
+
+            // Validate bumper configuration (playlists only)
+            if (list is SmartPlaylistDto playlistDto && playlistDto.Bumpers != null)
+            {
+                var bumpers = playlistDto.Bumpers;
+
+                var intervalResult = ValidateInteger(bumpers.Interval, min: 1, max: 10000, fieldName: "Bumper interval");
+                if (!intervalResult.IsValid)
+                {
+                    return intervalResult;
+                }
+
+                // Bumpers with rules configured require a media type to fetch content from
+                if (bumpers.ExpressionSets != null && bumpers.ExpressionSets.Count > 0
+                    && (bumpers.MediaTypes == null || bumpers.MediaTypes.Count == 0))
+                {
+                    return SmartListValidationResult.Failure("Bumpers require at least one media type");
+                }
+
+                var bumperMediaTypesResult = ValidateMediaTypeValues(bumpers.MediaTypes, "bumper media type");
+                if (!bumperMediaTypesResult.IsValid)
+                {
+                    return bumperMediaTypesResult;
+                }
+
+                // Bumpers are woven into playlists, so their media types must be playlist-supported
+                var unsupportedBumperType = bumpers.MediaTypes?.FirstOrDefault(mt =>
+                    mt == Core.Constants.MediaTypes.Series
+                    || mt == Core.Constants.MediaTypes.Season
+                    || mt == Core.Constants.MediaTypes.MusicAlbum
+                    || mt == Core.Constants.MediaTypes.LiveTvChannel
+                    || Core.Constants.MediaTypes.IsContainerType(mt));
+                if (unsupportedBumperType != null)
+                {
+                    return SmartListValidationResult.Failure($"{unsupportedBumperType} media type is not supported for bumpers. Bumpers are woven into playlists, which cannot contain {unsupportedBumperType} items.");
+                }
+
+                if (!string.IsNullOrEmpty(bumpers.BumperOrder)
+                    && bumpers.BumperOrder != "Random"
+                    && bumpers.BumperOrder != "Name"
+                    && bumpers.BumperOrder != "ReleaseDate")
+                {
+                    return SmartListValidationResult.Failure($"Invalid bumper order '{bumpers.BumperOrder}'. Allowed values: Random, Name, ReleaseDate");
+                }
+
+                var bumperRuleGroupsResult = ValidateRuleGroups(bumpers.ExpressionSets, "Bumpers");
+                if (!bumperRuleGroupsResult.IsValid)
+                {
+                    return bumperRuleGroupsResult;
+                }
+            }
+
+            // Validate numeric fields
+            var maxItemsResult = ValidateInteger(list.MaxItems, min: 0, max: 100000, fieldName: "MaxItems");
+            if (!maxItemsResult.IsValid)
+            {
+                return maxItemsResult;
+            }
+
+            var maxPlayTimeResult = ValidateInteger(list.MaxPlayTimeMinutes, min: 0, max: 525600, fieldName: "MaxPlayTimeMinutes"); // Max 1 year in minutes
+            if (!maxPlayTimeResult.IsValid)
+            {
+                return maxPlayTimeResult;
+            }
+
+            var randomGroupSelectionResult = ValidateRandomGroupSelection(list.RandomGroupSelection);
+            if (!randomGroupSelectionResult.IsValid)
+            {
+                return randomGroupSelectionResult;
+            }
+
+            // Validate schedules count
+            if (list.Schedules != null && list.Schedules.Count > MaxSchedulesCount)
+            {
+                return SmartListValidationResult.Failure($"Cannot have more than {MaxSchedulesCount} schedules");
+            }
+
+            if (list.VisibilitySchedules != null && list.VisibilitySchedules.Count > MaxSchedulesCount)
+            {
+                return SmartListValidationResult.Failure($"Cannot have more than {MaxSchedulesCount} visibility schedules");
+            }
+
+            // Validate managed metadata tags
+            if (list.Tags != null)
+            {
+                if (list.Tags.Count > MaxTagsCount)
+                {
+                    return SmartListValidationResult.Failure($"Cannot have more than {MaxTagsCount} tags");
+                }
+
+                foreach (var tag in list.Tags)
+                {
+                    if (string.IsNullOrWhiteSpace(tag))
+                    {
+                        return SmartListValidationResult.Failure("Tags cannot be empty or whitespace");
+                    }
+
+                    if (tag.Length > MaxTagLength)
+                    {
+                        return SmartListValidationResult.Failure($"Tags cannot exceed {MaxTagLength} characters");
+                    }
+
+                    if (tag.Any(c => char.IsControl(c)))
+                    {
+                        return SmartListValidationResult.Failure("Tags cannot contain control characters");
+                    }
+                }
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        private static SmartListValidationResult ValidateRandomGroupSelection(RandomGroupSelectionDto? randomGroupSelection)
+        {
+            if (randomGroupSelection == null || !randomGroupSelection.Enabled)
+            {
+                return SmartListValidationResult.Success();
+            }
+
+            if (string.IsNullOrWhiteSpace(randomGroupSelection.GroupBy))
+            {
+                return SmartListValidationResult.Failure("RandomGroupSelection.GroupBy is required when random group selection is enabled");
+            }
+
+            if (!RandomGroupSelectionDto.IsSupportedGroupByField(randomGroupSelection.GroupBy))
+            {
+                return SmartListValidationResult.Failure($"Invalid RandomGroupSelection.GroupBy value: {randomGroupSelection.GroupBy}");
+            }
+
+            return ValidateInteger(randomGroupSelection.MinimumItems, min: 0, max: 100000, fieldName: "RandomGroupSelection.MinimumItems");
+        }
+
+        /// <summary>
+        /// Validates that all media type values are known media types.
+        /// <paramref name="label"/> names the field in the failure message
+        /// (e.g. "media type" or "bumper media type").
+        /// </summary>
+        private static SmartListValidationResult ValidateMediaTypeValues(List<string>? types, string label)
+        {
+            if (types == null || types.Count == 0)
+            {
+                return SmartListValidationResult.Success();
+            }
+
+            var validMediaTypes = Core.Constants.MediaTypes.All;
+            var invalidMediaTypes = types
+                .Where(mt => !validMediaTypes.Contains(mt))
+                .ToList();
+
+            if (invalidMediaTypes.Count > 0)
+            {
+                return SmartListValidationResult.Failure($"Invalid {label}(s): {string.Join(", ", invalidMediaTypes)}. Allowed types: {string.Join(", ", validMediaTypes)}");
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates rule groups: caps the group count and validates every expression.
+        /// <paramref name="label"/> names the owner in the failure message
+        /// (empty for the main rule groups, "Bumpers" for bumper rule groups).
+        /// </summary>
+        private static SmartListValidationResult ValidateRuleGroups(List<ExpressionSet>? sets, string label)
+        {
+            if (sets == null)
+            {
+                return SmartListValidationResult.Success();
+            }
+
+            if (sets.Count > MaxExpressionSetsCount)
+            {
+                var subject = string.IsNullOrEmpty(label) ? "Cannot" : $"{label} cannot";
+                return SmartListValidationResult.Failure($"{subject} have more than {MaxExpressionSetsCount} rule groups");
+            }
+
+            return ValidateExpressionSets(sets);
+        }
+
+        /// <summary>
+        /// Validates expression sets (rule groups).
+        /// </summary>
+        private static SmartListValidationResult ValidateExpressionSets(List<ExpressionSet> expressionSets)
+        {
+            foreach (var expressionSet in expressionSets)
+            {
+                if (expressionSet.Expressions == null)
+                {
+                    continue;
+                }
+
+                if (expressionSet.Expressions.Count > MaxExpressionsPerSet)
+                {
+                    return SmartListValidationResult.Failure($"Cannot have more than {MaxExpressionsPerSet} rules in a single group");
+                }
+
+                foreach (var expression in expressionSet.Expressions)
+                {
+                    var result = ValidateExpression(expression);
+                    if (!result.IsValid)
+                    {
+                        return result;
+                    }
+                }
+            }
+
+            return SmartListValidationResult.Success();
+        }
+
+        /// <summary>
+        /// Validates a single expression (rule).
+        /// </summary>
+        private static SmartListValidationResult ValidateExpression(Expression expression)
+        {
+            // Validate field name
+            var fieldResult = ValidateFieldName(expression.MemberName);
+            if (!fieldResult.IsValid)
+            {
+                return fieldResult;
+            }
+
+            // Validate operator
+            var operatorResult = ValidateOperator(expression.Operator);
+            if (!operatorResult.IsValid)
+            {
+                return operatorResult;
+            }
+
+            // Validate target value based on operator
+            if (expression.Operator?.Contains("Regex", StringComparison.OrdinalIgnoreCase) == true)
+            {
+                return ValidateRegexPattern(expression.TargetValue);
+            }
+            else
+            {
+                return ValidateStringValue(expression.TargetValue, fieldName: "Rule value");
+            }
+        }
+
+        /// <summary>
+        /// Checks if a string contains SQL injection patterns.
+        /// </summary>
+        private static bool ContainsSqlInjection(string value)
+        {
+            foreach (var regex in CompiledSqlInjectionPatterns)
+            {
+                try
+                {
+                    if (regex.IsMatch(value))
+                    {
+                        return true;
+                    }
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    // If the regex times out, treat it as potentially dangerous
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if a string contains XSS patterns.
+        /// </summary>
+        private static bool ContainsXss(string value)
+        {
+            foreach (var regex in CompiledXssPatterns)
+            {
+                try
+                {
+                    if (regex.IsMatch(value))
+                    {
+                        return true;
+                    }
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    // If the regex times out, treat it as potentially dangerous
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Checks if a string contains path traversal patterns.
+        /// </summary>
+        private static bool ContainsPathTraversal(string value)
+        {
+            foreach (var regex in CompiledPathTraversalPatterns)
+            {
+                try
+                {
+                    if (regex.IsMatch(value))
+                    {
+                        return true;
+                    }
+                }
+                catch (RegexMatchTimeoutException)
+                {
+                    // If the regex times out, treat it as potentially dangerous
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Represents the result of a validation operation.
+    /// </summary>
+    public class SmartListValidationResult
+    {
+        public bool IsValid { get; }
+        public string? ErrorMessage { get; }
+
+        private SmartListValidationResult(bool isValid, string? errorMessage = null)
+        {
+            IsValid = isValid;
+            ErrorMessage = errorMessage;
+        }
+
+        public static SmartListValidationResult Success() => new SmartListValidationResult(true);
+
+        public static SmartListValidationResult Failure(string errorMessage) => new SmartListValidationResult(false, errorMessage);
+    }
+}

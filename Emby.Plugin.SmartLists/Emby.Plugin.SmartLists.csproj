@@ -1,0 +1,128 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Emby Server 4.10.1.0 runs plugins on net8.0. -->
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>Emby.Plugin.SmartLists</RootNamespace>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <NoWarn>$(NoWarn);CA1873</NoWarn>
+    <Nullable>enable</Nullable>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!-- Version will be set dynamically during build from git tag -->
+    <Version Condition="'$(Version)' == ''">0.0.0</Version>
+    <AssemblyVersion Condition="'$(AssemblyVersion)' == ''">$(Version).0</AssemblyVersion>
+    <PackageIcon>logo.jpg</PackageIcon>
+    <!-- Point EmbySystemDir at the "system" folder of an Emby Server 4.10.1.0 install (or set EMBY_SYSTEM_DIR). -->
+    <EmbySystemDir Condition="'$(EmbySystemDir)' == ''">$(EMBY_SYSTEM_DIR)</EmbySystemDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\images\logo.jpg" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <!-- Exposes internal members (e.g. Engine's internal statics) to the test project. -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="Emby.Plugin.SmartLists.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Configuration\config.html" />
+    <!-- User-facing pages -->
+    <EmbeddedResource Include="Configuration\user-playlists.html" />
+    <!-- Core utilities and constants (must load first) -->
+    <EmbeddedResource Include="Configuration\config-core.js" />
+    <!-- Formatters and option generators -->
+    <EmbeddedResource Include="Configuration\config-formatters.js" />
+    <!-- Schedule management -->
+    <EmbeddedResource Include="Configuration\config-schedules.js" />
+    <!-- Image management -->
+    <EmbeddedResource Include="Configuration\config-images.js" />
+    <!-- Sort management -->
+    <EmbeddedResource Include="Configuration\config-sorts.js" />
+    <!-- Generic multi-select component -->
+    <EmbeddedResource Include="Configuration\config-multi-select.js" />
+    <!-- Multi-select component CSS -->
+    <EmbeddedResource Include="Configuration\config-multi-select.css" />
+    <!-- Searchable single-select component -->
+    <EmbeddedResource Include="Configuration\config-searchable-select.js" />
+    <!-- User selection component -->
+    <EmbeddedResource Include="Configuration\config-user-select.js" />
+    <!-- Rule management -->
+    <EmbeddedResource Include="Configuration\config-rules.js" />
+    <!-- Playlist CRUD operations -->
+    <EmbeddedResource Include="Configuration\config-lists.js" />
+    <!-- Template catalog and picker -->
+    <EmbeddedResource Include="Configuration\config-templates.js" />
+    <!-- Filtering and search -->
+    <EmbeddedResource Include="Configuration\config-filters.js" />
+    <!-- Bulk actions -->
+    <EmbeddedResource Include="Configuration\config-bulk-actions.js" />
+    <!-- Status page -->
+    <EmbeddedResource Include="Configuration\config-status.js" />
+    <!-- API calls -->
+    <EmbeddedResource Include="Configuration\config-api.js" />
+    <!-- Initialization (must load last) -->
+    <EmbeddedResource Include="Configuration\config-init.js" />
+    <!-- Smart list badge overlay for cover images -->
+    <EmbeddedResource Include="Resources\badge.png" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="MediaBrowser.Common"><HintPath>$(EmbySystemDir)\MediaBrowser.Common.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MediaBrowser.Controller"><HintPath>$(EmbySystemDir)\MediaBrowser.Controller.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="MediaBrowser.Model"><HintPath>$(EmbySystemDir)\MediaBrowser.Model.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
+  <!-- Emby ships Microsoft.Extensions.* / ASP.NET Core 8.0 itself; compile against the targeting pack only. -->
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <!--
+    Deferred features (not in the Emby MVP). Excluded, not deleted, so they can be brought back:
+    the collage/badge helpers need ImageSharp, which Emby does not ship and which would have to be bundled.
+  -->
+  <!--
+    Jellyfin-only code awaiting its Emby rewrite. Excluded from the build so the rest can be ported first;
+    each file is still the source of truth for the logic its replacement must carry.
+      Api\**                        MVC controllers      -> Emby IService endpoints (port phase 6)
+      AutoRefreshHostedService      IHostedService       -> IServerEntryPoint shell (port phase 5)
+      StorageMigrationHostedService IHostedService       -> entry-point startup step (port phase 5)
+      PluginPagesRegistrationService Jellyfin Plugin Pages -> Emby page model (port phase 6)
+      CleanupTask / BackupTask      Jellyfin IScheduledTask -> Emby IScheduledTask (port phase 5)
+  -->
+  <ItemGroup>
+    <Compile Remove="Api\**" />
+    <Compile Remove="Services\Shared\AutoRefreshHostedService.cs" />
+    <Compile Remove="Services\Shared\StorageMigrationHostedService.cs" />
+    <Compile Remove="Services\PluginPagesRegistrationService.cs" />
+    <Compile Remove="Services\Shared\CleanupTask.cs" />
+    <Compile Remove="Services\Shared\BackupTask.cs" />
+  </ItemGroup>
+
+  <!--
+    ImageSharp is bundled with the plugin (Emby does not ship it) for the collage and badge helpers.
+    UNVERIFIED on Emby: whether the plugin loader resolves a dependency DLL placed next to the plugin DLL;
+    Plugin.cs keeps the AssemblyResolve fallback the original plugin used. Verify in port phase 7.
+  -->
+  <ItemGroup>
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12">
+      <Private>true</Private>
+      <CopyLocal>true</CopyLocal>
+    </PackageReference>
+  </ItemGroup>
+
+  <Target Name="CopyImageSharpDll" AfterTargets="ResolveReferences">
+    <ItemGroup>
+      <ImageSharpReference Include="@(ReferencePath)" Condition="'%(Filename)' == 'SixLabors.ImageSharp'" />
+    </ItemGroup>
+    <Copy SourceFiles="@(ImageSharpReference)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="All" />
+    <PackageReference Include="SmartAnalyzers.MultithreadingAnalyzer" Version="1.1.31" PrivateAssets="All" />
+  </ItemGroup>
+
+</Project>
