@@ -158,3 +158,6 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 ### Checkpoint O — security review (see docs/security.md)
 - Probed the admin API (authn, traversal, upload, malicious backup zip, JSON/regex/size fuzzing), UI script injection, dependencies and static patterns. Findings fixed: uploaded/restored images were accepted by extension only and SVG was allowed -> `Utilities/ImageContentValidator` (magic bytes), SVG removed, rejected uploads now return 400. No traversal, injection or auth bypass found.
 - Non-administrator session (test1) verified: 403 on every endpoint tried, including the plugin configuration GET.
+
+### Checkpoint P — CI removed
+- Deleted `.github/` (the CI and release workflows) at the owner's request: the plugin is built and tested locally, and the workflows could not run without a hosted copy of the Emby server DLLs. `docs/development.md` no longer describes CI. Earlier checkpoints that mention the workflows are historical.
