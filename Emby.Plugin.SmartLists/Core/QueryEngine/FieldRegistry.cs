@@ -63,7 +63,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         // These trigger two-phase filtering for optimization
         AudioLanguages = 1 << 0,      // Fields: AudioLanguages, SubtitleLanguages | Cache: MediaStreamsCache
         AudioQuality = 1 << 1,        // Fields: AudioBitrate, AudioSampleRate, AudioBitDepth, AudioCodec, AudioProfile, AudioChannels | Cache: MediaStreamsCache
-        VideoQuality = 1 << 2,        // Fields: Resolution, AspectRatio, Framerate, VideoCodec, VideoProfile, VideoRange, VideoRangeType | Cache: MediaStreamsCache
+        VideoQuality = 1 << 2,        // Fields: Resolution, AspectRatio, Framerate, VideoCodec, VideoProfile, VideoRange | Cache: MediaStreamsCache
         People = 1 << 3,              // Fields: All people roles (Actors, Directors, etc.) | Cache: ItemPeople
         Collections = 1 << 4,         // Fields: Collections | Cache: ItemCollectionsWithDepth, CollectionMembershipCache
         Playlists = 1 << 5,           // Fields: Playlists | Cache: ItemPlaylists, PlaylistMembershipCache
@@ -244,7 +244,6 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             AddField(fields, "VideoCodec", "Video Codec", FieldType.Text, FieldCategory.Video, StringOperators, ExtractionGroup.VideoQuality);
             AddField(fields, "VideoProfile", "Video Profile", FieldType.Text, FieldCategory.Video, StringOperators, ExtractionGroup.VideoQuality);
             AddField(fields, "VideoRange", "Video Range", FieldType.Text, FieldCategory.Video, StringOperators, ExtractionGroup.VideoQuality);
-            AddField(fields, "VideoRangeType", "Video Range Type", FieldType.Text, FieldCategory.Video, StringOperators, ExtractionGroup.VideoQuality);
 
             // Audio Fields
             AddField(fields, "AudioLanguages", "Audio Languages", FieldType.List, FieldCategory.Audio, MultiValueOperators, ExtractionGroup.AudioLanguages);
@@ -298,7 +297,9 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             AddField(fields, "ItemType", "Item Type", FieldType.Simple, FieldCategory.Content, SimpleOperators);
             AddField(fields, "ExtraType", "Extra Type", FieldType.Simple, FieldCategory.Content, SimpleOperators);
 
-            // People Fields (all expensive - require People extraction group)
+            // People Fields (all expensive - require People extraction group). Emby only knows eight person types
+            // (Actor, Director, Writer, Producer, GuestStar, Composer, Conductor, Lyricist), so the other roles the
+            // original plugin offered (arrangers, authors, ...) can never match and are not exposed.
             AddPeopleField(fields, "People", "People (All)");
             AddPeopleField(fields, "Actors", "Actors");
             AddPeopleField(fields, "ActorRoles", "Actor Roles (Character Names)");
@@ -309,22 +310,6 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             AddPeopleField(fields, "Producers", "Producers");
             AddPeopleField(fields, "Conductors", "Conductors");
             AddPeopleField(fields, "Lyricists", "Lyricists");
-            AddPeopleField(fields, "Arrangers", "Arrangers");
-            AddPeopleField(fields, "SoundEngineers", "Sound Engineers");
-            AddPeopleField(fields, "Mixers", "Mixers");
-            AddPeopleField(fields, "Remixers", "Remixers");
-            AddPeopleField(fields, "Creators", "Creators");
-            AddPeopleField(fields, "PersonArtists", "Artists (Person Role)");
-            AddPeopleField(fields, "PersonAlbumArtists", "Album Artists (Person Role)");
-            AddPeopleField(fields, "Authors", "Authors");
-            AddPeopleField(fields, "Illustrators", "Illustrators");
-            AddPeopleField(fields, "Pencilers", "Pencilers");
-            AddPeopleField(fields, "Inkers", "Inkers");
-            AddPeopleField(fields, "Colorists", "Colorists");
-            AddPeopleField(fields, "Letterers", "Letterers");
-            AddPeopleField(fields, "CoverArtists", "Cover Artists");
-            AddPeopleField(fields, "Editors", "Editors");
-            AddPeopleField(fields, "Translators", "Translators");
 
             return fields;
         }

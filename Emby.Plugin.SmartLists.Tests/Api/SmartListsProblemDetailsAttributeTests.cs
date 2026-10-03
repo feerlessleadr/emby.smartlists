@@ -1,3 +1,4 @@
+using Emby.Plugin.SmartLists.Core.QueryEngine;
 using Emby.Plugin.SmartLists.Api.Filters;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -7,8 +8,8 @@ using Microsoft.AspNetCore.Mvc.Infrastructure;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
 
-// Tests for Api/Filters/SmartListsProblemDetailsAttribute.cs. The Api folder is excluded from the build
-// until the MVC controllers are replaced by Emby endpoints (port phase 6); see the csproj.
+// Tests for Api/Filters/SmartListsProblemDetailsAttribute.cs. These tests cover the filter,
+// (ExtractDetail is also what the Emby ControllerRouter uses to shape error bodies).
 namespace Emby.Plugin.SmartLists.Tests;
 
 #region (B) Api/Filters/SmartListsProblemDetailsAttribute.cs

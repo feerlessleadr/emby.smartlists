@@ -41,7 +41,6 @@
 
   <!-- Tests for code that is excluded from the plugin build until its Emby rewrite (port phase 6). -->
   <ItemGroup>
-    <Compile Remove="Api\**" />
   </ItemGroup>
 
   <ItemGroup>
