@@ -2,6 +2,10 @@
 
 Requires **Emby Server 4.10.1.0** (the plugin is compiled against that version; other versions are untested).
 
+## Before you install
+
+Back up your Emby data folder (`<programdata>`, at least `config`, `data` and `plugins`) first, and try the plugin on a test server before a production one. To roll back, stop Emby, delete the two plugin DLLs, and restore the backup if needed.
+
 ## Install
 
 1. Get the plugin zip: either a release build, or build it yourself (`docs/development.md`, "Building a release zip"). It contains exactly two files:
