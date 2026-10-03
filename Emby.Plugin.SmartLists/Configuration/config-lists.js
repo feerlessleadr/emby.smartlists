@@ -2062,8 +2062,8 @@
                 '</tr>' :
                 ''
             ) +
-            // Hide Created By property on user pages
-            (!isUserPage ?
+            // Created By is only recorded for lists made on the (unsupported here) user page, so hide it when unknown
+            (!isUserPage && eCreatedBy && eCreatedBy !== 'Unknown' ?
                 '<tr style="border-bottom: 1px solid var(--jf-palette-divider);">' +
                 '<td style="padding: 0.5em 0.75em; font-weight: bold; opacity: 0.8; width: 40%; border-right: 1px solid var(--jf-palette-divider);">Created By</td>' +
                 '<td style="padding: 0.5em 0.75em; ">' + eCreatedBy + '</td>' +
