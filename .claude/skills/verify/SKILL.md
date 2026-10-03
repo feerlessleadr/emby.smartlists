@@ -13,7 +13,7 @@ Unit tests do not touch Emby. Anything that creates playlists/collections, refre
 ./dev/deploy-local.ps1 -EmbyRoot '<folder containing Emby system + programdata>'
 ```
 
-It builds with a timestamped version (Emby caches plugin files by version), stops the server, copies `Emby.Plugin.SmartLists.dll` + `SixLabors.ImageSharp.dll` into `programdata\plugins` and restarts. Then check the log for `SmartLists started` (`programdata\logs\embyserver.txt`, lines `SmartLists: ...`).
+It builds with a timestamped version (Emby caches plugin files by version), stops the server, copies the single self-contained `Emby.Plugin.SmartLists.dll` into `programdata\plugins` and restarts. Then check the log for `SmartLists started` (`programdata\logs\embyserver.txt`, lines `SmartLists: ...`).
 
 ## Exercise
 

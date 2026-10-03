@@ -46,7 +46,7 @@ Tips:
 ./dev/build-release.ps1 -Version 0.1.0
 ```
 
-Produces `artifacts/Emby.Plugin.SmartLists-0.1.0.zip` containing `Emby.Plugin.SmartLists.dll` and `SixLabors.ImageSharp.dll`. Use a new version for every distributed build.
+Produces `artifacts/Emby.Plugin.SmartLists-0.1.0.zip` and the bare `artifacts/Emby.Plugin.SmartLists.dll`. The plugin is a single self-contained DLL (ImageSharp is embedded), so a release needs only ONE of the two as its asset; the GitHub plugin installer picks a loose `.dll` asset before a zip. Use a new version for every distributed build.
 
 ## CI
 

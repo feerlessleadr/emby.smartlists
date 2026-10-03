@@ -23,14 +23,14 @@ Written for running the plugin on an internet-facing Emby server. This is a revi
 | Regex | Catastrophic pattern `(a+)+$` | Accepted but every evaluation runs under a 1 s match timeout |
 | Script injection (UI) | HTML/script payloads in list name, overview, tags, sort title and rule value; viewed in Manage, expanded, and opened in Edit | Rendered as text, no element injected, no script ran |
 | Dependencies | `dotnet list package --vulnerable --include-transitive`, `--deprecated` | None reported (only direct reference: SixLabors.ImageSharp 3.1.12) |
-| Static scan | Process start, dynamic assembly load, binary/XML deserialization, SQL, script compilation | None used (one `Assembly.LoadFrom` for the bundled ImageSharp DLL from Emby's plugin folder) |
+| Static scan | Process start, dynamic assembly load, binary/XML deserialization, SQL, script compilation | None used (ImageSharp is loaded from a resource embedded in the plugin DLL via `Assembly.Load`) |
 
 ## Known residual risks
 
 - **Admin-only abuse**: an administrator can already do worse in Emby, but note: the *custom backup path* setting lets an admin choose where backup zips are written; a backup zip upload is capped at 1 GB and its contents are not size-limited when extracted (zip bomb), so a stolen admin token could fill a disk.
 - **Lists for unknown users**: creating a list for a non-existent user id is accepted (it fails at refresh). Harmless.
 - **Error detail**: some 500 responses include the exception message, which can contain server paths. Only administrators see these.
-- **ImageSharp** decodes uploaded images and library artwork. Keep the bundled package updated (`dotnet list package --vulnerable`).
+- **ImageSharp** decodes uploaded images and library artwork. Keep the embedded package updated (`dotnet list package --vulnerable`).
 - **Plugin UI files are public** (Emby behaviour). No secrets are in them.
 - **Settings XML** has fields for third-party API keys (unused here, hidden in the UI). They would be stored in plain text if ever set.
 

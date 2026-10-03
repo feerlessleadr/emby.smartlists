@@ -26,6 +26,9 @@ namespace Emby.Plugin.SmartLists
             AppDomain.CurrentDomain.AssemblyResolve += OnAssemblyResolve;
         }
 
+        private static readonly object ImageSharpLock = new();
+        private static Assembly? _imageSharp;
+
         private readonly string _pluginsPath;
 
         private Assembly? OnAssemblyResolve(object? sender, ResolveEventArgs args)
@@ -36,15 +39,34 @@ namespace Emby.Plugin.SmartLists
                 return null;
             }
 
-            // Emby may load the plugin from memory, leaving Assembly.Location empty; fall back to its plugins folder.
-            var pluginDirectory = System.IO.Path.GetDirectoryName(GetType().Assembly.Location);
-            if (string.IsNullOrEmpty(pluginDirectory))
+            lock (ImageSharpLock)
             {
-                pluginDirectory = _pluginsPath;
-            }
+                if (_imageSharp is not null)
+                {
+                    return _imageSharp;
+                }
 
-            var imageSharpPath = System.IO.Path.Combine(pluginDirectory, "SixLabors.ImageSharp.dll");
-            return System.IO.File.Exists(imageSharpPath) ? Assembly.LoadFrom(imageSharpPath) : null;
+                // ImageSharp is embedded in this assembly and loaded from memory: nothing on disk is held open, so the
+                // plugin DLL can be replaced in place while Emby runs (and another plugin's copy cannot clash).
+                using var resource = GetType().Assembly.GetManifestResourceStream("SixLabors.ImageSharp.dll");
+                if (resource is not null)
+                {
+                    using var buffer = new System.IO.MemoryStream();
+                    resource.CopyTo(buffer);
+                    _imageSharp = Assembly.Load(buffer.ToArray());
+                    return _imageSharp;
+                }
+
+                // Fallback for a build without the embedded copy: a loose DLL in Emby's plugins folder, read into memory.
+                var imageSharpPath = System.IO.Path.Combine(_pluginsPath, "SixLabors.ImageSharp.dll");
+                if (System.IO.File.Exists(imageSharpPath))
+                {
+                    _imageSharp = Assembly.Load(System.IO.File.ReadAllBytes(imageSharpPath));
+                    return _imageSharp;
+                }
+
+                return null;
+            }
         }
 
         public override string Name => "SmartLists";

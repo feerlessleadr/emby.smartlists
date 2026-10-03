@@ -87,23 +87,17 @@
   </ItemGroup>
 
   <!--
-    ImageSharp is bundled with the plugin (Emby does not ship it) for the collage and badge helpers.
-    UNVERIFIED on Emby: whether the plugin loader resolves a dependency DLL placed next to the plugin DLL;
-    Plugin.cs keeps the AssemblyResolve fallback the original plugin used. Verify in port phase 7.
+    ImageSharp is not shipped by Emby, so it is embedded in the plugin DLL as a resource and loaded from memory by
+    Plugin.cs when first needed. A loose SixLabors.ImageSharp.dll in the plugins folder would be file-locked by the
+    running server (breaking in-place upgrades, e.g. by a GitHub plugin installer) and could clash with another
+    plugin that ships its own copy. The runtime asset is excluded so it is not copied next to the plugin.
   -->
   <ItemGroup>
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12">
-      <Private>true</Private>
-      <CopyLocal>true</CopyLocal>
+    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" GeneratePathProperty="true">
+      <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <EmbeddedResource Include="$(PkgSixLabors_ImageSharp)\lib\net6.0\SixLabors.ImageSharp.dll" LogicalName="SixLabors.ImageSharp.dll" Visible="false" />
   </ItemGroup>
-
-  <Target Name="CopyImageSharpDll" AfterTargets="ResolveReferences">
-    <ItemGroup>
-      <ImageSharpReference Include="@(ReferencePath)" Condition="'%(Filename)' == 'SixLabors.ImageSharp'" />
-    </ItemGroup>
-    <Copy SourceFiles="@(ImageSharpReference)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" />
-  </Target>
 
   <ItemGroup>
     <PackageReference Include="StyleCop.Analyzers" Version="1.2.0-beta.556" PrivateAssets="All" />

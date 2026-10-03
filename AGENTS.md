@@ -26,7 +26,7 @@ The build treats all warnings as errors with `AnalysisMode=Recommended`: CA/SA a
 ### Deploying to a local Emby
 
 1. Stop the server (`Stop-Process -Name EmbyServer`).
-2. Copy `Emby.Plugin.SmartLists.dll` and `SixLabors.ImageSharp.dll` from `bin\<config>\net8.0` into `<programdata>\plugins`.
+2. Copy `Emby.Plugin.SmartLists.dll` from `bin\<config>\net8.0` into `<programdata>\plugins`. It is self-contained (ImageSharp is embedded in it); delete any loose `SixLabors.ImageSharp.dll` left by builds before 0.1.2.
 3. Start `system\EmbyServer.exe -programdata <programdata>`. Logs: `<programdata>\logs\embyserver.txt` (plugin lines are `SmartLists: <Class>: ...`).
 
 Things that will bite you:
@@ -90,7 +90,7 @@ Full detail in `docs/port/api-notes.md`. The ones that cause bugs:
 - `BaseItem.SortName`'s setter needs the static `BaseItem.LocalizationManager`. A forced sort title = `SetSortNameDirect` + lock `MetadataFields.SortName`; Emby's post-create refresh can revert it, so both services re-apply it after creation.
 - Playlists: owner = the user share with `ManageDelete`; refresh = remove all entries, then add (`IPlaylistManager`). Collections: `ICollectionManager.CreateCollection` (created locked), membership by add/remove diff; BoxSets are virtual (no containing folder: images live under `GetInternalMetadataPath()`, see `GetItemImageFolder`). `UpdateRatingToItems` does nothing on locked items.
 - Emby's logger is a different interface from Microsoft's; the plugin code uses `Microsoft.Extensions.Logging` and `EmbyLoggerProvider` bridges it (text is passed as a `"{0}"` argument; the `ReadOnlyMemory` overloads are obsolete errors).
-- Emby calls `GetTypes()` on every plugin assembly before the plugin can register its assembly resolver, so no type (including compiler-generated nested ones) may need ImageSharp to *load*: async state-machine structs with ImageSharp awaiters (e.g. `TaskAwaiter<Image>`) do, which is why `CollageBuilder` is synchronous behind `Task.Run` wrappers. Keep ImageSharp types out of async methods. `Plugin.cs` still resolves the DLL from `IApplicationPaths.PluginsPath` because `Assembly.Location` is empty.
+- Emby calls `GetTypes()` on every plugin assembly before the plugin can register its assembly resolver, so no type (including compiler-generated nested ones) may need ImageSharp to *load*: async state-machine structs with ImageSharp awaiters (e.g. `TaskAwaiter<Image>`) do, which is why `CollageBuilder` is synchronous behind `Task.Run` wrappers. Keep ImageSharp types out of async methods. ImageSharp is embedded in the plugin DLL as a resource and `Plugin.cs` loads it from memory (`Assembly.Load(bytes)`) on the first assembly-resolve event. Do not ship it as a loose file: Emby keeps a loaded file locked, which broke in-place upgrades by a GitHub plugin installer (0.1.1).
 - `ILibraryManager`/`IUserManager` return arrays; `IUserManager.Users` is obsolete (use `GetUserList(new UserQuery())`); `BaseItem.IsFolder` is obsolete (`is Folder`).
 
 ## UI gotchas (config-*.js and config.html)
@@ -114,7 +114,7 @@ Full detail in `docs/port/api-notes.md`. The ones that cause bugs:
 
 ## Versioning and releases
 
-Personal project: no release automation beyond a CI build. A release is a zip of `Emby.Plugin.SmartLists.dll` + `SixLabors.ImageSharp.dll` built with `-c Release -p:Version=x.y.z`, extracted into Emby's `plugins` folder (see `docs/install.md`). The Emby plugin version is the assembly version; change it for every distributed build because it is also the resource cache key.
+Personal project: no release automation beyond a CI build. A release is the single self-contained `Emby.Plugin.SmartLists.dll` (or a zip containing only it) built with `-c Release -p:Version=x.y.z`, placed in Emby's `plugins` folder (see `docs/install.md`). The Emby plugin version is the assembly version; change it for every distributed build because it is also the resource cache key.
 
 ## When making changes
 

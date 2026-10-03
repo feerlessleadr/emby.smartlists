@@ -38,7 +38,10 @@ Get-CimInstance Win32_Process -Filter "Name='EmbyServer.exe'" |
 Start-Sleep -Seconds 3
 
 New-Item -ItemType Directory -Force $plugins | Out-Null
-Copy-Item (Join-Path $out 'Emby.Plugin.SmartLists.dll'), (Join-Path $out 'SixLabors.ImageSharp.dll') $plugins -Force
+Copy-Item (Join-Path $out 'Emby.Plugin.SmartLists.dll') $plugins -Force
+# ImageSharp is embedded in the plugin DLL now; remove a loose copy left by older builds.
+$loose = Join-Path $plugins 'SixLabors.ImageSharp.dll'
+if (Test-Path $loose) { Remove-Item $loose -Force }
 Write-Host "Copied plugin to $plugins"
 
 if (-not $NoStart) {

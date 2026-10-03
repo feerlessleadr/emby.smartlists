@@ -1,7 +1,7 @@
 #!/usr/bin/env pwsh
 <#
 .SYNOPSIS
-  Builds a Release plugin and packs artifacts/Emby.Plugin.SmartLists-<Version>.zip (the two DLLs).
+  Builds a Release plugin (ImageSharp is embedded in the single DLL) and writes artifacts/Emby.Plugin.SmartLists-<Version>.zip plus the bare DLL.
 .PARAMETER Version
   Plugin version, three or four numeric parts (e.g. 0.1.0). Emby uses it as the resource cache key: change it for every distributed build.
 .PARAMETER EmbySystemDir
@@ -24,5 +24,6 @@ $dest = Join-Path $repo 'artifacts'
 New-Item -ItemType Directory -Force $dest | Out-Null
 $zip = Join-Path $dest "Emby.Plugin.SmartLists-$Version.zip"
 if (Test-Path $zip) { Remove-Item $zip }
-Compress-Archive -Path (Join-Path $out 'Emby.Plugin.SmartLists.dll'), (Join-Path $out 'SixLabors.ImageSharp.dll') -DestinationPath $zip
-Write-Host "Wrote $zip"
+Compress-Archive -Path (Join-Path $out 'Emby.Plugin.SmartLists.dll') -DestinationPath $zip
+Copy-Item (Join-Path $out 'Emby.Plugin.SmartLists.dll') (Join-Path $dest 'Emby.Plugin.SmartLists.dll') -Force
+Write-Host "Wrote $zip (and a bare Emby.Plugin.SmartLists.dll; upload only ONE of the two to a release)"
