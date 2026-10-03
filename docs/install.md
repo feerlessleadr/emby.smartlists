@@ -14,9 +14,6 @@ Requires **Emby Server 4.10.1.0** (the plugin is compiled against that version; 
 
 Check the server log (`<programdata>\logs\embyserver.txt`) for lines starting `SmartLists:`. Expect `SmartLists started (auto-refresh listening).`
 
-### Harmless log noise
-
-On every start Emby logs `Error loading types from assembly ... Could not load ... SixLabors.ImageSharp`. It is Emby scanning the plugin folder; cover generation is unaffected.
 
 ## Upgrade
 

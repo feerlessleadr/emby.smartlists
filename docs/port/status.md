@@ -150,3 +150,7 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 - Added `dev/deploy-local.ps1` and `dev/build-release.ps1` (both exercised: release zip holds the two DLLs; deploy restarts the dev server), rewrote the `verify` skill, rewrote `ci.yml` and `release.yml` (need the repo variable `EMBY_SERVER_URL` for the Emby assemblies; NOT yet run on GitHub).
 - The in-page Help/Documentation links now point at `blob/main/docs/reference/user-guide/*.md` in `feerlessleadr/jellyfin-smartlists-plugin-emby`.
 - Left: remove the API key file `%USERPROFILE%\.emby-spike-key` when done testing; optional fix for the startup ImageSharp loader error; reference docs still contain Jellyfin-era detail on features that do not apply.
+
+### Checkpoint N — startup loader error fixed
+- Cause: Emby calls `GetTypes()` on each plugin assembly before `Plugin`'s AssemblyResolve exists. `CollageBuilder`'s async methods compiled to state-machine structs with `TaskAwaiter<Image>` fields, which need ImageSharp to load, so two types failed (`Error loading types from assembly`). Found with a small probe that loads the DLL in an `AssemblyLoadContext` that cannot resolve ImageSharp and calls `GetTypes()`.
+- Fix: `CollageBuilder` does its ImageSharp work in synchronous private methods; the public `...Async` methods are `Task.Run` wrappers. After the change `GetTypes()` succeeds without ImageSharp, the server log has no loader error, and the auto-generated cover (collage + badge) is still produced.

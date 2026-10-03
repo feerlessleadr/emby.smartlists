@@ -80,7 +80,22 @@ namespace Emby.Plugin.SmartLists.Utilities
         /// <param name="applyBadge">Whether to stamp the smart list badge on the result.</param>
         /// <param name="logger">Logger for per-image load failures.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        public static async Task CreateGridCollageAsync(
+        public static Task CreateGridCollageAsync(
+            IReadOnlyList<string> imagePaths,
+            string outputPath,
+            int width,
+            int height,
+            bool applyBadge,
+            ILogger logger,
+            CancellationToken cancellationToken)
+            => Task.Run(() => CreateGridCollage(imagePaths, outputPath, width, height, applyBadge, logger, cancellationToken), cancellationToken);
+
+        // The ImageSharp work is synchronous on purpose. An async method gets a compiler-generated state-machine
+        // struct whose awaiter fields (e.g. TaskAwaiter<Image>) force the CLR to load ImageSharp types as soon as
+        // anyone enumerates this class's nested types. Emby does that for every plugin assembly at start-up, before
+        // the plugin can register its assembly resolver, and logs a loader error. Keeping ImageSharp types out of
+        // async state machines avoids it.
+        private static void CreateGridCollage(
             IReadOnlyList<string> imagePaths,
             string outputPath,
             int width,
@@ -107,7 +122,8 @@ namespace Emby.Plugin.SmartLists.Utilities
             {
                 try
                 {
-                    using var sourceImage = await Image.LoadAsync(imagePaths[i], cancellationToken).ConfigureAwait(false);
+                    cancellationToken.ThrowIfCancellationRequested();
+                    using var sourceImage = Image.Load(imagePaths[i]);
 
                     // Rotate EXIF-oriented sources (e.g. phone photos) into the display frame
                     // before any geometry runs on their pixel grid.
@@ -135,7 +151,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                 CoverBadgeHelper.ApplyBadge(collage, logger);
             }
 
-            await SaveCoverAsync(collage, outputPath, cancellationToken).ConfigureAwait(false);
+            SaveCover(collage, outputPath);
         }
 
         /// <summary>
@@ -156,7 +172,18 @@ namespace Emby.Plugin.SmartLists.Utilities
         /// <param name="logger">Logger for failures.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>False when the source cannot be decoded or the copy cannot be saved.</returns>
-        public static async Task<bool> TryCreateCroppedCoverAsync(
+        public static Task<bool> TryCreateCroppedCoverAsync(
+            string sourcePath,
+            string outputPath,
+            int aspectWidth,
+            int aspectHeight,
+            int targetWidth,
+            bool applyBadge,
+            ILogger logger,
+            CancellationToken cancellationToken)
+            => Task.Run(() => TryCreateCroppedCover(sourcePath, outputPath, aspectWidth, aspectHeight, targetWidth, applyBadge, logger, cancellationToken), cancellationToken);
+
+        private static bool TryCreateCroppedCover(
             string sourcePath,
             string outputPath,
             int aspectWidth,
@@ -168,7 +195,8 @@ namespace Emby.Plugin.SmartLists.Utilities
         {
             try
             {
-                using var image = await Image.LoadAsync(sourcePath, cancellationToken).ConfigureAwait(false);
+                cancellationToken.ThrowIfCancellationRequested();
+                using var image = Image.Load(sourcePath);
 
                 // Rotate EXIF-oriented sources into the display frame BEFORE the crop
                 // geometry below reads Width/Height, and so the saved copy carries no
@@ -212,7 +240,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                     CoverBadgeHelper.ApplyBadge(image, logger);
                 }
 
-                await SaveCoverAsync(image, outputPath, cancellationToken).ConfigureAwait(false);
+                SaveCover(image, outputPath);
                 return true;
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
@@ -226,16 +254,17 @@ namespace Emby.Plugin.SmartLists.Utilities
         /// Saves a cover with the encoder inferred from the output extension; JPEG output
         /// uses the plugin's standard quality.
         /// </summary>
-        private static Task SaveCoverAsync(Image image, string outputPath, CancellationToken cancellationToken)
+        private static void SaveCover(Image image, string outputPath)
         {
             var extension = System.IO.Path.GetExtension(outputPath);
             if (string.Equals(extension, ".jpg", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(extension, ".jpeg", StringComparison.OrdinalIgnoreCase))
             {
-                return image.SaveAsync(outputPath, new JpegEncoder { Quality = JpegQuality }, cancellationToken);
+                image.Save(outputPath, new JpegEncoder { Quality = JpegQuality });
+                return;
             }
 
-            return image.SaveAsync(outputPath, cancellationToken);
+            image.Save(outputPath);
         }
     }
 }
