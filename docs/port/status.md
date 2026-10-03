@@ -161,3 +161,8 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 
 ### Checkpoint P — CI removed
 - Deleted `.github/` (the CI and release workflows) at the owner's request: the plugin is built and tested locally, and the workflows could not run without a hosted copy of the Emby server DLLs. `docs/development.md` no longer describes CI. Earlier checkpoints that mention the workflows are historical.
+
+### Checkpoint Q — page layout polish (from production feedback)
+- Dropdowns (native selects, searchable and multi selects) were much shorter than the text inputs: `config-controller.js` now measures `#playlistName` and sets `--sl-control-height` on the view so every control is the same height (35px at the default zoom).
+- Tab bar (`.localnav`) now has a tinted background with a theme-primary active tab; rule groups, rule rows, the group max-items strip and sort boxes are separate tinted panels (`--sl-surface-1/2`, derived from the theme text colour so they work in light and dark). All of it lives in the stylesheet injected by `config-controller.js`.
+- Verified in the light theme in the browser pane; the dark theme was only previewed by overriding Emby's theme variables, not with Emby's real dark theme.

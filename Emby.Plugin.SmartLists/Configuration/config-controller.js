@@ -60,6 +60,63 @@ define(['baseView', 'emby-input', 'emby-button', 'emby-select', 'emby-checkbox',
         '.SmartListsConfigurationPage .multi-select-display, .SmartListsConfigurationPage .multi-select-display * {',
         'color: var(--jf-palette-text-primary) !important;',
         '}',
+        // Layout polish for Emby (the page was designed against Jellyfin's taller controls and card colours).
+        // Two surface tints derived from the theme text colour work in both the light and the dark theme.
+        '.SmartListsConfigurationPage {',
+        '--sl-surface-1: hsla(var(--theme-text-color-hue), var(--theme-text-color-saturation), var(--theme-text-color-lightness), .06);',
+        '--sl-surface-2: hsla(var(--theme-text-color-hue), var(--theme-text-color-saturation), var(--theme-text-color-lightness), .12);',
+        '--sl-control-height: 2.4em;',
+        '}',
+        // Dropdowns as tall as the text inputs.
+        '.SmartListsConfigurationPage select.emby-select, .SmartListsConfigurationPage .searchable-select-display,',
+        '.SmartListsConfigurationPage .multi-select-display {',
+        'min-height: var(--sl-control-height) !important;',
+        'box-sizing: border-box;',
+        'display: flex;',
+        'align-items: center;',
+        'padding-top: 0 !important;',
+        'padding-bottom: 0 !important;',
+        '}',
+        '.SmartListsConfigurationPage select.emby-select { display: block; }',
+        // Tab bar with its own background and a clearly highlighted active tab.
+        '.SmartListsConfigurationPage .localnav {',
+        'display: flex;',
+        'flex-wrap: wrap;',
+        'gap: 0;',
+        'background: var(--sl-surface-2);',
+        'border-radius: 6px;',
+        'overflow: hidden;',
+        'margin: 0 0 1.25em 0 !important;',
+        '}',
+        '.SmartListsConfigurationPage .localnav .emby-button {',
+        'margin: 0 !important;',
+        'border-radius: 0 !important;',
+        'background: transparent;',
+        '}',
+        '.SmartListsConfigurationPage .localnav .emby-button.ui-btn-active {',
+        'background: var(--jf-palette-primary-main) !important;',
+        'color: #fff !important;',
+        '}',
+        // Rule groups, group options and sort boxes as distinct panels instead of one big box.
+        '.SmartListsConfigurationPage .logic-group, .SmartListsConfigurationPage .sort-box {',
+        'background: var(--sl-surface-1) !important;',
+        'border: 1px solid var(--jf-palette-divider) !important;',
+        'border-radius: 6px;',
+        'margin-bottom: 1.25em !important;',
+        '}',
+        '.SmartListsConfigurationPage .logic-group .rule-row {',
+        'background: var(--sl-surface-1);',
+        'border-radius: 6px;',
+        'padding: 0.5em;',
+        'margin-bottom: 0.75em;',
+        '}',
+        '.SmartListsConfigurationPage .group-max-items-container {',
+        'background: var(--sl-surface-2) !important;',
+        'border-radius: 6px;',
+        '}',
+        '.SmartListsConfigurationPage #rules-container, .SmartListsConfigurationPage #sorts-container {',
+        'margin-bottom: 1.5em;',
+        '}',
         '.SmartListsConfigurationPage .searchable-select-dropdown, .SmartListsConfigurationPage .multi-select-dropdown {',
         'background: var(--jf-palette-background-default) !important;',
         'backdrop-filter: none !important;',
@@ -115,6 +172,15 @@ define(['baseView', 'emby-input', 'emby-button', 'emby-select', 'emby-checkbox',
         view.addEventListener('viewshow', function () {
             loadModules().then(function () {
                 window.SmartLists.activePage = view;
+
+                // Make the dropdowns exactly as tall as the text inputs, whatever the theme/zoom.
+                requestAnimationFrame(function () {
+                    var input = view.querySelector('#playlistName');
+                    var height = input ? input.getBoundingClientRect().height : 0;
+                    if (height > 0) {
+                        view.style.setProperty('--sl-control-height', Math.round(height) + 'px');
+                    }
+                });
                 // config-init.js initialises the page from the document-level pageshow event.
                 document.dispatchEvent(new Event('pageshow'));
             }).catch(function (err) {
