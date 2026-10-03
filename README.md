@@ -4,6 +4,14 @@ Rule-based **playlists and collections** for Emby Server. You pick the media typ
 
 This is a port of the [Jellyfin SmartLists plugin](https://github.com/jyourstone/jellyfin-smartlists-plugin) to **Emby Server 4.10.1.0**. Jellyfin is no longer supported by this repository, and upstream changes are not tracked.
 
+## AI disclosure and disclaimer
+
+This plugin was ported from the Jellyfin SmartLists plugin to Emby **exclusively with Claude**, Anthropic's AI model, used through Claude Code. The code, tests and documentation in this repository were produced by that AI; the repository owner directed the work and ran it against test Emby servers.
+
+The software is provided **as is**, with no warranty of any kind. The repository owner takes **no responsibility for mistakes, errors, data loss or other problems** in the code, whether introduced by the AI or otherwise, or for any harm to your server, library or data from installing or using it.
+
+**If you are not comfortable with that, do not use this plugin.** If you do use it, back up your Emby data first (see [docs/install.md](docs/install.md)), try it on a test server before a production one, and read [docs/security.md](docs/security.md) for what was and was not tested.
+
 ## What works
 
 - **Rule builder** with grouped AND/OR rules over genres, ratings, dates, play state, people, tags, studios, resolution, runtime and many more fields. Sorting (up to three levels), item and runtime limits, random selection.
