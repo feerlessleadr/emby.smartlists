@@ -211,7 +211,7 @@
             var fileInput = document.createElement('input');
             fileInput.type = 'file';
             fileInput.className = 'image-file-input';
-            fileInput.accept = 'image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,image/svg+xml,image/tiff,image/apng,image/x-icon';
+            fileInput.accept = 'image/jpeg,image/png,image/webp,image/gif,image/bmp,image/avif,image/tiff,image/apng,image/x-icon';
             fileInput.style.display = 'none';
             fileInput.id = 'file-input-' + rowId;
             row.appendChild(fileInput);

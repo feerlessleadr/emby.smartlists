@@ -154,3 +154,7 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 ### Checkpoint N — startup loader error fixed
 - Cause: Emby calls `GetTypes()` on each plugin assembly before `Plugin`'s AssemblyResolve exists. `CollageBuilder`'s async methods compiled to state-machine structs with `TaskAwaiter<Image>` fields, which need ImageSharp to load, so two types failed (`Error loading types from assembly`). Found with a small probe that loads the DLL in an `AssemblyLoadContext` that cannot resolve ImageSharp and calls `GetTypes()`.
 - Fix: `CollageBuilder` does its ImageSharp work in synchronous private methods; the public `...Async` methods are `Task.Run` wrappers. After the change `GetTypes()` succeeds without ImageSharp, the server log has no loader error, and the auto-generated cover (collage + badge) is still produced.
+
+### Checkpoint O — security review (see docs/security.md)
+- Probed the admin API (authn, traversal, upload, malicious backup zip, JSON/regex/size fuzzing), UI script injection, dependencies and static patterns. Findings fixed: uploaded/restored images were accepted by extension only and SVG was allowed -> `Utilities/ImageContentValidator` (magic bytes), SVG removed, rejected uploads now return 400. No traversal, injection or auth bypass found.
+- Not yet run: a non-administrator session against the API (needs a non-admin signed in to the browser pane).

@@ -254,7 +254,16 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
 
                     // Extract the image
                     using var entryStream = entry.Open();
+                    // Backups can come from anywhere: only extract what really is a raster image, by signature
+                    var header = ImageContentValidator.ReadHeader(entryStream);
+                    if (!ImageContentValidator.LooksLikeRasterImage(header) || entry.Length > SmartListImageService.MaxFileSizeBytes)
+                    {
+                        logger.LogWarning("Skipped {ImageName} from the backup: not a supported image or too large", entry.Name);
+                        continue;
+                    }
+
                     using var fileStream = new FileStream(targetPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    await fileStream.WriteAsync(header);
                     await entryStream.CopyToAsync(fileStream);
 
                     logger.LogDebug("Extracted image {ImageName} for smart list {SmartListId}", entry.Name, smartListId);
@@ -3055,6 +3064,12 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     FileSize = file.Length
                 });
             }
+            catch (ArgumentException ex)
+            {
+                // Rejected by SmartListImageService (bad type, extension or file content): a client error.
+                logger.LogWarning("Rejected image upload for smart list {SmartListId}: {Reason}", id, ex.Message);
+                return BadRequest(new { message = ex.Message });
+            }
             catch (Exception ex)
             {
                 logger.LogError(ex, "Failed to upload image for smart list {SmartListId}", id);
@@ -3272,7 +3287,6 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 ".gif" => "image/gif",
                 ".bmp" => "image/bmp",
                 ".avif" => "image/avif",
-                ".svg" => "image/svg+xml",
                 ".tiff" or ".tif" => "image/tiff",
                 ".apng" => "image/apng",
                 ".ico" => "image/x-icon",

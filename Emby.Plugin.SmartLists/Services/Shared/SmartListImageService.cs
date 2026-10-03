@@ -34,7 +34,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// </summary>
         private static readonly string[] SupportedImageExtensions =
         {
-            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".svg", ".tiff", ".tif", ".apng", ".ico"
+            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".tiff", ".tif", ".apng", ".ico"
         };
 
         private static readonly HashSet<string> AllowedExtensions = new(SupportedImageExtensions, StringComparer.OrdinalIgnoreCase);
@@ -98,6 +98,13 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 throw new ArgumentException($"Invalid file extension: {extension}. Allowed: {string.Join(", ", AllowedExtensions)}");
             }
 
+            // The extension and content type come from the client: check the bytes too, before anything on disk changes.
+            var header = ImageContentValidator.ReadHeader(imageStream);
+            if (!ImageContentValidator.LooksLikeRasterImage(header))
+            {
+                throw new ArgumentException("File content is not a supported image format");
+            }
+
             // Create directory for this smart list's images
             var smartListImagePath = GetSmartListImageDirectory(smartListId);
             if (!Directory.Exists(smartListImagePath))
@@ -128,6 +135,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             var filePath = Path.Combine(smartListImagePath, fileName);
 
             await using var fileStream = new FileStream(filePath, FileMode.Create, FileAccess.Write, FileShare.None);
+            await fileStream.WriteAsync(header, cancellationToken).ConfigureAwait(false);
             await imageStream.CopyToAsync(fileStream, cancellationToken).ConfigureAwait(false);
 
             _logger.LogInformation("Saved {ImageType} image for smart list {SmartListId}: {FileName}",
@@ -413,7 +421,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 var validContentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif",
-                    "image/bmp", "image/avif", "image/svg+xml", "image/tiff", "image/apng", "image/x-icon"
+                    "image/bmp", "image/avif", "image/tiff", "image/apng", "image/x-icon"
                 };
 
                 if (!validContentTypes.Contains(contentType))
