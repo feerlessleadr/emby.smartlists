@@ -393,13 +393,15 @@
             existingPreviewContainer.style.cssText = 'width: 40px; height: 40px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; border: 1px solid var(--jf-palette-divider); border-radius: 4px; overflow: hidden; background: var(--jf-palette-background-paper);';
 
             var previewLink = document.createElement('a');
-            previewLink.href = existingImage.previewUrl;
+            previewLink.href = '#';
+            previewLink.className = 'sl-authed-image-link';
+            previewLink.setAttribute('data-image-url', existingImage.previewUrl);
             previewLink.target = '_blank';
             previewLink.rel = 'noopener noreferrer';
             previewLink.style.cssText = 'display: flex; width: 100%; height: 100%; align-items: center; justify-content: center;';
 
             var previewImg = document.createElement('img');
-            previewImg.src = existingImage.previewUrl;
+            SmartLists.setAuthedImageSrc(previewImg, existingImage.previewUrl);
             previewImg.style.cssText = 'max-width: 100%; max-height: 100%; object-fit: contain;';
             previewLink.appendChild(previewImg);
             existingPreviewContainer.appendChild(previewLink);
@@ -407,7 +409,9 @@
 
             // Filename link - added second (right of preview)
             var link = document.createElement('a');
-            link.href = existingImage.previewUrl;
+            link.href = '#';
+            link.className = 'sl-authed-image-link';
+            link.setAttribute('data-image-url', existingImage.previewUrl);
             link.target = '_blank';
             link.rel = 'noopener noreferrer';
             link.style.cssText = 'color: var(--jf-palette-primary-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1 1 auto;';
@@ -701,5 +705,58 @@
         var baseUrl = SmartLists.IS_USER_PAGE ? 'Plugins/SmartLists/User' : 'Plugins/SmartLists';
         return apiClient.getUrl(baseUrl + '/' + smartListId + '/images/' + imageType + '/file');
     };
+
+    // The image endpoint needs the user's access token. An <img src> or a plain link cannot send it (the browser
+    // makes those requests without Emby's token header, which gave "Access token is invalid or expired"), and putting
+    // the token in the URL would leak it into logs and history. Fetch with the Authorization header instead and hand
+    // the browser a short-lived blob: URL.
+    SmartLists.fetchImageBlobUrl = function (url) {
+        var apiClient = SmartLists.getApiClient ? SmartLists.getApiClient() : ApiClient;
+        return fetch(url, {
+            headers: { 'Authorization': 'MediaBrowser Token="' + apiClient.accessToken() + '"' }
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('Image request failed: HTTP ' + response.status);
+            }
+            return response.blob();
+        }).then(function (blob) {
+            return window.URL.createObjectURL(blob);
+        });
+    };
+
+    SmartLists.setAuthedImageSrc = function (imgElement, url) {
+        SmartLists.fetchImageBlobUrl(url).then(function (blobUrl) {
+            imgElement.src = blobUrl;
+        }).catch(function (err) {
+            console.error('Could not load image preview:', err);
+        });
+    };
+
+    // Open an image in a new tab (links carry class sl-authed-image-link and the endpoint in data-image-url).
+    document.addEventListener('click', function (e) {
+        var link = e.target && e.target.closest ? e.target.closest('a.sl-authed-image-link') : null;
+        if (!link) {
+            return;
+        }
+
+        e.preventDefault();
+        var url = link.getAttribute('data-image-url');
+        var win = window.open('', '_blank');
+        SmartLists.fetchImageBlobUrl(url).then(function (blobUrl) {
+            if (win) {
+                win.location.href = blobUrl;
+            } else {
+                window.open(blobUrl, '_blank');
+            }
+        }).catch(function (err) {
+            if (win) {
+                win.close();
+            }
+            console.error('Could not open image:', err);
+            if (SmartLists.showNotification) {
+                SmartLists.showNotification('Could not open the image.');
+            }
+        });
+    });
 
 })(window.SmartLists = window.SmartLists || {});

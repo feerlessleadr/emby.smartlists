@@ -1852,7 +1852,7 @@
             for (var imgType in playlist.CustomImages) {
                 if (playlist.CustomImages.hasOwnProperty(imgType)) {
                     var imgUrl = SmartLists.getImageDisplayUrl ? SmartLists.getImageDisplayUrl(playlistId, imgType) : '#';
-                    imageLinks.push('<a href="' + SmartLists.escapeHtmlAttribute(imgUrl) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary);">' + SmartLists.escapeHtml(imgType) + '</a>');
+                    imageLinks.push('<a href="#" class="sl-authed-image-link" data-image-url="' + SmartLists.escapeHtmlAttribute(imgUrl) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary);">' + SmartLists.escapeHtml(imgType) + '</a>');
                 }
             }
             customImagesHtml = imageLinks.join(', ');
