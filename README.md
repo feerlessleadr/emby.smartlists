@@ -49,6 +49,14 @@ Full steps and troubleshooting: [docs/install.md](docs/install.md).
 | [docs/reference/](docs/reference/README.md) | Field, operator, sorting and scheduling reference carried over from the Jellyfin version |
 | [docs/port/](docs/port/status.md) | How the port was done: decisions, verified Emby API behaviour, history |
 
+## 🙏 Credits
+
+The idea for this plugin, and much of its design, belong to **[jyourstone](https://github.com/jyourstone)**, the author of the [Jellyfin SmartLists plugin](https://github.com/jyourstone/jellyfin-smartlists-plugin). The rule builder, the query engine, the sorting, the admin page and its layout, the templates, the refresh model and much of the documentation in this repository come from that project; this repository adapts it to Emby. Please go and look at, use and support the original.
+
+That plugin is in turn based on the original SmartPlaylist plugin by **[ankenyr](https://github.com/ankenyr)** ([original repository](https://github.com/ankenyr/jellyfin-smartplaylist-plugin)), to whom jyourstone credits the foundational work and the core idea.
+
 ## License
 
-See [LICENSE](LICENSE).
+Licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0), the same license as the project this is derived from. See [LICENSE](LICENSE). In practice: you may use, modify and share it, but a modified version you distribute, or let others use over a network, must also be AGPL-3.0 and its source must be made available to those users. This repository is the source for this version, and the page's Help link points here.
+
+This is an independent, unofficial plugin. It is not affiliated with, endorsed by or supported by Emby, or by the authors credited above. "Emby" is a trademark of its owner.
