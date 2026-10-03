@@ -148,7 +148,7 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 - Docs now live on GitHub in the repo: `README.md` (rewritten for Emby), `docs/install.md`, `docs/using.md`, `docs/development.md`, `docs/reference/` (the upstream user guide and examples, mechanically adapted Jellyfin->Emby with a README listing what does not apply; `external-lists.md` removed), `docs/port/` (this log, plan, API notes, handoff, superseded phase-1 design — moved from `docs/` and `EMBY_PORT_HANDOFF.md`). `CLAUDE.md` and `AGENTS.md` rewritten (identical) for the Emby project.
 - Removed upstream/Jellyfin-only infrastructure: mkdocs site (`mkdocs.yml`, overrides, content, screenshots), `dev/` Docker scripts, `.claude/skills/release`, issue templates, funding, stale bot, release-notes config, `CONTRIBUTING.md`.
 - Added `dev/deploy-local.ps1` and `dev/build-release.ps1` (both exercised: release zip holds the two DLLs; deploy restarts the dev server), rewrote the `verify` skill, rewrote `ci.yml` and `release.yml` (need the repo variable `EMBY_SERVER_URL` for the Emby assemblies; NOT yet run on GitHub).
-- The in-page Help/Documentation links now point at `blob/main/docs/reference/user-guide/*.md` in `feerlessleadr/jellyfin-smartlists-plugin-emby`.
+- The in-page Help/Documentation links now point at `blob/main/docs/reference/user-guide/*.md` in `feerlessleadr/emby.smartlists`.
 - Left: remove the API key file `%USERPROFILE%\.emby-spike-key` when done testing; optional fix for the startup ImageSharp loader error; reference docs still contain Jellyfin-era detail on features that do not apply.
 
 ### Checkpoint N — startup loader error fixed
