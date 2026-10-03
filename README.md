@@ -1,6 +1,6 @@
 # SmartLists for Emby
 
-Rule-based **playlists and collections** for Emby Server. Describe what you want (for example "unwatched action movies from the 90s, newest first") and the list builds itself and keeps itself up to date as your library and watch history change.
+Rule-based **playlists and collections** for Emby Server. You pick the media types and define the rules in a point-and-click rule builder (for example: genre contains *Action*, release year between 1990 and 1999, playback status is *Unplayed*, sorted by release date, newest first). The plugin then builds the list and keeps it up to date as your library and watch history change. Rules are written by you; nothing is generated from free-text descriptions. A few built-in templates give you a starting point.
 
 This is a port of the [Jellyfin SmartLists plugin](https://github.com/jyourstone/jellyfin-smartlists-plugin) to **Emby Server 4.10.1.0**. Jellyfin is no longer supported by this repository, and upstream changes are not tracked.
 
