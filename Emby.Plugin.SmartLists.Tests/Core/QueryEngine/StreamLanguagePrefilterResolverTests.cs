@@ -25,7 +25,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 ///   'und'; per-item extraction drops them).
 /// - An empty (non-null) result is a hard "no stored code matches" claim.
 ///
-/// The dump and GetItemIds steps need a live Jellyfin 12 and are exercised there, not here.
+/// The dump and GetItemIds steps need a live Emby 12 and are exercised there, not here.
 /// </summary>
 public class StreamLanguagePrefilterResolverTests
 {

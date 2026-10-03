@@ -11,7 +11,7 @@ namespace Emby.Plugin.SmartLists.Utilities
     /// Reads the members of a collection or playlist through Emby's typed APIs.
     /// </summary>
     /// <remarks>
-    /// Emby has no <c>LinkedChildren</c>/<c>GetLinkedChildren</c> as Jellyfin did. A playlist's items come from
+    /// Emby has no <c>LinkedChildren</c>/<c>GetLinkedChildren</c> as Emby did. A playlist's items come from
     /// <c>Playlist.GetChildren(query)</c> (verified on Emby 4.10.1.0: returns the items in order, each with its
     /// <c>ListItemEntryId</c>). A collection's members are read with <c>InternalItemsQuery.CollectionIds</c>, which is
     /// NOT yet verified against a live server (port phase 4).

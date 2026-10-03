@@ -125,7 +125,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         ///
         /// The walk is: parent chain (stopping BEFORE AggregateFolder/UserRootFolder/UserView)
         /// UNION libraryManager.GetCollectionFolders(chainTop). The second half is NOT optional:
-        /// a CollectionFolder (a Jellyfin library) is never in the ParentId chain — it hangs off
+        /// a CollectionFolder (a Emby library) is never in the ParentId chain — it hangs off
         /// the UserRootFolder as a sibling structure — so a parents-only walk finds season tags
         /// but never library tags. Core's BaseItem.GetInheritedTags()/GetAncestorIds() have the
         /// same two-part shape.

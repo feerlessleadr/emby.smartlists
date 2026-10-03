@@ -1113,7 +1113,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
 
         /// <summary>
         /// Builds expressions for aspect ratios. Equality and ordering compare the numeric
-        /// width-to-height proportion, while regex intentionally targets Jellyfin's raw string.
+        /// width-to-height proportion, while regex intentionally targets Emby's raw string.
         /// </summary>
         private static System.Linq.Expressions.Expression BuildAspectRatioExpression(Expression r, MemberExpression left, ILogger? logger)
         {

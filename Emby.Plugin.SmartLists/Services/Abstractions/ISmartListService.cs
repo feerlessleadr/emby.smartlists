@@ -27,7 +27,7 @@ namespace Emby.Plugin.SmartLists.Services.Abstractions
         Task DeleteAsync(TDto dto, CancellationToken cancellationToken = default);
 
         /// <summary>
-        /// Disables a smart list (deletes the underlying Jellyfin entity)
+        /// Disables a smart list (deletes the underlying Emby entity)
         /// </summary>
         Task DisableAsync(TDto dto, CancellationToken cancellationToken = default);
 
@@ -47,11 +47,11 @@ namespace Emby.Plugin.SmartLists.Services.Abstractions
         /// <param name="user">The user for this playlist</param>
         /// <param name="allUserMedia">All media items for the user (cached)</param>
         /// <param name="refreshCache">RefreshCache instance for caching expensive operations</param>
-        /// <param name="saveCallback">Optional callback to save the DTO when JellyfinPlaylistId is updated</param>
+        /// <param name="saveCallback">Optional callback to save the DTO when PlaylistId is updated</param>
         /// <param name="progressCallback">Optional callback to report progress</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Tuple of (success, message, jellyfinPlaylistId)</returns>
-        Task<(bool Success, string Message, string JellyfinPlaylistId)> ProcessPlaylistRefreshWithCachedMediaAsync(
+        Task<(bool Success, string Message, string PlaylistId)> ProcessPlaylistRefreshWithCachedMediaAsync(
             TDto dto,
             User user,
             BaseItem[] allUserMedia,

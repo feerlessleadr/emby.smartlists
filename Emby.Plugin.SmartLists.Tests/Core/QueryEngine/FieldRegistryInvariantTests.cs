@@ -7,7 +7,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 /// <summary>
 /// Mechanically enforces the cross-file contract that CLAUDE.md flags as a known footgun:
 /// "Adding a new field requires updates in FieldRegistry.cs (definition), Operand.cs (property),
-/// and Factory.cs (extraction logic)". Factory.cs is unreachable from here (it takes Jellyfin
+/// and Factory.cs (extraction logic)". Factory.cs is unreachable from here (it takes Emby
 /// dependencies), but the FieldRegistry -> Operand -> Engine half of that contract is pure C#
 /// and is pinned below, by reflection, so it cannot drift silently.
 ///

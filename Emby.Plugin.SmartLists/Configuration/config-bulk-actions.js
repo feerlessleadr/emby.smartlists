@@ -56,10 +56,10 @@
             SmartLists.showNotification(refreshMessage, 'info', { html: true });
         }
 
-        // If disabling, show notification about Jellyfin list removal
+        // If disabling, show notification about Emby list removal
         if (options.actionType === 'disable' && listsToProcess.length > 0) {
             var disableListWord = listsToProcess.length === 1 ? 'list' : 'lists';
-            SmartLists.showNotification('Disabling ' + disableListWord + ' and removing Jellyfin ' + disableListWord + '...', 'info', { html: true });
+            SmartLists.showNotification('Disabling ' + disableListWord + ' and removing Emby ' + disableListWord + '...', 'info', { html: true });
         }
 
         // Process sequentially in background
@@ -160,9 +160,9 @@
             SmartLists.showNotification(refreshMessage, 'info', { html: true });
         }
 
-        // If disabling, show notification about Jellyfin list removal
+        // If disabling, show notification about Emby list removal
         if (options.actionType === 'disable') {
-            SmartLists.showNotification('Disabling list and removing Jellyfin list...', 'info', { html: true });
+            SmartLists.showNotification('Disabling list and removing Emby list...', 'info', { html: true });
         }
 
         // Make API call
@@ -630,14 +630,14 @@
         // Instead of getting them from checkboxes again
         const apiClient = SmartLists.getApiClient();
         const deleteCheckbox = page.querySelector('#delete-jellyfin-playlist-checkbox');
-        const deleteJellyfinList = deleteCheckbox ? deleteCheckbox.checked : false;
+        const deleteEmbyList = deleteCheckbox ? deleteCheckbox.checked : false;
         let successCount = 0;
         let errorCount = 0;
 
         Dashboard.showLoadingMsg();
 
         const promises = listIds.map(function (listId) {
-            const url = SmartLists.ENDPOINTS.base + '/' + listId + '?deleteJellyfinList=' + deleteJellyfinList;
+            const url = SmartLists.ENDPOINTS.base + '/' + listId + '?deleteEmbyList=' + deleteEmbyList;
             return apiClient.ajax({
                 type: 'DELETE',
                 url: apiClient.getUrl(url),
@@ -668,7 +668,7 @@
         Dashboard.hideLoadingMsg();
 
         if (successCount > 0) {
-            const action = deleteJellyfinList ? 'deleted' : 'suffix/prefix removed (if any) and configuration deleted';
+            const action = deleteEmbyList ? 'deleted' : 'suffix/prefix removed (if any) and configuration deleted';
             const deleteSuccessWord = successCount === 1 ? 'list' : 'lists';
             SmartLists.showNotification('Successfully ' + action + ' ' + successCount + ' ' + deleteSuccessWord + '.', 'success');
         }

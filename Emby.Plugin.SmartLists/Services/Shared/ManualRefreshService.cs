@@ -83,7 +83,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// <param name="playlist">The playlist to refresh</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Tuple of (success, message, jellyfinPlaylistId)</returns>
-        Task<(bool Success, string Message, string? JellyfinPlaylistId)> RefreshSinglePlaylistAsync(Core.Models.SmartPlaylistDto playlist, CancellationToken cancellationToken = default);
+        Task<(bool Success, string Message, string? PlaylistId)> RefreshSinglePlaylistAsync(Core.Models.SmartPlaylistDto playlist, CancellationToken cancellationToken = default);
 
         /// <summary>
         /// Refresh a single smart collection manually.
@@ -91,7 +91,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// <param name="collection">The collection to refresh</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Tuple of (success, message, jellyfinCollectionId)</returns>
-        Task<(bool Success, string Message, string? JellyfinCollectionId)> RefreshSingleCollectionAsync(Core.Models.SmartCollectionDto collection, CancellationToken cancellationToken = default);
+        Task<(bool Success, string Message, string? CollectionId)> RefreshSingleCollectionAsync(Core.Models.SmartCollectionDto collection, CancellationToken cancellationToken = default);
     }
 
     /// <summary>
@@ -236,7 +236,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Refresh all smart playlists manually without using Jellyfin scheduled tasks.
+        /// Refresh all smart playlists manually without using Emby scheduled tasks.
         /// This method enqueues all playlists for processing through the queue system.
         /// </summary>
         /// <param name="batchOffset">Offset for batch tracking (used when refreshing all lists together)</param>
@@ -471,7 +471,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Refresh all smart collections manually without using Jellyfin scheduled tasks.
+        /// Refresh all smart collections manually without using Emby scheduled tasks.
         /// This method enqueues all collections for processing through the queue system.
         /// </summary>
         /// <param name="batchOffset">Offset for batch tracking (used when refreshing all lists together)</param>
@@ -605,7 +605,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// Refresh a single smart playlist manually.
         /// This method enqueues the playlist for processing through the queue system.
         /// </summary>
-        public Task<(bool Success, string Message, string? JellyfinPlaylistId)> RefreshSinglePlaylistAsync(SmartPlaylistDto playlist, CancellationToken cancellationToken = default)
+        public Task<(bool Success, string Message, string? PlaylistId)> RefreshSinglePlaylistAsync(SmartPlaylistDto playlist, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(playlist);
 
@@ -628,12 +628,12 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 _refreshQueueService.EnqueueOperation(queueItem);
 
                 _logger.LogInformation("Enqueued single playlist: {PlaylistName} ({ListId})", playlist.Name, listId);
-                return Task.FromResult<(bool Success, string Message, string? JellyfinPlaylistId)>((true, "Playlist refresh has been queued. It will be processed in the background.", playlist.JellyfinPlaylistId));
+                return Task.FromResult<(bool Success, string Message, string? PlaylistId)>((true, "Playlist refresh has been queued. It will be processed in the background.", playlist.PlaylistId));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error enqueuing single playlist refresh for playlist: {PlaylistName} ({PlaylistId})", playlist.Name, playlist.Id);
-                return Task.FromResult<(bool Success, string Message, string? JellyfinPlaylistId)>((false, $"Error enqueuing playlist refresh: {ex.Message}", string.Empty));
+                return Task.FromResult<(bool Success, string Message, string? PlaylistId)>((false, $"Error enqueuing playlist refresh: {ex.Message}", string.Empty));
             }
         }
 
@@ -641,7 +641,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// Refresh a single smart collection manually.
         /// This method enqueues the collection for processing through the queue system.
         /// </summary>
-        public Task<(bool Success, string Message, string? JellyfinCollectionId)> RefreshSingleCollectionAsync(SmartCollectionDto collection, CancellationToken cancellationToken = default)
+        public Task<(bool Success, string Message, string? CollectionId)> RefreshSingleCollectionAsync(SmartCollectionDto collection, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(collection);
 
@@ -664,12 +664,12 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 _refreshQueueService.EnqueueOperation(queueItem);
 
                 _logger.LogInformation("Enqueued single collection: {CollectionName} ({ListId})", collection.Name, listId);
-                return Task.FromResult<(bool Success, string Message, string? JellyfinCollectionId)>((true, "Collection refresh has been queued. It will be processed in the background.", collection.JellyfinCollectionId));
+                return Task.FromResult<(bool Success, string Message, string? CollectionId)>((true, "Collection refresh has been queued. It will be processed in the background.", collection.CollectionId));
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Error enqueuing single collection refresh for collection: {CollectionName} ({CollectionId})", collection.Name, collection.Id);
-                return Task.FromResult<(bool Success, string Message, string? JellyfinCollectionId)>((false, $"Error enqueuing collection refresh: {ex.Message}", string.Empty));
+                return Task.FromResult<(bool Success, string Message, string? CollectionId)>((false, $"Error enqueuing collection refresh: {ex.Message}", string.Empty));
             }
         }
     }

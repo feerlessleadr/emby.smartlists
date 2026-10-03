@@ -177,7 +177,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
         <div class=""info-box"">
             <h2>What can I do?</h2>
             <p>
-                Please contact your Jellyfin administrator to request access to SmartLists. 
+                Please contact your Emby administrator to request access to SmartLists. 
                 Administrators can manage access in the SmartLists plugin settings.
             </p>
         </div>

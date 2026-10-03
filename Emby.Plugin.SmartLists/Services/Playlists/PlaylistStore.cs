@@ -96,7 +96,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             if (smartPlaylist.UserPlaylists != null && smartPlaylist.UserPlaylists.Count > 0)
             {
                 smartPlaylist.UserId = null;
-                smartPlaylist.JellyfinPlaylistId = null;
+                smartPlaylist.PlaylistId = null;
             }
 
             // Validate ID is a valid GUID to prevent path injection
@@ -199,7 +199,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         }
 
         /// <summary>
-        /// Migrates old UserId/JellyfinPlaylistId format to UserPlaylists array for backwards compatibility.
+        /// Migrates old UserId/PlaylistId format to UserPlaylists array for backwards compatibility.
         /// This ensures old playlists continue to work with the new multi-user system.
         /// Also normalizes UserIds to consistent format and deduplicates entries.
         /// </summary>
@@ -222,7 +222,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                             normalizedUserPlaylists.Add(new SmartPlaylistDto.UserPlaylistMapping
                             {
                                 UserId = userId.ToString("N"), // Standard format without dashes
-                                JellyfinPlaylistId = userMapping.JellyfinPlaylistId
+                                PlaylistId = userMapping.PlaylistId
                             });
                         }
                     }
@@ -242,12 +242,12 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                     new SmartPlaylistDto.UserPlaylistMapping
                     {
                         UserId = parsedUserId.ToString("N"), // Normalize to standard format without dashes
-                        JellyfinPlaylistId = dto.JellyfinPlaylistId
+                        PlaylistId = dto.PlaylistId
                     }
                 };
 
                 // Note: This creates the UserPlaylists structure from legacy data.
-                // The legacy UserId and JellyfinPlaylistId fields will be cleared by SaveAsync
+                // The legacy UserId and PlaylistId fields will be cleared by SaveAsync
                 // when the playlist is saved (see lines 82-86). This is intentional to enforce
                 // the new multi-user format and prevent inconsistencies.
                 // DEPRECATED: This is for backwards compatibility with old single-user playlists.
@@ -280,7 +280,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                 dto.Type = Core.Enums.SmartListType.Playlist;
             }
 
-            // Migrate old UserId/JellyfinPlaylistId format to UserPlaylists array
+            // Migrate old UserId/PlaylistId format to UserPlaylists array
             // This is playlist-specific and not part of common post-processing
             MigrateToUserPlaylists(dto);
 

@@ -9,12 +9,12 @@ namespace Emby.Plugin.SmartLists.Core.Enums
     public enum ScheduleAction
     {
         /// <summary>
-        /// Enable the list (make it visible in Jellyfin)
+        /// Enable the list (make it visible in Emby)
         /// </summary>
         Enable,
         
         /// <summary>
-        /// Disable the list (hide it from Jellyfin)
+        /// Disable the list (hide it from Emby)
         /// </summary>
         Disable
     }

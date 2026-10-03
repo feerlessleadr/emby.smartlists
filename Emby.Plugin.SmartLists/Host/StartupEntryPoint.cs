@@ -13,7 +13,7 @@ namespace Emby.Plugin.SmartLists.Host
 {
     /// <summary>
     /// Starts the plugin inside Emby: Emby injects the managers into this constructor and calls <see cref="Run"/> once
-    /// the server is up (the equivalent of Jellyfin's hosted services).
+    /// the server is up (the equivalent of Emby's hosted services).
     /// </summary>
     public sealed class StartupEntryPoint : IServerEntryPoint
     {

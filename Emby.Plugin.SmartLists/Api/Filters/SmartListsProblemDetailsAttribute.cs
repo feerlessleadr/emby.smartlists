@@ -26,7 +26,7 @@ namespace Emby.Plugin.SmartLists.Api.Filters
     /// that controller's own <c>ControllerModel.Filters</c>, and the filter pipeline for an action
     /// is built exclusively from its own controller/action models plus the global collection. Since
     /// this type appears in neither the global collection nor any non-SmartLists controller model,
-    /// core Jellyfin actions are structurally unreachable. As belt-and-braces against a future
+    /// core Emby actions are structurally unreachable. As belt-and-braces against a future
     /// global registration, <see cref="OnResultExecuting"/> also bails out when the executing
     /// controller does not come from this plugin's assembly.
     /// </para>
@@ -40,7 +40,7 @@ namespace Emby.Plugin.SmartLists.Api.Filters
     /// <para>
     /// Ceiling: this runs inside MVC's result pipeline, so it cannot normalize responses produced
     /// before or outside it - <c>[Authorize]</c> challenges, model-binding validation failures
-    /// (already framework <c>ValidationProblemDetails</c>) and Jellyfin's exception middleware.
+    /// (already framework <c>ValidationProblemDetails</c>) and Emby's exception middleware.
     /// The contract is "every error body this plugin authors", not "every byte these routes emit".
     /// </para>
     /// </summary>

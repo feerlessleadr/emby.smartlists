@@ -76,7 +76,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                 Favorite = source.Favorite,
                 
                 // Playlist-specific (initialize to defaults)
-                JellyfinPlaylistId = null,
+                PlaylistId = null,
                 Public = false,
                 AllUsers = false,
                 UserPlaylists = null
@@ -156,7 +156,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                 Favorite = source.Favorite,
                 
                 // Collection-specific (will be set by caller)
-                JellyfinCollectionId = null
+                CollectionId = null
             };
             
             return target;

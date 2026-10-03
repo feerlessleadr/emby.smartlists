@@ -273,7 +273,7 @@ public class ResolutionOrderTests
     /// <summary>
     /// The cached entry is authoritative: a seeded 4K entry on an item that owns no real streams
     /// still sorts as 4K. This is what makes the rest of the file a valid test of the order
-    /// rather than of Jellyfin's stream plumbing.
+    /// rather than of Emby's stream plumbing.
     /// </summary>
     [Fact]
     public void SeededCacheEntry_IsUsedInsteadOfRereadingTheItem()

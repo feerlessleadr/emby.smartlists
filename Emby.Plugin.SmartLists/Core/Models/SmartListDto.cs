@@ -85,7 +85,7 @@ namespace Emby.Plugin.SmartLists.Core.Models
 
         /// <summary>
         /// Collections only. When true, every matched item that is a direct member of one or more
-        /// Jellyfin collections is replaced by those collections. Items in no collection - and results
+        /// Emby collections is replaced by those collections. Items in no collection - and results
         /// that are themselves collections/playlists - pass through unchanged. Grouping runs before
         /// sorting and before both limit kinds, so grouped entries are what MaxItems counts.
         /// Direct membership only: the Collection search depth setting is not used.
@@ -93,8 +93,8 @@ namespace Emby.Plugin.SmartLists.Core.Models
         public bool GroupIntoCollections { get; set; } = false;
 
         /// <summary>
-        /// Minimum number of matched items required for the Jellyfin playlist/collection to
-        /// exist. While the count is below this, the Jellyfin playlist/collection is not
+        /// Minimum number of matched items required for the Emby playlist/collection to
+        /// exist. While the count is below this, the Emby playlist/collection is not
         /// created (and an existing one is removed) -- it is recreated automatically once the
         /// count reaches the threshold again. The smart list configuration itself is never
         /// deleted. Null or 0 means no minimum (always shown, even with zero items) --
@@ -158,27 +158,27 @@ namespace Emby.Plugin.SmartLists.Core.Models
         public Dictionary<string, string>? CustomImages { get; set; }
 
         /// <summary>
-        /// Custom sort title applied to the Jellyfin playlist/collection.
+        /// Custom sort title applied to the Emby playlist/collection.
         /// Overrides the auto-generated sort name when set.
         /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? SortTitle { get; set; }
 
         /// <summary>
-        /// Custom overview/description applied to the Jellyfin playlist/collection.
+        /// Custom overview/description applied to the Emby playlist/collection.
         /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public string? Overview { get; set; }
 
         /// <summary>
-        /// Tags applied to the Jellyfin playlist/collection.
+        /// Tags applied to the Emby playlist/collection.
         /// Null means tags are not managed by SmartLists; an empty list clears managed tags.
         /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public List<string>? Tags { get; set; }
 
         /// <summary>
-        /// Favorite state applied to the Jellyfin playlist/collection for the relevant user.
+        /// Favorite state applied to the Emby playlist/collection for the relevant user.
         /// Null means favorite state is not managed by SmartLists.
         /// </summary>
         [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]

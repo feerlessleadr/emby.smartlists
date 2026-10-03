@@ -246,7 +246,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             // Migrate legacy fields (e.g. IsPlayed -> PlaybackStatus)
             playlist.MigrateLegacyFields();
 
-            // Legacy include-only flags never worked for playlists (Jellyfin playlists can only
+            // Legacy include-only flags never worked for playlists (Emby playlists can only
             // contain media items; container results were silently dropped) - strip them silently
             StripIncludeOnlyFlags(playlist);
 
@@ -381,7 +381,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// <summary>
         /// Strips the legacy IncludeCollectionOnly/IncludePlaylistOnly flags from a playlist's
         /// rules. The include-only feature never worked for playlists (container results were
-        /// silently dropped by Jellyfin), so there is nothing to migrate. Idempotent.
+        /// silently dropped by Emby), so there is nothing to migrate. Idempotent.
         /// </summary>
         private static void StripIncludeOnlyFlags(SmartPlaylistDto playlist)
         {

@@ -24,7 +24,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
     /// <summary>
     /// Scheduled task that cleans up orphaned data from SmartLists.
     /// This includes orphaned folders without config.json, legacy image folders,
-    /// and leftover Jellyfin playlists/collections tethered to deleted or disabled smart lists.
+    /// and leftover Emby playlists/collections tethered to deleted or disabled smart lists.
     /// </summary>
     public class CleanupTask : IScheduledTask
     {
@@ -53,7 +53,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// <summary>
         /// Gets the description of the task.
         /// </summary>
-        public string Description => "Cleans up orphaned data from SmartLists, including custom images from deleted lists and leftover Jellyfin playlists/collections from deleted or disabled smart lists.";
+        public string Description => "Cleans up orphaned data from SmartLists, including custom images from deleted lists and leftover Emby playlists/collections from deleted or disabled smart lists.";
 
         /// <summary>
         /// Gets the category of the task.
@@ -98,7 +98,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Clean up Jellyfin items tethered to deleted or disabled smart lists
+                // Clean up Emby items tethered to deleted or disabled smart lists
                 await CleanupOrphanedTetheredItemsAsync(playlists, collections, skippedFiles, cancellationToken).ConfigureAwait(false);
 
                 // Clean up legacy images folder if it exists
@@ -199,20 +199,20 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Deletes Jellyfin playlists/collections that carry the plugin's provider-ID tether
+        /// Deletes Emby playlists/collections that carry the plugin's provider-ID tether
         /// but whose smart list no longer exists or is disabled (leftovers from failed deletions).
         /// The enabled-list exemption is kind- and user-aware: a tethered Playlist item is only
         /// exempt if it belongs to a user still enabled on that smart list, so leftover playlists
         /// of users removed from a still-enabled list get reaped. A partial store read (some smart
         /// list files failed to load) aborts the sweep entirely, since a file that failed to parse
         /// is indistinguishable from a deleted list and treating it as deleted would be destructive.
-        /// Stored Jellyfin IDs referencing a deleted item are cleared from the smart list DTOs
+        /// Stored Emby IDs referencing a deleted item are cleared from the smart list DTOs
         /// after deletion, so this doesn't leave dangling pointers behind.
         /// </summary>
         private static async Task CleanupOrphanedTetheredItemsAsync(SmartPlaylistDto[] playlists, SmartCollectionDto[] collections, int skippedFiles, CancellationToken cancellationToken)
         {
             // Items created during (or shortly before) the sweep are skipped as likely
-            // mid-creation by a concurrent refresh. Jellyfin persists DateCreated as local
+            // mid-creation by a concurrent refresh. Emby persists DateCreated as local
             // wall-clock time on some paths, so the raw value can sit anywhere from 12 hours
             // behind to 14 hours ahead of UTC; a 40-hour margin keeps the guard effective across
             // all offsets (26h base + 14h positive-offset worst case), and the mid-sweep race it
@@ -245,7 +245,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             if (candidates.Count == 0)
             {
-                Logger.LogDebug("No orphaned tethered Jellyfin items found");
+                Logger.LogDebug("No orphaned tethered Emby items found");
                 return;
             }
 
@@ -287,7 +287,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             if (orphans.Count == 0)
             {
-                Logger.LogDebug("No orphaned tethered Jellyfin items remained after re-check");
+                Logger.LogDebug("No orphaned tethered Emby items remained after re-check");
                 return;
             }
 
@@ -315,7 +315,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             if (deletedOrphanIds.Count > 0)
             {
                 // Every other delete path in this plugin clears stored IDs on success; leaving
-                // them here would dangle pointers that Jellyfin's deterministic path-based item
+                // them here would dangle pointers that Emby's deterministic path-based item
                 // IDs could later rebind to an unrelated item.
                 await ClearDanglingStoredIdsAsync(freshPlaylists, freshCollections, deletedOrphanIds).ConfigureAwait(false);
             }
@@ -380,7 +380,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Determines whether a tethered Jellyfin item is orphaned: untethered items are never
+        /// Determines whether a tethered Emby item is orphaned: untethered items are never
         /// orphans; a Playlist is exempt only if its tether matches an enabled playlist and its
         /// owner is still in that playlist's user set; a BoxSet is exempt if its tether matches
         /// an enabled collection; anything else is treated as not orphaned (defensive).
@@ -405,7 +405,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Nulls any stored Jellyfin playlist/collection ID that references a just-deleted orphan.
+        /// Nulls any stored Emby playlist/collection ID that references a just-deleted orphan.
         /// The DTOs passed in are a snapshot taken before the delete loop, so they're used only to
         /// identify which smart lists have a dangling stored ID; each candidate is reloaded fresh
         /// from its store immediately before mutating and saving, so a concurrent edit made during
@@ -417,11 +417,11 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             foreach (var snapshotPlaylist in playlists)
             {
                 var hasDanglingId = (snapshotPlaylist.UserPlaylists?.Any(mapping =>
-                        !string.IsNullOrEmpty(mapping.JellyfinPlaylistId)
-                        && Guid.TryParse(mapping.JellyfinPlaylistId, out var mappedId)
+                        !string.IsNullOrEmpty(mapping.PlaylistId)
+                        && Guid.TryParse(mapping.PlaylistId, out var mappedId)
                         && deletedOrphanIds.Contains(mappedId)) ?? false)
-                    || (!string.IsNullOrEmpty(snapshotPlaylist.JellyfinPlaylistId)
-                        && Guid.TryParse(snapshotPlaylist.JellyfinPlaylistId, out var legacyMappedId)
+                    || (!string.IsNullOrEmpty(snapshotPlaylist.PlaylistId)
+                        && Guid.TryParse(snapshotPlaylist.PlaylistId, out var legacyMappedId)
                         && deletedOrphanIds.Contains(legacyMappedId));
 
                 if (!hasDanglingId)
@@ -448,27 +448,27 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 {
                     foreach (var mapping in playlist.UserPlaylists)
                     {
-                        if (!string.IsNullOrEmpty(mapping.JellyfinPlaylistId)
-                            && Guid.TryParse(mapping.JellyfinPlaylistId, out var mappedId)
+                        if (!string.IsNullOrEmpty(mapping.PlaylistId)
+                            && Guid.TryParse(mapping.PlaylistId, out var mappedId)
                             && deletedOrphanIds.Contains(mappedId))
                         {
                             Logger.LogDebug(
-                                "Clearing dangling JellyfinPlaylistId {JellyfinPlaylistId} for user {UserId} on smart list {SmartListId}",
-                                mapping.JellyfinPlaylistId, mapping.UserId, playlist.Id);
-                            mapping.JellyfinPlaylistId = null;
+                                "Clearing dangling PlaylistId {PlaylistId} for user {UserId} on smart list {SmartListId}",
+                                mapping.PlaylistId, mapping.UserId, playlist.Id);
+                            mapping.PlaylistId = null;
                             mutated = true;
                         }
                     }
                 }
 
-                if (!string.IsNullOrEmpty(playlist.JellyfinPlaylistId)
-                    && Guid.TryParse(playlist.JellyfinPlaylistId, out var legacyMappedIdReloaded)
+                if (!string.IsNullOrEmpty(playlist.PlaylistId)
+                    && Guid.TryParse(playlist.PlaylistId, out var legacyMappedIdReloaded)
                     && deletedOrphanIds.Contains(legacyMappedIdReloaded))
                 {
                     Logger.LogDebug(
-                        "Clearing dangling legacy JellyfinPlaylistId {JellyfinPlaylistId} on smart list {SmartListId}",
-                        playlist.JellyfinPlaylistId, playlist.Id);
-                    playlist.JellyfinPlaylistId = null;
+                        "Clearing dangling legacy PlaylistId {PlaylistId} on smart list {SmartListId}",
+                        playlist.PlaylistId, playlist.Id);
+                    playlist.PlaylistId = null;
                     mutated = true;
                 }
 
@@ -487,8 +487,8 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             foreach (var snapshotCollection in collections)
             {
-                if (string.IsNullOrEmpty(snapshotCollection.JellyfinCollectionId)
-                    || !Guid.TryParse(snapshotCollection.JellyfinCollectionId, out var mappedCollectionId)
+                if (string.IsNullOrEmpty(snapshotCollection.CollectionId)
+                    || !Guid.TryParse(snapshotCollection.CollectionId, out var mappedCollectionId)
                     || !deletedOrphanIds.Contains(mappedCollectionId))
                 {
                     continue;
@@ -507,17 +507,17 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     continue;
                 }
 
-                if (string.IsNullOrEmpty(collection.JellyfinCollectionId)
-                    || !Guid.TryParse(collection.JellyfinCollectionId, out var reloadedMappedCollectionId)
+                if (string.IsNullOrEmpty(collection.CollectionId)
+                    || !Guid.TryParse(collection.CollectionId, out var reloadedMappedCollectionId)
                     || !deletedOrphanIds.Contains(reloadedMappedCollectionId))
                 {
                     continue;
                 }
 
                 Logger.LogDebug(
-                    "Clearing dangling JellyfinCollectionId {JellyfinCollectionId} on smart list {SmartListId}",
-                    collection.JellyfinCollectionId, collection.Id);
-                collection.JellyfinCollectionId = null;
+                    "Clearing dangling CollectionId {CollectionId} on smart list {SmartListId}",
+                    collection.CollectionId, collection.Id);
+                collection.CollectionId = null;
 
                 try
                 {

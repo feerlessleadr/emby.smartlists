@@ -16,7 +16,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 /// - Anything the compiled rule would reject (unsupported operator, empty or unparsable
 ///   value) stays per-item - the gate never guesses.
 ///
-/// The user resolution and GetItemIds steps need a live Jellyfin and are exercised there, not here.
+/// The user resolution and GetItemIds steps need a live Emby and are exercised there, not here.
 /// </summary>
 public class NextUnwatchedPrefilterResolverTests
 {

@@ -1,6 +1,6 @@
 // Template catalog for the "Start from a template" picker on the Create tab.
 // Each dto is a partial SmartListDto containing only definition fields —
-// never instance fields (Id, FileName, Jellyfin IDs, dates, stats, images).
+// never instance fields (Id, FileName, Emby IDs, dates, stats, images).
 // Rule MemberName/Operator/TargetValue strings and sort names must match the
 // backend vocabulary (FieldRegistry.cs / OrderFactory) — dev/validate-templates.js
 // checks the catalog against config-core.js.

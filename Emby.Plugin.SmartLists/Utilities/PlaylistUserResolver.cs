@@ -72,7 +72,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                         userId != Guid.Empty &&
                         !existingByUserId.ContainsKey(userId.ToString("N")))
                     {
-                        existingByUserId[userId.ToString("N")] = mapping.JellyfinPlaylistId;
+                        existingByUserId[userId.ToString("N")] = mapping.PlaylistId;
                     }
                 }
             }
@@ -85,7 +85,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                     return new SmartPlaylistDto.UserPlaylistMapping
                     {
                         UserId = normalizedUserId,
-                        JellyfinPlaylistId = jellyfinPlaylistId
+                        PlaylistId = jellyfinPlaylistId
                     };
                 })
                 .ToList();

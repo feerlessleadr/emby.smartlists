@@ -9,7 +9,7 @@ namespace Emby.Plugin.SmartLists.Tests;
 /// Covers both public methods of <see cref="DateUtils"/>.
 /// <para>
 /// Emby stores <c>BaseItem.PremiereDate</c> as a <see cref="DateTimeOffset"/>?: an instant plus an offset, so the
-/// Jellyfin-era questions about <see cref="DateTimeKind"/> (is an unspecified date UTC or local?) no longer exist.
+/// Emby-era questions about <see cref="DateTimeKind"/> (is an unspecified date UTC or local?) no longer exist.
 /// DateUtils returns the instant as UTC. It needs no Emby host, DB or DI, so a bare <see cref="BaseItem"/> subclass
 /// is enough.
 /// </para>

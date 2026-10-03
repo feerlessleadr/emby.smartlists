@@ -70,11 +70,11 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         /// <param name="user">The user for this playlist (already resolved)</param>
         /// <param name="allUserMedia">All media items for the user (can be cached)</param>
         /// <param name="refreshCache">RefreshCache instance for caching expensive operations</param>
-        /// <param name="saveCallback">Optional callback to save the DTO when JellyfinPlaylistId is updated</param>
+        /// <param name="saveCallback">Optional callback to save the DTO when PlaylistId is updated</param>
         /// <param name="progressCallback">Optional callback to report progress (processed items, total items)</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Tuple of (success, message, jellyfinPlaylistId)</returns>
-        public async Task<(bool Success, string Message, string JellyfinPlaylistId)> ProcessPlaylistRefreshWithCachedMediaAsync(
+        public async Task<(bool Success, string Message, string PlaylistId)> ProcessPlaylistRefreshWithCachedMediaAsync(
             SmartPlaylistDto dto,
             User user,
             BaseItem[] allUserMedia,
@@ -115,10 +115,10 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         /// <param name="user">The user for this playlist (already resolved)</param>
         /// <param name="allUserMedia">All media items for the user (can be cached)</param>
         /// <param name="logger">Logger to use for this operation</param>
-        /// <param name="saveCallback">Optional callback to save the DTO when JellyfinPlaylistId is updated</param>
+        /// <param name="saveCallback">Optional callback to save the DTO when PlaylistId is updated</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>Tuple of (success, message, jellyfinPlaylistId)</returns>
-        private async Task<(bool Success, string Message, string JellyfinPlaylistId)> ProcessPlaylistRefreshAsync(
+        private async Task<(bool Success, string Message, string PlaylistId)> ProcessPlaylistRefreshAsync(
             SmartPlaylistDto dto,
             User user,
             BaseItem[] allUserMedia,
@@ -141,7 +141,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
 
                 var smartPlaylist = new Core.SmartList(dto)
                 {
-                    UserManager = _userManager, // Set UserManager for Jellyfin 10.11+ user resolution
+                    UserManager = _userManager, // Set UserManager for user resolution
                     ItemRepository = _itemRepository, // ItemValues-backed name dumps for DB prefilters
                 };
 
@@ -220,43 +220,43 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                 logger.LogDebug("Calculated playlist stats: {ItemCount} items, {TotalRuntime} minutes total playtime",
                     dto.ItemCount, dto.TotalRuntimeMinutes);
 
-                // Try to find existing playlist by Jellyfin playlist ID first, then by current naming format, then by old format
+                // Try to find existing playlist by Emby playlist ID first, then by current naming format, then by old format
                 Playlist? existingPlaylist = null;
 
-                // For multi-user playlists, find the JellyfinPlaylistId for this specific user
+                // For multi-user playlists, find the PlaylistId for this specific user
                 string? jellyfinPlaylistIdForUser = null;
                 if (dto.UserPlaylists != null && dto.UserPlaylists.Count > 0)
                 {
                     var userMapping = dto.UserPlaylists.FirstOrDefault(m => string.Equals(m.UserId, user.Id.ToString("N"), StringComparison.OrdinalIgnoreCase));
-                    jellyfinPlaylistIdForUser = userMapping?.JellyfinPlaylistId;
+                    jellyfinPlaylistIdForUser = userMapping?.PlaylistId;
                 }
                 else
                 {
-                    // Fallback to top-level JellyfinPlaylistId (backwards compatibility)
-                    jellyfinPlaylistIdForUser = dto.JellyfinPlaylistId;
+                    // Fallback to top-level PlaylistId (backwards compatibility)
+                    jellyfinPlaylistIdForUser = dto.PlaylistId;
                 }
 
-                logger.LogDebug("Looking for playlist: User={UserId}, JellyfinPlaylistId={JellyfinPlaylistId}",
+                logger.LogDebug("Looking for playlist: User={UserId}, PlaylistId={PlaylistId}",
                     user.Id, jellyfinPlaylistIdForUser);
 
-                // First try to find by Jellyfin playlist ID (most reliable)
-                if (!string.IsNullOrEmpty(jellyfinPlaylistIdForUser) && long.TryParse(jellyfinPlaylistIdForUser, out var parsedJellyfinPlaylistId))
+                // First try to find by Emby playlist ID (most reliable)
+                if (!string.IsNullOrEmpty(jellyfinPlaylistIdForUser) && long.TryParse(jellyfinPlaylistIdForUser, out var parsedPlaylistId))
                 {
-                    if (_libraryManager.GetItemById(parsedJellyfinPlaylistId) is Playlist playlistById)
+                    if (_libraryManager.GetItemById(parsedPlaylistId) is Playlist playlistById)
                     {
                         existingPlaylist = playlistById;
-                        logger.LogDebug("Found existing playlist by Jellyfin playlist ID: {JellyfinPlaylistId} - {PlaylistName}",
+                        logger.LogDebug("Found existing playlist by Emby playlist ID: {PlaylistId} - {PlaylistName}",
                             jellyfinPlaylistIdForUser, existingPlaylist.Name);
                     }
                     else
                     {
-                        logger.LogDebug("No playlist found by Jellyfin playlist ID: {JellyfinPlaylistId}", jellyfinPlaylistIdForUser);
+                        logger.LogDebug("No playlist found by Emby playlist ID: {PlaylistId}", jellyfinPlaylistIdForUser);
                     }
                 }
 
-                // Note: Legacy name-based fallback removed - all playlists should now have JellyfinPlaylistId
+                // Note: Legacy name-based fallback removed - all playlists should now have PlaylistId
 
-                // Recovery: if the stored Jellyfin playlist ID is stale (e.g. lost after a DB
+                // Recovery: if the stored Emby playlist ID is stale (e.g. lost after a DB
                 // migration or restore), re-find the playlist via the SmartLists provider ID
                 // stamped on it at creation. Never match by name - duplicate names are legal.
                 var recoveredViaProviderId = false;
@@ -278,7 +278,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                     if (existingPlaylist != null)
                     {
                         recoveredViaProviderId = true;
-                        logger.LogInformation("Recovered playlist '{PlaylistName}' ({PlaylistId}) for user {UserId} via SmartLists provider ID; stored Jellyfin playlist ID was stale",
+                        logger.LogInformation("Recovered playlist '{PlaylistName}' ({PlaylistId}) for user {UserId} via SmartLists provider ID; stored Emby playlist ID was stale",
                             existingPlaylist.Name, existingPlaylist.Id, user.Id);
                     }
                 }
@@ -286,12 +286,12 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                 // Now that we've found the existing playlist (or not), apply the new naming format
                 var smartPlaylistName = NameFormatter.FormatPlaylistName(dto.Name);
 
-                // Minimum items: don't keep a Jellyfin playlist around while it's below the floor
+                // Minimum items: don't keep a Emby playlist around while it's below the floor
                 if (dto.MinItems.GetValueOrDefault() > 0 && newItemIds.Length < dto.MinItems)
                 {
                     if (existingPlaylist != null)
                     {
-                        logger.LogInformation("Smart playlist '{PlaylistName}' matched {Count} item(s), below its minimum of {MinItems} - deleting Jellyfin playlist", dto.Name, newItemIds.Length, dto.MinItems);
+                        logger.LogInformation("Smart playlist '{PlaylistName}' matched {Count} item(s), below its minimum of {MinItems} - deleting Emby playlist", dto.Name, newItemIds.Length, dto.MinItems);
                         _libraryManager.DeleteItem(existingPlaylist, new DeleteOptions { DeleteFileLocation = true }, true);
 
                         // Drop it from this drain's snapshot too, so lists refreshed after this one
@@ -299,21 +299,21 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                         refreshCache.OnContainerRemoved(existingPlaylist.InternalId);
                     }
 
-                    // Clear the stored Jellyfin playlist ID so a later refresh with items recreates it
+                    // Clear the stored Emby playlist ID so a later refresh with items recreates it
                     if (dto.UserPlaylists != null && dto.UserPlaylists.Count > 0)
                     {
                         var emptyUserMapping = dto.UserPlaylists.FirstOrDefault(m => string.Equals(m.UserId, user.Id.ToString("N"), StringComparison.OrdinalIgnoreCase));
                         if (emptyUserMapping != null)
                         {
-                            emptyUserMapping.JellyfinPlaylistId = null;
+                            emptyUserMapping.PlaylistId = null;
                         }
 
                         // Update backwards compatibility field (first user's playlist)
-                        dto.JellyfinPlaylistId = dto.UserPlaylists[0].JellyfinPlaylistId;
+                        dto.PlaylistId = dto.UserPlaylists[0].PlaylistId;
                     }
                     else
                     {
-                        dto.JellyfinPlaylistId = null;
+                        dto.PlaylistId = null;
                     }
 
                     if (saveCallback != null)
@@ -394,22 +394,22 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                             var recoveredMapping = dto.UserPlaylists.FirstOrDefault(m => string.Equals(m.UserId, user.Id.ToString("N"), StringComparison.OrdinalIgnoreCase));
                             if (recoveredMapping != null)
                             {
-                                recoveredMapping.JellyfinPlaylistId = recoveredPlaylistId;
+                                recoveredMapping.PlaylistId = recoveredPlaylistId;
                             }
                             else
                             {
                                 dto.UserPlaylists.Add(new SmartPlaylistDto.UserPlaylistMapping
                                 {
                                     UserId = user.Id.ToString("N"),
-                                    JellyfinPlaylistId = recoveredPlaylistId
+                                    PlaylistId = recoveredPlaylistId
                                 });
                             }
 
-                            dto.JellyfinPlaylistId = dto.UserPlaylists[0].JellyfinPlaylistId;
+                            dto.PlaylistId = dto.UserPlaylists[0].PlaylistId;
                         }
                         else
                         {
-                            dto.JellyfinPlaylistId = recoveredPlaylistId;
+                            dto.PlaylistId = recoveredPlaylistId;
                         }
 
                         if (saveCallback != null)
@@ -420,7 +420,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                             }
                             catch (Exception saveEx)
                             {
-                                logger.LogWarning(saveEx, "Failed to save recovered Jellyfin playlist ID for {PlaylistName}, but continuing with operation", dto.Name);
+                                logger.LogWarning(saveEx, "Failed to save recovered Emby playlist ID for {PlaylistName}, but continuing with operation", dto.Name);
                             }
                         }
                     }
@@ -452,15 +452,15 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                         DeleteOrphanedTetheredPlaylists(dto, user, createdPlaylistGuid, refreshCache);
                     }
 
-                    // Update the DTO with the new Jellyfin playlist ID
+                    // Update the DTO with the new Emby playlist ID
                     // For multi-user playlists, update the specific user's mapping
                     if (dto.UserPlaylists != null && dto.UserPlaylists.Count > 0)
                     {
                         var userMapping = dto.UserPlaylists.FirstOrDefault(m => string.Equals(m.UserId, user.Id.ToString("N"), StringComparison.OrdinalIgnoreCase));
                         if (userMapping != null)
                         {
-                            userMapping.JellyfinPlaylistId = newPlaylistId;
-                            logger.LogDebug("Updated UserPlaylistMapping for user {UserId} with JellyfinPlaylistId {JellyfinPlaylistId}", user.Id, newPlaylistId);
+                            userMapping.PlaylistId = newPlaylistId;
+                            logger.LogDebug("Updated UserPlaylistMapping for user {UserId} with PlaylistId {PlaylistId}", user.Id, newPlaylistId);
                         }
                         else
                         {
@@ -468,18 +468,18 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                             dto.UserPlaylists.Add(new SmartPlaylistDto.UserPlaylistMapping
                             {
                                 UserId = user.Id.ToString("N"),
-                                JellyfinPlaylistId = newPlaylistId
+                                PlaylistId = newPlaylistId
                             });
                         }
                         // Update backwards compatibility field (first user's playlist)
-                        dto.JellyfinPlaylistId = dto.UserPlaylists[0].JellyfinPlaylistId;
+                        dto.PlaylistId = dto.UserPlaylists[0].PlaylistId;
                     }
                     else
                     {
                         // Single-user playlist (backwards compatibility)
                         // DEPRECATED: This is for backwards compatibility with old single-user playlists.
                         // It is planned to be removed in version 10.12. Use UserPlaylists array instead.
-                        dto.JellyfinPlaylistId = newPlaylistId;
+                        dto.PlaylistId = newPlaylistId;
                     }
                     dto.LastRefreshed = DateTime.UtcNow;
 
@@ -489,7 +489,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                         try
                         {
                             await saveCallback(dto);
-                            logger.LogDebug("Saved playlist DTO with new Jellyfin playlist ID {JellyfinPlaylistId} for playlist {PlaylistName}",
+                            logger.LogDebug("Saved playlist DTO with new Emby playlist ID {PlaylistId} for playlist {PlaylistName}",
                                 newPlaylistId, dto.Name);
                         }
                         catch (Exception saveEx)
@@ -598,29 +598,29 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
 
                 Playlist? existingPlaylist = null;
 
-                // Try to find by Jellyfin playlist ID only (no name fallback for deletion)
-                if (!string.IsNullOrEmpty(dto.JellyfinPlaylistId) && long.TryParse(dto.JellyfinPlaylistId, out var jellyfinPlaylistId))
+                // Try to find by Emby playlist ID only (no name fallback for deletion)
+                if (!string.IsNullOrEmpty(dto.PlaylistId) && long.TryParse(dto.PlaylistId, out var jellyfinPlaylistId))
                 {
                     if (_libraryManager.GetItemById(jellyfinPlaylistId) is Playlist playlistById)
                     {
                         existingPlaylist = playlistById;
-                        _logger.LogDebug("Found playlist by Jellyfin playlist ID for deletion: {JellyfinPlaylistId} - {PlaylistName}",
-                            dto.JellyfinPlaylistId, existingPlaylist.Name);
+                        _logger.LogDebug("Found playlist by Emby playlist ID for deletion: {PlaylistId} - {PlaylistName}",
+                            dto.PlaylistId, existingPlaylist.Name);
                     }
                     else
                     {
-                        _logger.LogWarning("No Jellyfin playlist found by ID '{JellyfinPlaylistId}' for deletion. Playlist may have been manually deleted.", dto.JellyfinPlaylistId);
+                        _logger.LogWarning("No Emby playlist found by ID '{PlaylistId}' for deletion. Playlist may have been manually deleted.", dto.PlaylistId);
                     }
                 }
                 else
                 {
-                    _logger.LogWarning("No Jellyfin playlist ID available for playlist '{PlaylistName}'. Cannot delete Jellyfin playlist.", dto.Name);
+                    _logger.LogWarning("No Emby playlist ID available for playlist '{PlaylistName}'. Cannot delete Emby playlist.", dto.Name);
                 }
 
                 if (existingPlaylist != null)
                 {
                     var userName = user?.Name ?? "Unknown User";
-                    _logger.LogInformation("Deleting Jellyfin playlist '{PlaylistName}' (ID: {PlaylistId}) for user '{UserName}'",
+                    _logger.LogInformation("Deleting Emby playlist '{PlaylistName}' (ID: {PlaylistId}) for user '{UserName}'",
                         existingPlaylist.Name, existingPlaylist.Id, userName);
                     _libraryManager.DeleteItem(existingPlaylist, new DeleteOptions { DeleteFileLocation = true }, true);
                 }
@@ -646,21 +646,21 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                     _logger.LogWarning("No user found for playlist '{PlaylistName}'. Cannot remove smart suffix.", dto.Name);
 
                     // Multi-user playlists have no single owner (UserId is legacy/empty). Still strip the
-                    // tether from every stored Jellyfin playlist so the weekly cleanup sweep doesn't delete
+                    // tether from every stored Emby playlist so the weekly cleanup sweep doesn't delete
                     // items the user chose to keep.
                     var idsToClear = new List<string>();
-                    if (!string.IsNullOrEmpty(dto.JellyfinPlaylistId))
+                    if (!string.IsNullOrEmpty(dto.PlaylistId))
                     {
-                        idsToClear.Add(dto.JellyfinPlaylistId);
+                        idsToClear.Add(dto.PlaylistId);
                     }
 
                     if (dto.UserPlaylists != null)
                     {
                         foreach (var mapping in dto.UserPlaylists)
                         {
-                            if (!string.IsNullOrEmpty(mapping.JellyfinPlaylistId))
+                            if (!string.IsNullOrEmpty(mapping.PlaylistId))
                             {
-                                idsToClear.Add(mapping.JellyfinPlaylistId);
+                                idsToClear.Add(mapping.PlaylistId);
                             }
                         }
                     }
@@ -673,7 +673,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                             var tether = playlistToClear.GetProviderId(ProviderKeys.SmartLists);
                             if (!string.IsNullOrEmpty(tether) && !string.Equals(tether, dto.Id, StringComparison.OrdinalIgnoreCase))
                             {
-                                _logger.LogWarning("Stored ID '{JellyfinPlaylistId}' points at an item tethered to a different smart list ('{PlaylistName}'). Skipping.",
+                                _logger.LogWarning("Stored ID '{PlaylistId}' points at an item tethered to a different smart list ('{PlaylistName}'). Skipping.",
                                     id, playlistToClear.Name);
                                 continue;
                             }
@@ -714,23 +714,23 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
 
                 Playlist? existingPlaylist = null;
 
-                // Try to find by Jellyfin playlist ID only (no name fallback for suffix removal)
-                if (!string.IsNullOrEmpty(dto.JellyfinPlaylistId) && long.TryParse(dto.JellyfinPlaylistId, out var jellyfinPlaylistId))
+                // Try to find by Emby playlist ID only (no name fallback for suffix removal)
+                if (!string.IsNullOrEmpty(dto.PlaylistId) && long.TryParse(dto.PlaylistId, out var jellyfinPlaylistId))
                 {
                     if (_libraryManager.GetItemById(jellyfinPlaylistId) is Playlist playlistById)
                     {
                         existingPlaylist = playlistById;
-                        _logger.LogDebug("Found playlist by Jellyfin playlist ID for suffix removal: {JellyfinPlaylistId} - {PlaylistName}",
-                            dto.JellyfinPlaylistId, existingPlaylist.Name);
+                        _logger.LogDebug("Found playlist by Emby playlist ID for suffix removal: {PlaylistId} - {PlaylistName}",
+                            dto.PlaylistId, existingPlaylist.Name);
                     }
                     else
                     {
-                        _logger.LogWarning("No Jellyfin playlist found by ID '{JellyfinPlaylistId}' for suffix removal. Playlist may have been manually deleted.", dto.JellyfinPlaylistId);
+                        _logger.LogWarning("No Emby playlist found by ID '{PlaylistId}' for suffix removal. Playlist may have been manually deleted.", dto.PlaylistId);
                     }
                 }
                 else
                 {
-                    _logger.LogWarning("No Jellyfin playlist ID available for playlist '{PlaylistName}'.", dto.Name);
+                    _logger.LogWarning("No Emby playlist ID available for playlist '{PlaylistName}'.", dto.Name);
                 }
 
                 if (existingPlaylist != null)
@@ -738,8 +738,8 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                     var tether = existingPlaylist.GetProviderId(ProviderKeys.SmartLists);
                     if (!string.IsNullOrEmpty(tether) && !string.Equals(tether, dto.Id, StringComparison.OrdinalIgnoreCase))
                     {
-                        _logger.LogWarning("Stored ID '{JellyfinPlaylistId}' points at an item tethered to a different smart list ('{PlaylistName}'). Skipping.",
-                            dto.JellyfinPlaylistId, existingPlaylist.Name);
+                        _logger.LogWarning("Stored ID '{PlaylistId}' points at an item tethered to a different smart list ('{PlaylistName}'). Skipping.",
+                            dto.PlaylistId, existingPlaylist.Name);
                         existingPlaylist = null;
                     }
                 }
@@ -846,8 +846,8 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             {
                 _logger.LogDebug("Disabling smart playlist: {PlaylistName}", dto.Name);
 
-                // Delete all Jellyfin playlists for all users
-                await DeleteAllJellyfinPlaylistsForUsersAsync(dto, cancellationToken).ConfigureAwait(false);
+                // Delete all Emby playlists for all users
+                await DeleteAllEmbyPlaylistsForUsersAsync(dto, cancellationToken).ConfigureAwait(false);
                 _logger.LogInformation("Successfully disabled smart playlist: {PlaylistName}", dto.Name);
             }
             catch (Exception ex)
@@ -1021,7 +1021,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             => MetadataHelper.ApplyCustomMetadataAsync(item, dto, _logger, cancellationToken, user, _userDataManager);
 
         /// <summary>
-        /// Applies custom images from the smart list configuration to the Jellyfin playlist.
+        /// Applies custom images from the smart list configuration to the Emby playlist.
         /// Also removes images that are no longer in CustomImages (e.g., after image type change).
         /// </summary>
         private async Task ApplyCustomImagesToPlaylistAsync(Playlist playlist, SmartPlaylistDto dto, CancellationToken cancellationToken)
@@ -1077,7 +1077,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                         var destPath = Path.Combine(itemPath, destFileName);
 
                         // Copy the image to the playlist folder. With the badge enabled, covers
-                        // are center-cropped to Jellyfin's tile proportions at native resolution
+                        // are center-cropped to Emby's tile proportions at native resolution
                         // and stamped, keeping the badge visible in every view (documented
                         // trade-off: detail pages show the crop instead of the original
                         // proportions). With the badge disabled, uploads are copied untouched.
@@ -1096,7 +1096,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                         _logger.LogDebug("Copied custom {ImageType} image to playlist: {DestPath}", imageTypeName, destPath);
 
                         // Remove same-slot files after replacement so folder.jpg and folder.jpeg cannot compete.
-                        _imageService.DeleteJellyfinImageFilesForType(itemPath, imageType, destPath, cancellationToken);
+                        _imageService.DeleteEmbyImageFilesForType(itemPath, imageType, destPath, cancellationToken);
 
                         // A custom Primary replaces our auto-generated collage; remove the leftover file.
                         if (imageType == ImageType.Primary)
@@ -1120,7 +1120,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                 }
 
                 // Only clean up orphaned images if this smart list has/had custom images through our system
-                // This prevents removing user-added images from Jellyfin when no smart list images were ever uploaded
+                // This prevents removing user-added images from Emby when no smart list images were ever uploaded
                 var removedAny = false;
                 if (hasOrHadSmartListImages)
                 {
@@ -1144,10 +1144,10 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         /// <summary>
         /// Cleans up orphaned images from SmartLists storage that are no longer in the CustomImages dictionary.
         /// This handles cases where image type changed (e.g., Primary -> Banner) or images were removed.
-        /// NOTE: This only cleans up SmartLists storage - it does NOT touch Jellyfin playlist images.
-        /// Jellyfin images are only removed through explicit delete operations (DeleteImageFromPlaylistAsync).
+        /// NOTE: This only cleans up SmartLists storage - it does NOT touch Emby playlist images.
+        /// Emby images are only removed through explicit delete operations (DeleteImageFromPlaylistAsync).
         /// </summary>
-        /// <param name="playlist">The Jellyfin playlist (for logging).</param>
+        /// <param name="playlist">The Emby playlist (for logging).</param>
         /// <param name="itemPath">Path to the playlist folder (unused, kept for signature compatibility).</param>
         /// <param name="imageInfos">List of image infos (unused, kept for signature compatibility).</param>
         /// <param name="customImageTypes">Image types currently in dto.CustomImages.</param>
@@ -1195,13 +1195,13 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         }
 
         /// <summary>
-        /// Gets the standard Jellyfin filename for an image type.
+        /// Gets the standard Emby filename for an image type.
         /// Delegates to the shared helper in SmartListImageService.
         /// </summary>
         private static string GetImageFileName(ImageType imageType, string extension)
-            => SmartListImageService.GetJellyfinImageFileName(imageType, extension);
+            => SmartListImageService.GetEmbyImageFileName(imageType, extension);
 
-        // Removed: legacy name-based lookup helper (no longer used after migration to JellyfinPlaylistId)
+        // Removed: legacy name-based lookup helper (no longer used after migration to PlaylistId)
 
         /// <summary>
         /// Validates that the given media types do not contain types unsupported by playlists.
@@ -1212,7 +1212,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             if (mediaTypes?.Contains(Core.Constants.MediaTypes.Series) == true)
             {
                 _logger.LogError(
-                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. Series playlists are not supported due to Jellyfin playlist limitations. Use '{SuggestedType}' media type instead, or create a Collection for Series support. Skipping playlist refresh.",
+                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. Series playlists are not supported due to Emby playlist limitations. Use '{SuggestedType}' media type instead, or create a Collection for Series support. Skipping playlist refresh.",
                     playlistName, Core.Constants.MediaTypes.Series, Core.Constants.MediaTypes.Episode);
                 return (false, $"{Core.Constants.MediaTypes.Series} media type is not supported for Playlists. Use {Core.Constants.MediaTypes.Episode} media type, or create a Collection instead.", string.Empty);
             }
@@ -1220,7 +1220,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             if (mediaTypes?.Contains(Core.Constants.MediaTypes.Season) == true)
             {
                 _logger.LogError(
-                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. Season playlists are not supported due to Jellyfin playlist limitations. Use '{SuggestedType}' media type instead, or create a Collection for Season support. Skipping playlist refresh.",
+                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. Season playlists are not supported due to Emby playlist limitations. Use '{SuggestedType}' media type instead, or create a Collection for Season support. Skipping playlist refresh.",
                     playlistName, Core.Constants.MediaTypes.Season, Core.Constants.MediaTypes.Episode);
                 return (false, $"{Core.Constants.MediaTypes.Season} media type is not supported for Playlists. Use {Core.Constants.MediaTypes.Episode} media type, or create a Collection instead.", string.Empty);
             }
@@ -1228,7 +1228,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             if (mediaTypes?.Contains(Core.Constants.MediaTypes.MusicAlbum) == true)
             {
                 _logger.LogError(
-                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. MusicAlbum playlists are not supported due to Jellyfin playlist limitations. Use '{SuggestedType}' media type instead, or create a Collection for Album support. Skipping playlist refresh.",
+                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. MusicAlbum playlists are not supported due to Emby playlist limitations. Use '{SuggestedType}' media type instead, or create a Collection for Album support. Skipping playlist refresh.",
                     playlistName, Core.Constants.MediaTypes.MusicAlbum, Core.Constants.MediaTypes.Audio);
                 return (false, $"{Core.Constants.MediaTypes.MusicAlbum} media type is not supported for Playlists. Use {Core.Constants.MediaTypes.Audio} media type, or create a Collection instead.", string.Empty);
             }
@@ -1236,9 +1236,9 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             if (mediaTypes?.Contains(Core.Constants.MediaTypes.LiveTvChannel) == true)
             {
                 _logger.LogError(
-                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. Jellyfin playlists cannot contain Live TV channels. Create a Collection for Live TV support. Skipping playlist refresh.",
+                    "Smart playlist '{PlaylistName}' uses '{MediaType}' media type. Emby playlists cannot contain Live TV channels. Create a Collection for Live TV support. Skipping playlist refresh.",
                     playlistName, Core.Constants.MediaTypes.LiveTvChannel);
-                return (false, $"{Core.Constants.MediaTypes.LiveTvChannel} media type is not supported for Playlists. Jellyfin playlists cannot contain Live TV channels - create a Collection instead.", string.Empty);
+                return (false, $"{Core.Constants.MediaTypes.LiveTvChannel} media type is not supported for Playlists. Emby playlists cannot contain Live TV channels - create a Collection instead.", string.Empty);
             }
 
             return (true, string.Empty, string.Empty);
@@ -1372,9 +1372,9 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                     MediaTypes = bumpers.MediaTypes ?? [],
                     Order = new OrderDto { SortOptions = [sortOption] },
 
-                    // The bumper pool builds part of the parent playlist, so the parent's Jellyfin
+                    // The bumper pool builds part of the parent playlist, so the parent's Emby
                     // playlist(s) must stay out of the pool's own Playlists results (self-reference).
-                    JellyfinPlaylistId = dto.JellyfinPlaylistId,
+                    PlaylistId = dto.PlaylistId,
                     UserPlaylists = dto.UserPlaylists,
 
                     // Extras (trailers, interstitials, etc.) are the archetypal bumper
@@ -1384,7 +1384,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
 
                 var bumperList = new Core.SmartList(bumperDto)
                 {
-                    UserManager = _userManager, // Set UserManager for Jellyfin 10.11+ user resolution
+                    UserManager = _userManager, // Set UserManager for user resolution
                     ItemRepository = _itemRepository, // ItemValues-backed name dumps for DB prefilters
                 };
                 var bumperMedia = GetAllUserMedia(user, bumperDto.MediaTypes, bumperDto).ToArray();
@@ -1454,7 +1454,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         /// <summary>
         /// Generates the playlist's Primary cover image from its items: a single item's poster
         /// (badged copy when the badge is enabled) or a square 2x2 collage for 2+ items.
-        /// The plugin always generates playlist covers itself (instead of triggering Jellyfin's
+        /// The plugin always generates playlist covers itself (instead of triggering Emby's
         /// refresh-based generation) so covers are consistent with collections and can carry
         /// the smart list badge. Only called when no custom Primary image is uploaded via Smart List.
         /// </summary>
@@ -1471,7 +1471,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
 
                 var collagePath = Path.Combine(itemPath, CollageBuilder.CollageFileName);
 
-                // Respect covers uploaded directly through Jellyfin's UI: those are saved as
+                // Respect covers uploaded directly through Emby's UI: those are saved as
                 // folder.<ext> inside the playlist folder (core's own generated covers live in
                 // the internal metadata dir, and the SmartLists custom-image flow is guarded
                 // upstream), so any file in the playlist folder that isn't our generated
@@ -1525,9 +1525,9 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                 if (imagePaths.Count == 1)
                 {
                     // Single image: with the badge enabled, a square center-cropped badged copy
-                    // (Jellyfin's square playlist tiles would hide a corner badge on a poster-
+                    // (Emby's square playlist tiles would hide a corner badge on a poster-
                     // ratio cover); with it disabled, or when the source can't be decoded,
-                    // reference the item's image untouched (native Jellyfin behavior). Never
+                    // reference the item's image untouched (native Emby behavior). Never
                     // modifies the item's own file.
                     coverPath = CoverBadgeHelper.IsEnabled
                         && await CollageBuilder.TryCreateBadgedTileCoverAsync(imagePaths[0], collagePath, ImageType.Primary, forPlaylist: true, 600, _logger, cancellationToken).ConfigureAwait(false)
@@ -1536,7 +1536,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                 }
                 else
                 {
-                    // Square 2x2 collage, matching the covers Jellyfin generates for playlists.
+                    // Square 2x2 collage, matching the covers Emby generates for playlists.
                     // Cycle the available images to fill all four quadrants (like collections do).
                     var collageSources = new List<string>(4);
                     for (int i = 0; i < 4; i++)
@@ -1579,7 +1579,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         /// <summary>
         /// Gets an item's Primary image path, falling back to its parent's Primary image
         /// (e.g. album art for audio tracks). Episodes are represented by their series
-        /// poster instead of the episode screenshot, matching Jellyfin's native playlist
+        /// poster instead of the episode screenshot, matching Emby's native playlist
         /// covers. Paths already in <paramref name="seenPaths"/> are returned without a
         /// filesystem check - large playlists hit the same series/album image over and
         /// over, and the caller dedupes anyway. Returns null when no image exists on disk.
@@ -1607,7 +1607,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
 
         /// <summary>
         /// Determines whether the playlist's current Primary image is a cover uploaded
-        /// manually (e.g. through Jellyfin's own Edit Images UI). Manual covers live inside
+        /// manually (e.g. through Emby's own Edit Images UI). Manual covers live inside
         /// the playlist folder under a name other than the plugin's generated collage.
         /// A dangling path (file deleted by hand) is not treated as manual, so generation
         /// can recover the cover.
@@ -1674,14 +1674,14 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                 }
             }
 
-            // Default to Audio for mixed/unknown content (Jellyfin standard)
+            // Default to Audio for mixed/unknown content (Emby standard)
             _logger.LogDebug("Playlist {PlaylistName} has mixed/unknown content, defaulting to Audio", dto.Name);
             return Core.Constants.MediaTypes.Audio;
         }
 
 
         /// <summary>
-        /// Sets the MediaType of a Jellyfin playlist using reflection (similar to IsPublic implementation).
+        /// Sets the MediaType of a Emby playlist using reflection (similar to IsPublic implementation).
         /// </summary>
         /// <param name="playlist">The playlist object</param>
         /// <param name="mediaType">The media type to set ("Video" or "Audio")</param>
@@ -1769,7 +1769,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         }
 
         /// <summary>
-        /// Mirrors the child aggregation Jellyfin's provider refresh normally performs
+        /// Mirrors the child aggregation Emby's provider refresh normally performs
         /// (MetadataService.UpdateMetadataFromChildren): cumulative runtime, genres, studios, and official rating.
         /// Required because the plugin saves playlists via UpdateToRepositoryAsync,
         /// which bypasses the provider pipeline that computes these fields.
@@ -1810,7 +1810,7 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         }
 
         /// <summary>
-        /// Deletes duplicate Jellyfin playlists that carry this smart playlist's provider-ID
+        /// Deletes duplicate Emby playlists that carry this smart playlist's provider-ID
         /// tether for this user but are not the tracked playlist. The tether proves the plugin
         /// created them, so deletion cannot hit user-created playlists.
         /// </summary>
@@ -1864,28 +1864,28 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
         }
 
         /// <summary>
-        /// Helper method to delete all Jellyfin playlists for a smart playlist across all users.
+        /// Helper method to delete all Emby playlists for a smart playlist across all users.
         /// Handles both multi-user playlists (UserPlaylists array) and legacy single-user playlists.
         /// This centralizes the deletion logic used by disable, delete, and visibility schedule operations.
-        /// Successfully deleted playlists have their stored Jellyfin playlist IDs cleared on the DTO;
+        /// Successfully deleted playlists have their stored Emby playlist IDs cleared on the DTO;
         /// failed deletions keep their IDs so deletion can be retried later. Callers are responsible
         /// for persisting the DTO.
         /// </summary>
-        /// <param name="playlistDto">The smart playlist DTO containing Jellyfin playlist IDs to delete</param>
+        /// <param name="playlistDto">The smart playlist DTO containing Emby playlist IDs to delete</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        public async Task DeleteAllJellyfinPlaylistsForUsersAsync(SmartPlaylistDto playlistDto, CancellationToken cancellationToken = default)
+        public async Task DeleteAllEmbyPlaylistsForUsersAsync(SmartPlaylistDto playlistDto, CancellationToken cancellationToken = default)
         {
             ArgumentNullException.ThrowIfNull(playlistDto);
 
-            // Delete all Jellyfin playlists for all users
+            // Delete all Emby playlists for all users
             if (playlistDto.UserPlaylists != null && playlistDto.UserPlaylists.Count > 0)
             {
-                _logger.LogDebug("Deleting {Count} Jellyfin playlists for multi-user playlist '{PlaylistName}'",
+                _logger.LogDebug("Deleting {Count} Emby playlists for multi-user playlist '{PlaylistName}'",
                     playlistDto.UserPlaylists.Count, playlistDto.Name);
 
                 foreach (var userMapping in playlistDto.UserPlaylists)
                 {
-                    if (!string.IsNullOrEmpty(userMapping.JellyfinPlaylistId))
+                    if (!string.IsNullOrEmpty(userMapping.PlaylistId))
                     {
                         try
                         {
@@ -1895,39 +1895,39 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
                                 Id = playlistDto.Id,
                                 Name = playlistDto.Name,
                                 UserId = userMapping.UserId,
-                                JellyfinPlaylistId = userMapping.JellyfinPlaylistId
+                                PlaylistId = userMapping.PlaylistId
                             };
                             await DeleteAsync(tempDto, cancellationToken).ConfigureAwait(false);
-                            _logger.LogDebug("Deleted Jellyfin playlist {JellyfinPlaylistId} for user {UserId}",
-                                userMapping.JellyfinPlaylistId, userMapping.UserId);
+                            _logger.LogDebug("Deleted Emby playlist {PlaylistId} for user {UserId}",
+                                userMapping.PlaylistId, userMapping.UserId);
                             // Clear the mapping only on successful deletion; a failed delete keeps
                             // its ID so the playlist can be found and deleted on a later attempt
-                            userMapping.JellyfinPlaylistId = null;
+                            userMapping.PlaylistId = null;
                         }
                         catch (Exception ex)
                         {
-                            _logger.LogWarning(ex, "Failed to delete Jellyfin playlist {JellyfinPlaylistId} for user {UserId}, continuing",
-                                userMapping.JellyfinPlaylistId, userMapping.UserId);
+                            _logger.LogWarning(ex, "Failed to delete Emby playlist {PlaylistId} for user {UserId}, continuing",
+                                userMapping.PlaylistId, userMapping.UserId);
                         }
                     }
                 }
 
                 // Keep the backwards-compatibility field in sync (first user's playlist)
-                playlistDto.JellyfinPlaylistId = playlistDto.UserPlaylists[0].JellyfinPlaylistId;
+                playlistDto.PlaylistId = playlistDto.UserPlaylists[0].PlaylistId;
             }
-            else if (!string.IsNullOrEmpty(playlistDto.JellyfinPlaylistId))
+            else if (!string.IsNullOrEmpty(playlistDto.PlaylistId))
             {
                 // Fallback to single playlist deletion (backwards compatibility)
-                _logger.LogDebug("Deleting Jellyfin playlist {JellyfinPlaylistId} for playlist '{PlaylistName}'",
-                    playlistDto.JellyfinPlaylistId, playlistDto.Name);
+                _logger.LogDebug("Deleting Emby playlist {PlaylistId} for playlist '{PlaylistName}'",
+                    playlistDto.PlaylistId, playlistDto.Name);
                 try
                 {
                     await DeleteAsync(playlistDto, cancellationToken).ConfigureAwait(false);
-                    playlistDto.JellyfinPlaylistId = null;
+                    playlistDto.PlaylistId = null;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Failed to delete Jellyfin playlist for '{PlaylistName}'", playlistDto.Name);
+                    _logger.LogWarning(ex, "Failed to delete Emby playlist for '{PlaylistName}'", playlistDto.Name);
                 }
             }
         }

@@ -142,7 +142,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 if (!OperatingSystem.IsWindows() && IsWindowsStylePath(customPath))
                 {
                     _logger.LogWarning(
-                        "Custom backup path '{CustomPath}' appears to be a Windows path but Jellyfin is running on Linux/macOS. " +
+                        "Custom backup path '{CustomPath}' appears to be a Windows path but Emby is running on Linux/macOS. " +
                         "Using default backup location instead.",
                         customPath);
                     return defaultPath;
@@ -152,7 +152,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 if (OperatingSystem.IsWindows() && IsUnixStyleAbsolutePath(customPath))
                 {
                     _logger.LogWarning(
-                        "Custom backup path '{CustomPath}' appears to be a Unix path but Jellyfin is running on Windows. " +
+                        "Custom backup path '{CustomPath}' appears to be a Unix path but Emby is running on Windows. " +
                         "Using default backup location instead.",
                         customPath);
                     return defaultPath;

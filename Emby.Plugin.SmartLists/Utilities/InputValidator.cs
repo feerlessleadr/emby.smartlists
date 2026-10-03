@@ -77,7 +77,7 @@ namespace Emby.Plugin.SmartLists.Utilities
             RegexOptions.Compiled
         );
 
-        // Mirrors Jellyfin core's ManagedFileSystem._invalidPathCharacters
+        // Mirrors Emby core's ManagedFileSystem._invalidPathCharacters
         // (Emby.Server.Implementations/IO/ManagedFileSystem.cs). Core replaces each of these with a
         // space when it derives the FOLDER name for a collection or playlist
         // (CollectionManager.CreateCollectionAsync, PlaylistManager.CreatePlaylist) while storing the
@@ -89,7 +89,7 @@ namespace Emby.Plugin.SmartLists.Utilities
         // array; control characters (also in core's list) are handled via char.IsControl in
         // SanitizedFolderName below, because collection restore (SmartListController.RestoreCollection...)
         // saves names without going through ValidateName, so a restored name can still contain them.
-        private static readonly char[] JellyfinSanitizedChars = new[] { '"', '<', '>', '|', ':', '*', '?', '\\', '/' };
+        private static readonly char[] EmbySanitizedChars = new[] { '"', '<', '>', '|', ':', '*', '?', '\\', '/' };
 
         /// <summary>
         /// Validates a smart list name.
@@ -148,7 +148,7 @@ namespace Emby.Plugin.SmartLists.Utilities
         }
 
         /// <summary>
-        /// Reproduces the folder name Jellyfin core derives from a list name: every character core
+        /// Reproduces the folder name Emby core derives from a list name: every character core
         /// treats as invalid becomes a space (ManagedFileSystem.GetValidFilename), and the result is
         /// trimmed because a path segment cannot begin or end in whitespace on Windows.
         /// </summary>
@@ -157,7 +157,7 @@ namespace Emby.Plugin.SmartLists.Utilities
             var chars = name.ToCharArray();
             for (var i = 0; i < chars.Length; i++)
             {
-                if (Array.IndexOf(JellyfinSanitizedChars, chars[i]) >= 0 || char.IsControl(chars[i]))
+                if (Array.IndexOf(EmbySanitizedChars, chars[i]) >= 0 || char.IsControl(chars[i]))
                 {
                     chars[i] = ' ';
                 }
@@ -168,7 +168,7 @@ namespace Emby.Plugin.SmartLists.Utilities
 
         /// <summary>
         /// Returns true when two already-formatted list names would resolve to the same folder on disk.
-        /// Jellyfin core replaces every character it treats as invalid with a space when it derives a
+        /// Emby core replaces every character it treats as invalid with a space when it derives a
         /// collection's folder name, and derives the item's id from that path - so two names differing
         /// only in those characters silently share one BoxSet.
         /// </summary>
@@ -186,10 +186,10 @@ namespace Emby.Plugin.SmartLists.Utilities
         {
             if (string.Equals(candidateFormatted, existingFormatted, StringComparison.OrdinalIgnoreCase))
             {
-                return $"A collection named '{candidateFormatted}' already exists. Jellyfin does not allow multiple collections with the same name.";
+                return $"A collection named '{candidateFormatted}' already exists. Emby does not allow multiple collections with the same name.";
             }
 
-            return $"A collection named '{existingFormatted}' already exists, and Jellyfin replaces the characters \" < > | : * ? \\ / with spaces when it creates the collection folder - so '{candidateFormatted}' would end up sharing that same collection. Choose a name that differs by more than those characters.";
+            return $"A collection named '{existingFormatted}' already exists, and Emby replaces the characters \" < > | : * ? \\ / with spaces when it creates the collection folder - so '{candidateFormatted}' would end up sharing that same collection. Choose a name that differs by more than those characters.";
         }
 
         /// <summary>
@@ -199,7 +199,7 @@ namespace Emby.Plugin.SmartLists.Utilities
         /// Validates a string value used in filters and rules.
         /// Note: Does not check for SQL injection or XSS patterns since these values
         /// are used for filtering media content (e.g., searching for movies with "SELECT" in the title).
-        /// The actual query execution is handled safely by Jellyfin's query engine.
+        /// The actual query execution is handled safely by Emby's query engine.
         /// </summary>
         public static SmartListValidationResult ValidateStringValue(string? value, string fieldName = "Value")
         {
@@ -355,7 +355,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                 return mediaTypesResult;
             }
 
-            // Container media types (Collection/Playlist) are collection-only: Jellyfin playlists
+            // Container media types (Collection/Playlist) are collection-only: Emby playlists
             // can only contain media items, so container results would be silently dropped.
             // Gated on the Type discriminator rather than the CLR type: the user page binds every
             // create body as a SmartPlaylistDto and only converts to a collection DTO after
@@ -365,16 +365,16 @@ namespace Emby.Plugin.SmartLists.Utilities
                 var containerType = list.MediaTypes?.FirstOrDefault(Core.Constants.MediaTypes.IsContainerType);
                 if (containerType != null)
                 {
-                    return SmartListValidationResult.Failure($"{containerType} media type is not supported for playlists. Jellyfin playlists can only contain media items - use a smart collection instead.");
+                    return SmartListValidationResult.Failure($"{containerType} media type is not supported for playlists. Emby playlists can only contain media items - use a smart collection instead.");
                 }
             }
 
-            // Grouping emits BoxSets, which Jellyfin playlists cannot contain. Gated on the Type
+            // Grouping emits BoxSets, which Emby playlists cannot contain. Gated on the Type
             // discriminator rather than the CLR type: the user page binds every create body as a
             // SmartPlaylistDto and only converts to a collection DTO after validation has run.
             if (list.Type != Core.Enums.SmartListType.Collection && list.GroupIntoCollections)
             {
-                return SmartListValidationResult.Failure("Group results into collections is not supported for playlists. Jellyfin playlists can only contain media items - use a smart collection instead.");
+                return SmartListValidationResult.Failure("Group results into collections is not supported for playlists. Emby playlists can only contain media items - use a smart collection instead.");
             }
 
             // Validate expression sets

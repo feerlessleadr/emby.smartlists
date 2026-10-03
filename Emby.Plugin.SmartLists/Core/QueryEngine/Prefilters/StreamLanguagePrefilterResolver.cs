@@ -10,7 +10,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine.Prefilters
 {
     /// <summary>
     /// Prefilter resolver for the AudioLanguages and SubtitleLanguages rule fields,
-    /// Jellyfin 12 only.
+    /// Emby 12 only.
     ///
     /// Two steps, preserving the per-item operator semantics exactly:
     /// 1. Dump the distinct STORED language codes for the stream kind via

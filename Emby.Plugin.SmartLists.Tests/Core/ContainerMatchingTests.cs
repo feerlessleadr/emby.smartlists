@@ -35,7 +35,7 @@ public class ContainerMatchingTests
     // Fixture builders
     // ---------------------------------------------------------------------------------------
 
-    /// <summary>A BoxSet - what Jellyfin calls a collection. Name before SortName, as ever.</summary>
+    /// <summary>A BoxSet - what Emby calls a collection. Name before SortName, as ever.</summary>
     private static BoxSet CollectionNamed(string name, params string[] genres)
     {
         var boxSet = new BoxSet { Id = Guid.NewGuid(), InternalId = TestItems.NextId(), Name = name, Genres = genres };
@@ -68,7 +68,7 @@ public class ContainerMatchingTests
             Name = "Container Test List",
             MediaTypes = mediaTypes,
             MatchByMembers = matchByMembers,
-            JellyfinCollectionId = jellyfinCollectionId,
+            CollectionId = jellyfinCollectionId,
             ExpressionSets =
             [
                 new ExpressionSet { Expressions = [new Expression("Genres", "Contains", genre)] },
@@ -290,7 +290,7 @@ public class ContainerMatchingTests
 
     /// <summary>
     /// Seeds an item's people into the refresh cache so People extraction is a cache hit and the
-    /// throwing TestLibraryManager is never queried. Seeding an EMPTY set models Jellyfin's
+    /// throwing TestLibraryManager is never queried. Seeding an EMPTY set models Emby's
     /// reality for containers: people are never rolled up onto a BoxSet.
     /// </summary>
     private static void SeedActors(RefreshQueueService.RefreshCache cache, BaseItem item, params string[] actors)
@@ -413,7 +413,7 @@ public class ContainerMatchingTests
     [Fact]
     public void MatchByMembersOff_PeopleRuleMatchesNothingAgainstABareBoxSet()
     {
-        // Jellyfin never rolls People up onto a BoxSet, so with the toggle off a People rule
+        // Emby never rolls People up onto a BoxSet, so with the toggle off a People rule
         // evaluates against the container's own (empty) people and returns nothing - even when a
         // member DOES have the actor. The engine must not secretly consult members in this mode;
         // the field picker hides People for container-only + toggle-off lists for the same reason.
@@ -499,7 +499,7 @@ public class ContainerMatchingTests
     // Playlist containers - same semantics, PlaylistChildItems-backed
     // ---------------------------------------------------------------------------------------
 
-    /// <summary>A Jellyfin Playlist container candidate.</summary>
+    /// <summary>A Emby Playlist container candidate.</summary>
     private static Playlist PlaylistContainer(string name)
     {
         var playlist = new Playlist { Id = Guid.NewGuid(), InternalId = TestItems.NextId(), Name = name };

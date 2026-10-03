@@ -89,7 +89,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine.Prefilters
         {
             // TODO(port): disabled on Emby. This pushdown asserts "no item matches" from a stored-name dump, which is only
             // safe if the dump keeps every distinct stored spelling. Emby's GetPeople semantics are unverified, and its
-            // PersonType set is smaller than Jellyfin's role list. Returning null keeps per-item evaluation, which is always correct.
+            // PersonType set is smaller than Emby's role list. Returning null keeps per-item evaluation, which is always correct.
             _ = expression;
             _ = context;
             return null;

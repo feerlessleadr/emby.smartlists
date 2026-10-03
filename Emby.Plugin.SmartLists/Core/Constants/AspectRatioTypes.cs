@@ -5,7 +5,7 @@ using System.Linq;
 namespace Emby.Plugin.SmartLists.Core.Constants
 {
     /// <summary>
-    /// Parses and compares Jellyfin display-aspect-ratio values such as <c>16:9</c>,
+    /// Parses and compares Emby display-aspect-ratio values such as <c>16:9</c>,
     /// <c>2.35:1</c>, and <c>80:29</c>.
     /// </summary>
     public static class AspectRatioTypes
@@ -66,7 +66,7 @@ namespace Emby.Plugin.SmartLists.Core.Constants
         /// Evaluates a ratio comparison. Invalid or missing item values never match, including
         /// negative operators, so non-video items do not leak into aspect-ratio rules.
         /// </summary>
-        /// <param name="fieldValue">Jellyfin's stored aspect ratio.</param>
+        /// <param name="fieldValue">Emby's stored aspect ratio.</param>
         /// <param name="targetValue">One ratio, or a semicolon-separated list for IsIn/IsNotIn.</param>
         /// <param name="operatorName">The SmartLists operator name.</param>
         /// <returns>Whether the comparison matches.</returns>

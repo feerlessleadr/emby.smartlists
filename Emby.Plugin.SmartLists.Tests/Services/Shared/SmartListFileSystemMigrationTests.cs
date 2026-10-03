@@ -20,7 +20,7 @@ namespace Emby.Plugin.SmartLists.Tests.Services.Shared;
 /// item types. MatchByMembers stays false, preserving the legacy match-against-container-metadata
 /// behavior.
 ///
-/// Playlists: the flags are stripped silently - the feature never worked there because Jellyfin
+/// Playlists: the flags are stripped silently - the feature never worked there because Emby
 /// playlists can only contain media items (container results were silently dropped).
 /// </summary>
 public class SmartListFileSystemMigrationTests

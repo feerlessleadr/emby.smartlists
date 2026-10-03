@@ -14,7 +14,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.Orders;
 /// <see cref="SeriesNameOrder"/> (+Desc), <see cref="SeriesNameIgnoreArticlesOrder"/> (+Desc)
 /// and <see cref="ArtistOrder"/> (+Desc).
 ///
-/// TWO PRECONDITIONS that every test in this file depends on, both properties of Jellyfin's
+/// TWO PRECONDITIONS that every test in this file depends on, both properties of Emby's
 /// BaseItem rather than of the plugin:
 ///
 /// 1. Reading <c>item.SortName</c> when it was never assigned throws NullReferenceException -
@@ -77,7 +77,7 @@ public class NameOrderTests
     // NameSortHelper - auto-generated SortName detection
     // Audio pattern:   ^\d+\s+-\s+          e.g. "0001 - Track Title"
     // Episode pattern: ^\d{3,}\s+-\s+\d{4,}\s+-\s+   e.g. "001 - 0001 - Title"
-    // A match means "Jellyfin generated this, the user asked for Name, so use Name".
+    // A match means "Emby generated this, the user asked for Name, so use Name".
     // Anything else is treated as a MANUAL sort title and wins over Name.
     // =================================================================================
 

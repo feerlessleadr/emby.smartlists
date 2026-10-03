@@ -15,7 +15,7 @@ namespace Emby.Plugin.SmartLists.Tests.Services.Shared;
 ///
 /// The container snapshots (<c>AllCollections</c>/<c>AllPlaylists</c>) and the membership caches
 /// behind them are built ONCE per refresh-queue drain, while the cache itself is per user and lives
-/// until the drain finishes. So when list A rewrote its own Jellyfin container mid-drain, every list
+/// until the drain finishes. So when list A rewrote its own Emby container mid-drain, every list
 /// refreshed after it in that drain still evaluated its Collections/Playlists rules against A's
 /// pre-drain contents - permanently one refresh behind while lists refresh together, which is the
 /// normal case under scheduled auto-refresh.
@@ -170,7 +170,7 @@ public class RefreshCacheStalenessTests
     }
 
     /// <summary>
-    /// "Hide when empty" deletes the Jellyfin container mid-drain; lists refreshed after it must
+    /// "Hide when empty" deletes the Emby container mid-drain; lists refreshed after it must
     /// stop seeing it.
     /// </summary>
     [Fact]

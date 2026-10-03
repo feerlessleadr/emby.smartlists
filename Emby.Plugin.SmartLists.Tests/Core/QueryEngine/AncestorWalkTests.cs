@@ -68,7 +68,7 @@ public class AncestorWalkTests
     }
 
     /// <summary>
-    /// A Jellyfin library (CollectionFolder) is NEVER in the ParentId chain - it hangs off the
+    /// A Emby library (CollectionFolder) is NEVER in the ParentId chain - it hangs off the
     /// UserRootFolder as a sibling structure - so the walk has to union
     /// <c>GetCollectionFolders(chainTop)</c> on top of the parent chain. Drop that half and a
     /// library-level tag is invisible, which is the second symptom reported in #495.
@@ -654,7 +654,7 @@ public class AncestorWalkTests
     /// <summary>
     /// The compiled-rule cache is process-static, holds 1000 entries and cleans up no more often
     /// than every five minutes, so a rule-set hash that ignores a compilation-affecting flag
-    /// produces a stale-rule bug that does NOT self-heal without a Jellyfin restart.
+    /// produces a stale-rule bug that does NOT self-heal without a Emby restart.
     /// </summary>
     [Fact]
     public void GenerateRuleSetHash_DiffersWhenIncludeParentTagsToggles()

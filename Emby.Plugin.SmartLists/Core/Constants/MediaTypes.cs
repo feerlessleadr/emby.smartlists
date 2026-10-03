@@ -13,11 +13,11 @@ namespace Emby.Plugin.SmartLists.Core.Constants
         // TV Types
         public const string Episode = nameof(Episode);
 
-        // Series media type: Not supported in Playlists (Jellyfin expands to episodes causing playback issues)
+        // Series media type: Not supported in Playlists (Emby expands to episodes causing playback issues)
         // but supported in Collections (Collections don't play sequentially, so no expansion issues)
         public const string Series = nameof(Series);
 
-        // Season media type: Not supported in Playlists (Jellyfin expands to episodes causing playback issues)
+        // Season media type: Not supported in Playlists (Emby expands to episodes causing playback issues)
         // but supported in Collections (same pattern as Series)
         public const string Season = nameof(Season);
 
@@ -27,14 +27,14 @@ namespace Emby.Plugin.SmartLists.Core.Constants
         // Audio Types
         public const string Audio = nameof(Audio);
 
-        // MusicAlbum media type: Not supported in Playlists (Jellyfin expands to individual tracks)
+        // MusicAlbum media type: Not supported in Playlists (Emby expands to individual tracks)
         // but supported in Collections (same pattern as Series)
         public const string MusicAlbum = nameof(MusicAlbum);
 
         // Music Video Types
         public const string MusicVideo = nameof(MusicVideo);
 
-        // Home Video and Photo Types (matching Jellyfin's backend types)
+        // Home Video and Photo Types (matching Emby's backend types)
         public const string Video = nameof(Video);
         public const string Photo = nameof(Photo);
 
@@ -43,7 +43,7 @@ namespace Emby.Plugin.SmartLists.Core.Constants
         public const string AudioBook = nameof(AudioBook);
 
         // Live TV Types
-        // LiveTvChannel media type: Not supported in Playlists (Jellyfin's PlaylistManager drops any
+        // LiveTvChannel media type: Not supported in Playlists (Emby's PlaylistManager drops any
         // item whose SupportsAddingToPlaylist is false, and LiveTvChannel never overrides it) but
         // supported in Collections. Note: LiveTvChannel.GetClientTypeName() returns ItemKinds.TvChannel
         // at runtime, so the runtime type-name switches in OperandFactory/AutoRefreshService match the
@@ -51,7 +51,7 @@ namespace Emby.Plugin.SmartLists.Core.Constants
         public const string LiveTvChannel = nameof(LiveTvChannel);
 
         // Container Types
-        // Collection media type (BoxSet): Not supported in Playlists (Jellyfin playlists can only
+        // Collection media type (BoxSet): Not supported in Playlists (Emby playlists can only
         // contain media items; containers are silently dropped) but supported in Collections
         public const string Collection = nameof(Collection);
 
@@ -155,7 +155,7 @@ namespace Emby.Plugin.SmartLists.Core.Constants
 
         /// <summary>
         /// Gets container media types (Collection, Playlist) - only valid for smart collections,
-        /// never for smart playlists (Jellyfin playlists can only contain media items)
+        /// never for smart playlists (Emby playlists can only contain media items)
         /// </summary>
         public static readonly string[] ContainerTypes = [Collection, Playlist];
 

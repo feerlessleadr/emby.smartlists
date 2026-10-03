@@ -411,7 +411,7 @@ namespace Emby.Plugin.SmartLists.Core.Orders
             }
 
             // Same-day tie between episodes of different series: the series Sort Title decides.
-            // Air time is not in Jellyfin metadata (provider dates are day-precision), so users
+            // Air time is not in Emby metadata (provider dates are day-precision), so users
             // order a crossover night by editing the series' Sort Title.
             if (a is Episode epA && b is Episode epB && epA.SeriesId != epB.SeriesId)
             {
@@ -560,7 +560,7 @@ namespace Emby.Plugin.SmartLists.Core.Orders
         /// UNFILTERED pool. For regular items this matches the "Playback Status" rule semantics:
         /// Played flag unset is unwatched, so imported watch states without a timestamp count as
         /// watched and started-but-unfinished items count as unwatched. Folder items (Series and
-        /// other containers) with any aggregate watch activity count as watched instead — Jellyfin
+        /// other containers) with any aggregate watch activity count as watched instead — Emby
         /// does not reliably persist the Played flag on folder user-data rows, so a fully-watched
         /// Series would otherwise hold its group forever.
         /// </summary>
@@ -620,7 +620,7 @@ namespace Emby.Plugin.SmartLists.Core.Orders
                     var lastPlayed = aggregateLastPlayed
                         ?? LastPlayedOrderBase.GetLastPlayedDateFromUserData(userData);
 
-                    // Only fully played items advance the rotation: Jellyfin stamps LastPlayedDate
+                    // Only fully played items advance the rotation: Emby stamps LastPlayedDate
                     // on any playback, so a half-watched episode must not send its group to the
                     // back. Folder items keep the aggregate date (their Played flag is unreliable).
                     var countsForRecency = aggregateLastPlayed != null || userData?.Played == true;

@@ -31,7 +31,7 @@ namespace Emby.Plugin.SmartLists.Services.ExternalList
             "(https://listenbrainz.org/syndication-feed/user/{user}/recommendations?recommendation_type=weekly-jams).";
 
         private static readonly string UserAgent =
-            "JellyfinSmartLists/" + (typeof(ListenBrainzListProvider).Assembly.GetName().Version?.ToString() ?? "1.0")
+            "EmbySmartLists/" + (typeof(ListenBrainzListProvider).Assembly.GetName().Version?.ToString() ?? "1.0")
             + " (+https://github.com/jyourstone/jellyfin-smartlists-plugin)";
 
         private readonly IHttpClientFactory _httpClientFactory;

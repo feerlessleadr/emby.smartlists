@@ -16,7 +16,7 @@ namespace Emby.Plugin.SmartLists.Utilities;
 public static class MetadataHelper
 {
     /// <summary>
-    /// Applies custom metadata (Sort Title, Overview, Tags, Favorite) from the smart list configuration to a Jellyfin item.
+    /// Applies custom metadata (Sort Title, Overview, Tags, Favorite) from the smart list configuration to a Emby item.
     /// Called after metadata refresh to prevent providers from overwriting custom values.
     /// </summary>
     public static async Task ApplyCustomMetadataAsync(
@@ -63,7 +63,7 @@ public static class MetadataHelper
             logger.LogDebug("Set Overview for {ItemName}", item.Name);
         }
 
-        // Apply Tags. Null means SmartLists should leave existing Jellyfin tags alone;
+        // Apply Tags. Null means SmartLists should leave existing Emby tags alone;
         // an empty list is intentional and clears managed tags.
         if (dto.Tags != null)
         {
@@ -87,7 +87,7 @@ public static class MetadataHelper
             await item.UpdateToRepositoryAsync(ItemUpdateType.MetadataEdit, cancellationToken).ConfigureAwait(false);
         }
 
-        // Favorite is stored as user data in Jellyfin, so it is applied separately from item metadata.
+        // Favorite is stored as user data in Emby, so it is applied separately from item metadata.
         if (dto.Favorite.HasValue)
         {
             if (favoriteUser == null || userDataManager == null)

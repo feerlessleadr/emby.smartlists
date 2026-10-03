@@ -21,7 +21,7 @@ namespace Emby.Plugin.SmartLists.Services.ExternalList
     public partial class ScrobListProvider : IExternalListProvider
     {
         private static readonly string UserAgent =
-            "JellyfinSmartLists/" + (typeof(ScrobListProvider).Assembly.GetName().Version?.ToString() ?? "1.0")
+            "EmbySmartLists/" + (typeof(ScrobListProvider).Assembly.GetName().Version?.ToString() ?? "1.0")
             + " (+https://github.com/jyourstone/jellyfin-smartlists-plugin)";
 
         private readonly IHttpClientFactory _httpClientFactory;

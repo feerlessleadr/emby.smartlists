@@ -334,7 +334,7 @@ public class SmartListsProblemDetailsAttributeTests
     [Fact]
     public void OnResultExecuting_ControllerFromAnotherAssembly_IsNotTouched()
     {
-        var body = new { message = "A core Jellyfin error body" };
+        var body = new { message = "A core Emby error body" };
         var factory = new RecordingProblemDetailsFactory();
         // System.Object lives in System.Private.CoreLib, i.e. not the plugin assembly.
         var context = CreateContext(new ObjectResult(body) { StatusCode = 400 }, new object(), factory);

@@ -9,9 +9,9 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
     /// <summary>
     /// Identifies the smart list currently being built, so that list can be kept out of its own
     /// Collections/Playlists results (self-reference prevention).
-    /// Matching is by identity only - the SmartLists provider-ID tether, or a stored Jellyfin item
+    /// Matching is by identity only - the SmartLists provider-ID tether, or a stored Emby item
     /// id - never by name. A separate list that merely shares the name is therefore matched
-    /// normally, and renaming the Jellyfin playlist/collection does not break the exclusion.
+    /// normally, and renaming the Emby playlist/collection does not break the exclusion.
     /// </summary>
     public sealed class ListOrigin
     {
@@ -21,10 +21,10 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         /// Initializes a new instance of the <see cref="ListOrigin"/> class describing the list being built.
         /// </summary>
         /// <param name="key">The plugin's own list id. This is what the plugin writes into the
-        /// SmartLists provider-ID tether on the Jellyfin item, and it is also used as part of the
+        /// SmartLists provider-ID tether on the Emby item, and it is also used as part of the
         /// per-item extraction cache keys so origin-filtered results are never shared between lists.</param>
-        /// <param name="jellyfinItemIds">Every Jellyfin playlist/collection id belonging to this list
-        /// (an AllUsers playlist has one per user). Empty until the list has been created in Jellyfin.</param>
+        /// <param name="jellyfinItemIds">Every Emby playlist/collection id belonging to this list
+        /// (an AllUsers playlist has one per user). Empty until the list has been created in Emby.</param>
         public ListOrigin(string key, IEnumerable<long> jellyfinItemIds)
         {
             ArgumentNullException.ThrowIfNull(jellyfinItemIds);
@@ -48,7 +48,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             ArgumentNullException.ThrowIfNull(candidate);
 
             // The provider-ID tether is the authoritative identity. It is checked first because the
-            // stored Jellyfin id can be stale, and the recovery that repairs it (PlaylistService /
+            // stored Emby id can be stale, and the recovery that repairs it (PlaylistService /
             // CollectionService) runs *after* filtering - so during a recovery refresh the id set
             // alone would miss the real container and let the list see itself again.
             // Every list this plugin creates is tethered at creation.
@@ -58,7 +58,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                 return true;
             }
 
-            // Before the list exists in Jellyfin this set is empty and nothing matches, which is
+            // Before the list exists in Emby this set is empty and nothing matches, which is
             // correct: there is no container of ours yet for an item to be a member of. Matching on
             // name instead would only ever hit somebody else's identically named list.
             return _jellyfinItemIds.Contains(candidate.InternalId);

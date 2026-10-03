@@ -23,7 +23,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 /// - Relative bounds are floored to whole unix seconds, mirroring the ToUnixTimeSeconds
 ///   truncation on both sides of the per-item comparison.
 ///
-/// The GetCount/GetItemList steps need a live Jellyfin and are exercised there, not here.
+/// The GetCount/GetItemList steps need a live Emby and are exercised there, not here.
 /// </summary>
 public class LastEpisodeAirDatePrefilterResolverTests
 {

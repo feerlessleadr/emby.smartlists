@@ -83,7 +83,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
 
         // Video quality fields (from media streams)
         public string Resolution { get; set; } = string.Empty;  // e.g., 480p, 720p, 1080p, 4K, 8K
-        public string AspectRatio { get; set; } = string.Empty;  // Jellyfin display ratio, e.g., 16:9, 2.35:1, 80:29
+        public string AspectRatio { get; set; } = string.Empty;  // Emby display ratio, e.g., 16:9, 2.35:1, 80:29
         public float? Framerate { get; set; } = null;  // e.g., 23.976, 29.97, 59.94
         public string VideoCodec { get; set; } = string.Empty;  // e.g., HEVC, H264, AV1, VP9
         public string VideoProfile { get; set; } = string.Empty;  // e.g., Main 10, High
@@ -108,7 +108,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         // Production locations - countries/regions where the content was produced
         public List<string> ProductionLocations { get; set; } = [];
 
-        // Library name - the Jellyfin library this item belongs to (e.g., "Movies", "TV Shows", "Music")
+        // Library name - the Emby library this item belongs to (e.g., "Movies", "TV Shows", "Music")
         public string LibraryName { get; set; } = string.Empty;
         public IReadOnlyList<string> LibraryNames { get; set; } = [];
 

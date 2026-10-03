@@ -116,7 +116,7 @@ public class AspectRatioTests
     }
 
     [Fact]
-    public void CompileRule_RegexTargetsJellyfinRawValue()
+    public void CompileRule_RegexTargetsEmbyRawValue()
     {
         Assert.True(Compile("MatchRegex", "^[0-9]+:29$")(Item("80:29")));
         Assert.False(Compile("MatchRegex", "^2\\.76:1$")(Item("80:29")));

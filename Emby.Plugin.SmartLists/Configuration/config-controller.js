@@ -28,7 +28,7 @@ define(['baseView', 'emby-input', 'emby-button', 'emby-select', 'emby-checkbox',
     var stamp = Date.now();
     var loadPromise = null;
 
-    // The page styles are written against Jellyfin's --jf-palette-* variables. Map them onto Emby's theme variables
+    // The page styles are written against Emby's --jf-palette-* variables. Map them onto Emby's theme variables
     // (which follow the user's light/dark theme) so the existing styling keeps working.
     var THEME_STYLE_ID = 'smartlists-theme-variables';
     var THEME_CSS = [

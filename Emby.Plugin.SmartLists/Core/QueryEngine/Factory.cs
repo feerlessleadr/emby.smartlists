@@ -317,7 +317,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                 return "Unplayed";
             }
 
-            // Check Jellyfin's Played flag first (authoritative)
+            // Check Emby's Played flag first (authoritative)
             if (userData.Played)
             {
                 return "Played";
@@ -1043,7 +1043,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         }
 
         /// <summary>
-        /// Populates derived user data for aggregate items when Jellyfin has no direct UserItemData row.
+        /// Populates derived user data for aggregate items when Emby has no direct UserItemData row.
         /// </summary>
         private static void PopulateAggregateUserDataFallbacks(
             Operand operand,
@@ -1346,7 +1346,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                 }
             }
 
-            // Extract Rating. Jellyfin uses null for unrated items; 0 is a valid rating.
+            // Extract Rating. Emby uses null for unrated items; 0 is a valid rating.
             var ratingProp = userDataType.GetProperty("Rating");
             var rating = ExtractDoubleValue(ratingProp?.GetValue(userData));
             operand.RatingByUser[userId] = rating.GetValueOrDefault(-1);
@@ -1699,7 +1699,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         }
 
         /// <summary>
-        /// Extracts Jellyfin's display aspect ratio from the item's video streams.
+        /// Extracts Emby's display aspect ratio from the item's video streams.
         /// </summary>
         private static void ExtractAspectRatio(Operand operand, BaseItem baseItem, RefreshQueueServiceRefreshCache cache, ILogger? logger)
         {
@@ -2701,7 +2701,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             var includeUnwatchedSeries = options.IncludeUnwatchedSeries;
             var additionalUserIds = options.AdditionalUserIds;
 
-            // Get user data first for Jellyfin 10.11 compatibility - check cache first
+            // Get user data first - check cache first
             MediaBrowser.Controller.Entities.UserItemData? userData = null;
             string playbackStatus = "Unplayed";
 
@@ -2886,8 +2886,8 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                             catch (InvalidOperationException ex) when (ex.Message.Contains("reflection") || ex.Message.Contains("internal structure"))
                             {
                                 // This is a reflection failure, not a missing user - provide a more helpful error
-                                logger?.LogError(ex, "Failed to access user manager via reflection for user {UserId}. This may be due to a Jellyfin version compatibility issue.", userId);
-                                throw new InvalidOperationException($"Unable to access user information due to internal system changes. This plugin may need to be updated for this version of Jellyfin. Original error: {ex.Message}", ex);
+                                logger?.LogError(ex, "Failed to access user manager via reflection for user {UserId}. This may be due to a Emby version compatibility issue.", userId);
+                                throw new InvalidOperationException($"Unable to access user information due to internal system changes. This plugin may need to be updated for this version of Emby. Original error: {ex.Message}", ex);
                             }
                         }
                         else
@@ -3472,7 +3472,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                         if (seasonNum.HasValue && episodeNum.HasValue && seasonNum.Value > 0)
                         {
                             // Call IsPlayed() fresh each time to ensure real-time accuracy
-                            // Get user data for Jellyfin 10.11 compatibility
+                            // Get user data
                             var episodeUserData = userDataManager?.GetUserData(user, episode);
                             var isWatched = episodeUserData != null ? IsPlayedFor(episode, user, episodeUserData) : false;
                             episodeInfos.Add((episode, seasonNum.Value, episodeNum.Value, isWatched));
@@ -3687,8 +3687,8 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         }
 
         /// <summary>
-        /// Extracts the library name that contains this item using Jellyfin's GetCollectionFolders API.
-        /// Libraries in Jellyfin are represented as CollectionFolder items.
+        /// Extracts the library name that contains this item using Emby's GetCollectionFolders API.
+        /// Libraries in Emby are represented as CollectionFolder items.
         /// Results are cached per-item to avoid repeated API calls during playlist processing.
         /// </summary>
         /// <param name="baseItem">The item to extract library name from</param>
@@ -3817,7 +3817,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
 
         /// <summary>
         /// Extracts the playlists that a media item belongs to, with caching for performance.
-        /// Note: Playlists in Jellyfin only contain media items (not other playlists), so no recursion is needed.
+        /// Note: Playlists in Emby only contain media items (not other playlists), so no recursion is needed.
         /// </summary>
         /// <param name="baseItem">The media item to check</param>
         /// <param name="user">The user context for playlist access</param>
@@ -3853,7 +3853,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                     var allPlaylists = libraryManager.GetItemsResult(playlistQuery).Items;
 
                     // Emby's user-scoped query already returns only the playlists this user can see (their own,
-                    // shared with them, or public), so no separate owner/public filtering is needed here. (Jellyfin
+                    // shared with them, or public), so no separate owner/public filtering is needed here. (Emby
                     // returned every playlist and this code had to filter by OwnerUserId / OpenAccess by reflection.)
                     var accessiblePlaylists = new List<BaseItem>(allPlaylists.Length);
                     foreach (var playlist in allPlaylists)
@@ -4110,7 +4110,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                 }
 
                 // Treat the DateTime as UTC to ensure consistency with other date handling in the plugin
-                // This assumes Jellyfin stores dates in UTC, which is the typical behavior
+                // This assumes Emby stores dates in UTC, which is the typical behavior
                 return new DateTimeOffset(dateTime, TimeSpan.Zero).ToUnixTimeSeconds();
             }
             catch (ArgumentOutOfRangeException)
@@ -4485,7 +4485,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
 
                         case "audio languages":
                             // Reuse compatibility helper to extract audio languages via reflection-backed paths
-                            // This avoids direct GetMediaStreams() call which can fail on some BaseItem types/Jellyfin versions
+                            // This avoids direct GetMediaStreams() call which can fail on some BaseItem types/Emby versions
                             try
                             {
                                 var tempOperand = new Operand(item.Name);

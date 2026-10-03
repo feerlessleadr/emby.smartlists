@@ -133,7 +133,7 @@ public class InputValidatorTests
     [Fact]
     public void ValidateName_NulByte_IsReportedAsAControlCharacter()
     {
-        // NUL is in Jellyfin core's sanitized set too, but the control-character check catches it
+        // NUL is in Emby core's sanitized set too, but the control-character check catches it
         // first and is the only thing that rejects it here; this pins the message a caller sees.
         var result = InputValidator.ValidateName("My\0List");
 
@@ -151,10 +151,10 @@ public class InputValidatorTests
     [InlineData("Comedy|Drama")]
     [InlineData("Who? What!")]
     [InlineData("Action*")]
-    public void ValidateName_CharactersJellyfinSanitizes_AreAccepted(string name)
+    public void ValidateName_CharactersEmbySanitizes_AreAccepted(string name)
     {
         // These are DISPLAY names, not file names. This plugin's own storage is GUID-keyed
-        // (SmartListFileSystem.GetSmartListFolderPath), and the only other consumer is Jellyfin
+        // (SmartListFileSystem.GetSmartListFolderPath), and the only other consumer is Emby
         // core, which runs the name through ManagedFileSystem.GetValidFilename before building the
         // collection/playlist folder while keeping the raw name as the item's display name.
         // Rejecting them here just broke names like "Marvel: Phase One" for no gain (issue #514).

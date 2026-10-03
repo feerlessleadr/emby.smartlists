@@ -42,7 +42,7 @@ namespace Emby.Plugin.SmartLists.Core
         public RandomGroupSelectionDto? RandomGroupSelection { get; set; }
         public List<string>? SimilarityComparisonFields { get; set; }
 
-        // UserManager for resolving user-specific queries (Jellyfin 10.11+)
+        // UserManager for resolving user-specific queries
         public IUserManager UserManager { get; set; } = null!;
 
         // Item repository for the DB prefilter's ItemValues-backed name dumps; optional -
@@ -99,7 +99,7 @@ namespace Emby.Plugin.SmartLists.Core
             // DEPRECATED: dto.UserId is for backwards compatibility with old single-user playlists.
             // It is planned to be removed in version 10.12. Use UserPlaylists array instead.
             UserId = Guid.TryParse(dto.UserId, out var userId) ? userId : Guid.Empty;
-            Origin = new ListOrigin(Id, CollectJellyfinPlaylistIds(dto));
+            Origin = new ListOrigin(Id, CollectPlaylistIds(dto));
 
             // Initialize properties before calling InitializeFromDto
             Orders = [];
@@ -119,7 +119,7 @@ namespace Emby.Plugin.SmartLists.Core
             // It is planned to be removed in version 10.12. Use UserPlaylists array instead.
             // Note: Collections still use UserId for owner context (IsPlayed, IsFavorite, etc.)
             UserId = Guid.TryParse(dto.UserId, out var userId) ? userId : Guid.Empty; // Owner user for rule context (IsPlayed, IsFavorite, etc.)
-            Origin = new ListOrigin(Id, CollectJellyfinCollectionIds(dto));
+            Origin = new ListOrigin(Id, CollectCollectionIds(dto));
 
             // Initialize properties before calling InitializeFromDto
             Orders = [];
@@ -129,13 +129,13 @@ namespace Emby.Plugin.SmartLists.Core
         }
 
         /// <summary>
-        /// Every Jellyfin playlist id that IS this smart list. An AllUsers/multi-user playlist has one
-        /// Jellyfin playlist per user, and each of them is a copy of this same list, so all of them must
+        /// Every Emby playlist id that IS this smart list. An AllUsers/multi-user playlist has one
+        /// Emby playlist per user, and each of them is a copy of this same list, so all of them must
         /// be excluded from this list's own Playlists results.
         /// </summary>
-        private static IEnumerable<long> CollectJellyfinPlaylistIds(SmartPlaylistDto dto)
+        private static IEnumerable<long> CollectPlaylistIds(SmartPlaylistDto dto)
         {
-            if (long.TryParse(dto.JellyfinPlaylistId, out var legacyId) && legacyId != 0L)
+            if (long.TryParse(dto.PlaylistId, out var legacyId) && legacyId != 0L)
             {
                 yield return legacyId;
             }
@@ -144,7 +144,7 @@ namespace Emby.Plugin.SmartLists.Core
             {
                 foreach (var mapping in dto.UserPlaylists)
                 {
-                    if (long.TryParse(mapping.JellyfinPlaylistId, out var userPlaylistId) && userPlaylistId != 0L)
+                    if (long.TryParse(mapping.PlaylistId, out var userPlaylistId) && userPlaylistId != 0L)
                     {
                         yield return userPlaylistId;
                     }
@@ -153,11 +153,11 @@ namespace Emby.Plugin.SmartLists.Core
         }
 
         /// <summary>
-        /// The Jellyfin collection (BoxSet) id that IS this smart list, if it has been created yet.
+        /// The Emby collection (BoxSet) id that IS this smart list, if it has been created yet.
         /// </summary>
-        private static IEnumerable<long> CollectJellyfinCollectionIds(SmartCollectionDto dto)
+        private static IEnumerable<long> CollectCollectionIds(SmartCollectionDto dto)
         {
-            if (long.TryParse(dto.JellyfinCollectionId, out var collectionId) && collectionId != 0L)
+            if (long.TryParse(dto.CollectionId, out var collectionId) && collectionId != 0L)
             {
                 yield return collectionId;
             }
@@ -1993,7 +1993,7 @@ namespace Emby.Plugin.SmartLists.Core
 
         /// <summary>
         /// GroupIntoCollections: replaces every matched non-container item that is a direct member of
-        /// one or more Jellyfin collections with those collections; Episodes and Seasons resolve
+        /// one or more Emby collections with those collections; Episodes and Seasons resolve
         /// through their series. Items in no collection - and results that are themselves containers
         /// (matched via the Collection/Playlist media types) - pass through unchanged. Results are
         /// de-duplicated by id and no plugin-generated smart collection is ever emitted, this list's

@@ -12,7 +12,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine.Prefilters
     /// with the plugin's per-item semantics (OrdinalIgnoreCase on raw strings) would miss
     /// groups whose OTHER variants match - a false negative. These helpers instead compare
     /// on normalized forms whose granularity is chosen per use case relative to the two
-    /// server cleans (10.11: RemoveDiacritics + lowercase; Jellyfin 12: the same plus
+    /// server cleans (10.11: RemoveDiacritics + lowercase; Emby 12: the same plus
     /// punctuation stripping and whitespace collapsing).
     /// </summary>
     internal static class PrefilterValueCleaner
@@ -20,7 +20,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine.Prefilters
         /// <summary>
         /// The 10.11 server's GetCleanValue: RemoveDiacritics (the server's own
         /// implementation, so character folding matches exactly) + ToLowerInvariant.
-        /// This is the FINEST clean either ABI applies to ItemValues - Jellyfin 12's
+        /// This is the FINEST clean either ABI applies to ItemValues - Emby 12's
         /// clean only removes more - so equality on this key implies equality of the
         /// stored CleanValue on BOTH ABIs. That implication is what the studio
         /// materialization coverage check relies on.

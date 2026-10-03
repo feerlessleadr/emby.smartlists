@@ -253,7 +253,7 @@
             checkboxOutline.appendChild(checkedIcon);
             checkboxOutline.appendChild(uncheckedIcon);
 
-            // Order: checkbox, label, outline (matching Jellyfin HTML)
+            // Order: checkbox, label, outline (matching Emby HTML)
             label.appendChild(checkbox);
             label.appendChild(checkboxLabel);
             label.appendChild(checkboxOutline);

@@ -106,7 +106,7 @@ namespace Emby.Plugin.SmartLists.Services.ExternalList
         /// <returns>The max items to fetch (0 = unlimited).</returns>
         public static int ComputeFetchLimit()
         {
-            // The smart list MaxItems limit is applied after Jellyfin library filtering and sorting.
+            // The smart list MaxItems limit is applied after Emby library filtering and sorting.
             // Applying it while fetching the external list truncates membership itself: for example,
             // fetching only the first 100 Criterion spine entries can yield far fewer than 100 owned
             // movies if many early spine numbers are not in the user's library.

@@ -28,7 +28,7 @@ namespace Emby.Plugin.SmartLists.Services.ExternalList
         private readonly ILogger<LetterboxdListProvider> _logger;
 
         /// <summary>
-        /// In-memory cache of film slug → TMDB ID, persists across refreshes within the same Jellyfin session.
+        /// In-memory cache of film slug → TMDB ID, persists across refreshes within the same Emby session.
         /// Avoids re-fetching individual film pages for films already resolved.
         /// </summary>
         private static readonly ConcurrentDictionary<string, string> _slugToTmdbCache = new(StringComparer.OrdinalIgnoreCase);

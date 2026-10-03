@@ -72,12 +72,12 @@ namespace Emby.Plugin.SmartLists.Host
             (bool Success, string Message, string Id) result;
             if (string.Equals(r.Kind, "collection", StringComparison.OrdinalIgnoreCase))
             {
-                var dto = new SmartCollectionDto { JellyfinCollectionId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], SortTitle = r.SortTitle, CustomImages = images };
+                var dto = new SmartCollectionDto { CollectionId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], SortTitle = r.SortTitle, CustomImages = images };
                 result = host.CollectionService.RefreshAsync(dto, null, CancellationToken.None).GetAwaiter().GetResult();
             }
             else
             {
-                var dto = new SmartPlaylistDto { JellyfinPlaylistId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public, AllUsers = r.AllUsers, SortTitle = r.SortTitle, CustomImages = images, AutoRefresh = Enum.TryParse<Core.Enums.AutoRefreshMode>(r.AutoRefresh, true, out var arm) ? arm : Core.Enums.AutoRefreshMode.Never };
+                var dto = new SmartPlaylistDto { PlaylistId = r.ExistingId, Id = r.Id, Name = r.Name, UserId = user.Id.ToString("D"), ExpressionSets = sets, MediaTypes = [r.MediaType], Public = r.Public, AllUsers = r.AllUsers, SortTitle = r.SortTitle, CustomImages = images, AutoRefresh = Enum.TryParse<Core.Enums.AutoRefreshMode>(r.AutoRefresh, true, out var arm) ? arm : Core.Enums.AutoRefreshMode.Never };
                 if (r.AllUsers)
                 {
                     Utilities.PlaylistUserResolver.ExpandAllUsers(dto, host.UserManager);

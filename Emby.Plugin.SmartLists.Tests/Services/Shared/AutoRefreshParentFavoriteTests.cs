@@ -79,7 +79,7 @@ public class AutoRefreshParentFavoriteTests
 
     /// <summary>
     /// First-seen events have no previous state: the saves that carry favorite toggles count
-    /// (Jellyfin's MarkFavorite saves with UpdateUserRating), mark-played and playback saves don't.
+    /// (Emby's MarkFavorite saves with UpdateUserRating), mark-played and playback saves don't.
     /// </summary>
     [Fact]
     public void FavoriteMayHaveChanged_FirstSeen_CountsFavoriteCarryingSaves()
@@ -96,7 +96,7 @@ public class AutoRefreshParentFavoriteTests
 
     /// <summary>
     /// Un-favoriting an album whose earlier state was never seen (restart, state-cache eviction)
-    /// arrives as an all-empty state - containers carry no play state of their own. Jellyfin saves a
+    /// arrives as an all-empty state - containers carry no play state of their own. Emby saves a
     /// favorite toggle with UpdateUserRating, and explicit edits always count, so it is still routed.
     /// The same holds for a leaf item marked unplayed or un-favorited right after a restart.
     /// </summary>

@@ -102,7 +102,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         /// Processes a collection refresh with pre-cached media for efficient batch processing.
         /// Implements ISmartListService interface (generic method name for both playlists and collections).
         /// </summary>
-        public async Task<(bool Success, string Message, string JellyfinPlaylistId)> ProcessPlaylistRefreshWithCachedMediaAsync(
+        public async Task<(bool Success, string Message, string PlaylistId)> ProcessPlaylistRefreshWithCachedMediaAsync(
             SmartCollectionDto dto,
             User user,
             BaseItem[] allUserMedia,
@@ -219,7 +219,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         {
                 var smartCollection = new Core.SmartList(dto)
                 {
-                    UserManager = _userManager, // Set UserManager for Jellyfin 10.11+ user resolution
+                    UserManager = _userManager, // Set UserManager for user resolution
                     ItemRepository = _itemRepository, // ItemValues-backed name dumps for DB prefilters
                 };
 
@@ -319,29 +319,29 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                 _logger.LogDebug("Calculated collection stats: {ItemCount} items, {TotalRuntime} minutes total runtime",
                     dto.ItemCount, dto.TotalRuntimeMinutes);
 
-                // Try to find existing collection by Jellyfin collection ID
+                // Try to find existing collection by Emby collection ID
                 BaseItem? existingCollectionItem = null;
 
-                _logger.LogDebug("Looking for collection: JellyfinCollectionId={JellyfinCollectionId}",
-                    dto.JellyfinCollectionId);
+                _logger.LogDebug("Looking for collection: CollectionId={CollectionId}",
+                    dto.CollectionId);
 
-                // First try to find by Jellyfin collection ID (most reliable)
-                if (!string.IsNullOrEmpty(dto.JellyfinCollectionId) && long.TryParse(dto.JellyfinCollectionId, out var jellyfinCollectionId))
+                // First try to find by Emby collection ID (most reliable)
+                if (!string.IsNullOrEmpty(dto.CollectionId) && long.TryParse(dto.CollectionId, out var jellyfinCollectionId))
                 {
                     var itemById = _libraryManager.GetItemById(jellyfinCollectionId);
                     if (itemById != null && itemById.GetClientTypeName() == ItemKinds.BoxSet)
                     {
                         existingCollectionItem = itemById;
-                        _logger.LogDebug("Found existing collection by Jellyfin collection ID: {JellyfinCollectionId} - {CollectionName}",
-                            dto.JellyfinCollectionId, itemById.Name);
+                        _logger.LogDebug("Found existing collection by Emby collection ID: {CollectionId} - {CollectionName}",
+                            dto.CollectionId, itemById.Name);
                     }
                     else
                     {
-                        _logger.LogDebug("No collection found by Jellyfin collection ID: {JellyfinCollectionId}", dto.JellyfinCollectionId);
+                        _logger.LogDebug("No collection found by Emby collection ID: {CollectionId}", dto.CollectionId);
                     }
                 }
 
-                // Recovery: if the stored Jellyfin collection ID is stale (e.g. lost after a DB
+                // Recovery: if the stored Emby collection ID is stale (e.g. lost after a DB
                 // migration or restore), re-find the collection via the SmartLists provider ID
                 // stamped on it at creation. Never match by name - duplicate names are legal.
                 // Runs before the minimum-items check so that a below-threshold refresh deletes the
@@ -359,18 +359,18 @@ namespace Emby.Plugin.SmartLists.Services.Collections
 
                     if (existingCollectionItem != null)
                     {
-                        _logger.LogInformation("Recovered collection '{CollectionName}' ({CollectionId}) via SmartLists provider ID; stored Jellyfin collection ID was stale",
+                        _logger.LogInformation("Recovered collection '{CollectionName}' ({CollectionId}) via SmartLists provider ID; stored Emby collection ID was stale",
                             existingCollectionItem.Name, existingCollectionItem.Id);
-                        dto.JellyfinCollectionId = existingCollectionItem.Id.ToString("N");
+                        dto.CollectionId = existingCollectionItem.Id.ToString("N");
                     }
                 }
 
-                // Minimum items: don't keep a Jellyfin collection around while it's below the floor
+                // Minimum items: don't keep a Emby collection around while it's below the floor
                 if (dto.MinItems.GetValueOrDefault() > 0 && newItemIds.Length < dto.MinItems)
                 {
                     if (existingCollectionItem != null)
                     {
-                        _logger.LogInformation("Smart collection '{CollectionName}' matched {Count} item(s), below its minimum of {MinItems} - deleting Jellyfin collection", dto.Name, newItemIds.Length, dto.MinItems);
+                        _logger.LogInformation("Smart collection '{CollectionName}' matched {Count} item(s), below its minimum of {MinItems} - deleting Emby collection", dto.Name, newItemIds.Length, dto.MinItems);
                         _libraryManager.DeleteItem(existingCollectionItem, new DeleteOptions { DeleteFileLocation = true }, true);
 
                         // Drop it from this drain's snapshot too, so lists refreshed after this one
@@ -378,8 +378,8 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                         refreshCache.OnContainerRemoved(existingCollectionItem.InternalId);
                     }
 
-                    // Clear the stored Jellyfin collection ID so a later refresh with items recreates it
-                    dto.JellyfinCollectionId = null;
+                    // Clear the stored Emby collection ID so a later refresh with items recreates it
+                    dto.CollectionId = null;
 
                     return (true, $"Collection '{NameFormatter.FormatPlaylistName(dto.Name)}' has {newItemIds.Length} item(s), below its minimum of {dto.MinItems} - hidden", string.Empty);
                 }
@@ -456,8 +456,8 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                         return (false, $"Failed to create collection '{collectionName}' - the collection could not be retrieved after creation", string.Empty);
                     }
 
-                    // Update the DTO with the new Jellyfin collection ID
-                    dto.JellyfinCollectionId = newCollectionId;
+                    // Update the DTO with the new Emby collection ID
+                    dto.CollectionId = newCollectionId;
 
                     if (long.TryParse(newCollectionId, out var createdCollectionGuid))
                     {
@@ -484,7 +484,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         }
 
         /// <summary>
-        /// Deletes duplicate Jellyfin collections that carry this smart collection's provider-ID
+        /// Deletes duplicate Emby collections that carry this smart collection's provider-ID
         /// tether but are not the tracked collection. The tether proves the plugin created them,
         /// so deletion cannot hit user-created collections.
         /// </summary>
@@ -536,8 +536,8 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         }
 
         /// <summary>
-        /// Deletes a Jellyfin collection associated with the smart collection.
-        /// Clears the stored Jellyfin collection ID when the collection is deleted or already absent, so callers should persist the DTO afterward.
+        /// Deletes a Emby collection associated with the smart collection.
+        /// Clears the stored Emby collection ID when the collection is deleted or already absent, so callers should persist the DTO afterward.
         /// </summary>
         /// <param name="dto">The smart collection DTO.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
@@ -549,34 +549,34 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             {
                 BaseItem? existingCollection = null;
 
-                // Try to find by Jellyfin collection ID only
-                if (!string.IsNullOrEmpty(dto.JellyfinCollectionId) && long.TryParse(dto.JellyfinCollectionId, out var jellyfinCollectionId))
+                // Try to find by Emby collection ID only
+                if (!string.IsNullOrEmpty(dto.CollectionId) && long.TryParse(dto.CollectionId, out var jellyfinCollectionId))
                 {
                     var itemById = _libraryManager.GetItemById(jellyfinCollectionId);
                     if (itemById != null && itemById.GetClientTypeName() == ItemKinds.BoxSet)
                     {
                         existingCollection = itemById;
-                        _logger.LogDebug("Found collection by Jellyfin collection ID for deletion: {JellyfinCollectionId} - {CollectionName}",
-                            dto.JellyfinCollectionId, existingCollection.Name);
+                        _logger.LogDebug("Found collection by Emby collection ID for deletion: {CollectionId} - {CollectionName}",
+                            dto.CollectionId, existingCollection.Name);
                     }
                     else
                     {
-                        _logger.LogWarning("No Jellyfin collection found by ID '{JellyfinCollectionId}' for deletion. Collection may have been manually deleted.", dto.JellyfinCollectionId);
-                        dto.JellyfinCollectionId = null;
+                        _logger.LogWarning("No Emby collection found by ID '{CollectionId}' for deletion. Collection may have been manually deleted.", dto.CollectionId);
+                        dto.CollectionId = null;
                     }
                 }
                 else
                 {
-                    _logger.LogWarning("No Jellyfin collection ID available for collection '{CollectionName}'. Cannot delete Jellyfin collection.", dto.Name);
+                    _logger.LogWarning("No Emby collection ID available for collection '{CollectionName}'. Cannot delete Emby collection.", dto.Name);
                 }
 
                 if (existingCollection != null)
                 {
-                    _logger.LogInformation("Deleting Jellyfin collection '{CollectionName}' (ID: {CollectionId})",
+                    _logger.LogInformation("Deleting Emby collection '{CollectionName}' (ID: {CollectionId})",
                         existingCollection.Name, existingCollection.Id);
                     // DeleteFileLocation = true to properly delete the BoxSet entity and its metadata
                     _libraryManager.DeleteItem(existingCollection, new DeleteOptions { DeleteFileLocation = true }, true);
-                    dto.JellyfinCollectionId = null;
+                    dto.CollectionId = null;
                 }
 
                 return Task.CompletedTask;
@@ -596,24 +596,24 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             {
                 BaseItem? existingCollection = null;
 
-                // Try to find by Jellyfin collection ID only (no name fallback for suffix removal)
-                if (!string.IsNullOrEmpty(dto.JellyfinCollectionId) && long.TryParse(dto.JellyfinCollectionId, out var jellyfinCollectionId))
+                // Try to find by Emby collection ID only (no name fallback for suffix removal)
+                if (!string.IsNullOrEmpty(dto.CollectionId) && long.TryParse(dto.CollectionId, out var jellyfinCollectionId))
                 {
                     var itemById = _libraryManager.GetItemById(jellyfinCollectionId);
                     if (itemById != null && itemById.GetClientTypeName() == ItemKinds.BoxSet)
                     {
                         existingCollection = itemById;
-                        _logger.LogDebug("Found collection by Jellyfin collection ID for suffix removal: {JellyfinCollectionId} - {CollectionName}",
-                            dto.JellyfinCollectionId, existingCollection.Name);
+                        _logger.LogDebug("Found collection by Emby collection ID for suffix removal: {CollectionId} - {CollectionName}",
+                            dto.CollectionId, existingCollection.Name);
                     }
                     else
                     {
-                        _logger.LogWarning("No Jellyfin collection found by ID '{JellyfinCollectionId}' for suffix removal. Collection may have been manually deleted.", dto.JellyfinCollectionId);
+                        _logger.LogWarning("No Emby collection found by ID '{CollectionId}' for suffix removal. Collection may have been manually deleted.", dto.CollectionId);
                     }
                 }
                 else
                 {
-                    _logger.LogWarning("No Jellyfin collection ID available for collection '{CollectionName}'.", dto.Name);
+                    _logger.LogWarning("No Emby collection ID available for collection '{CollectionName}'.", dto.Name);
                 }
 
                 if (existingCollection != null)
@@ -621,8 +621,8 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                     var tether = existingCollection.GetProviderId(ProviderKeys.SmartLists);
                     if (!string.IsNullOrEmpty(tether) && !string.Equals(tether, dto.Id, StringComparison.OrdinalIgnoreCase))
                     {
-                        _logger.LogWarning("Stored ID '{JellyfinCollectionId}' points at an item tethered to a different smart list ('{CollectionName}'). Skipping.",
-                            dto.JellyfinCollectionId, existingCollection.Name);
+                        _logger.LogWarning("Stored ID '{CollectionId}' points at an item tethered to a different smart list ('{CollectionName}'). Skipping.",
+                            dto.CollectionId, existingCollection.Name);
                         existingCollection = null;
                     }
                 }
@@ -634,7 +634,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                         oldName, existingCollection.Id);
 
                     // Collection is being handed back to the user - always remove the smart list tether
-                    // and unlock it so Jellyfin's metadata fetchers work again, regardless of whether the
+                    // and unlock it so Emby's metadata fetchers work again, regardless of whether the
                     // name still matches an expected smart format, so the weekly cleanup sweep doesn't
                     // delete an item the user chose to keep.
                     existingCollection.ProviderIds?.Remove(ProviderKeys.SmartLists);
@@ -784,7 +784,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             await ApplyCustomImagesToCollectionAsync(collection, dto, cancellationToken).ConfigureAwait(false);
 
             // Only trigger auto-generation if no custom Primary AND no custom Thumb uploaded
-            // (RefreshCollectionMetadataAsync already checks for manually uploaded images in Jellyfin)
+            // (RefreshCollectionMetadataAsync already checks for manually uploaded images in Emby)
             if (!hasCustomPrimary && !hasCustomThumb)
             {
                 // Pass the member ids to ensure we use the freshly-set items rather than potentially stale cache
@@ -921,7 +921,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
 
             // Every create/refresh path funnels through here, so this is the one place that
             // guarantees smart collections stay locked and carry no stray TMDB ID. A stray
-            // TMDB ID (stamped by Jellyfin's name-matching boxset fetcher) makes the
+            // TMDB ID (stamped by Emby's name-matching boxset fetcher) makes the
             // TMDbBoxSets plugin delete the collection as "orphaned" (#433).
             metadataChanged |= collection.ProviderIds?.Remove(MetadataProviders.Tmdb.ToString()) == true;
             if (!collection.IsLocked)
@@ -931,9 +931,9 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             }
 
             // Roll up member metadata (genres, studios, rating, runtime). The lock enforced
-            // above also suppresses Jellyfin's own child aggregation, so without this smart
+            // above also suppresses Emby's own child aggregation, so without this smart
             // collections carry no genres/studios at all - invisible to rules on those fields
-            // and blank in the Jellyfin UI. Change-tracked so a no-op refresh writes nothing.
+            // and blank in the Emby UI. Change-tracked so a no-op refresh writes nothing.
             metadataChanged |= UpdateAggregateMetadata(collection, members);
 
             if (metadataChanged)
@@ -946,7 +946,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         }
 
         /// <summary>
-        /// Mirrors the child aggregation Jellyfin's provider refresh normally performs
+        /// Mirrors the child aggregation Emby's provider refresh normally performs
         /// (MetadataService.UpdateMetadataFromChildren): cumulative runtime, genres, studios,
         /// and official rating. Counterpart of PlaylistService.UpdateAggregateMetadata.
         /// Required because smart collections are metadata-locked (#433), which suppresses
@@ -1020,12 +1020,12 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         }
 
         /// <summary>
-        /// Applies custom images from the smart list configuration to the Jellyfin collection.
+        /// Applies custom images from the smart list configuration to the Emby collection.
         /// Also removes orphaned images when CustomImages are deleted.
         /// Custom images take precedence over auto-generation - auto-generation only applies
         /// when no custom Primary/Thumb images are uploaded.
         /// </summary>
-        /// <param name="collection">The Jellyfin collection item.</param>
+        /// <param name="collection">The Emby collection item.</param>
         /// <param name="dto">The smart collection DTO.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         private async Task ApplyCustomImagesToCollectionAsync(BaseItem collection, SmartCollectionDto dto, CancellationToken cancellationToken)
@@ -1080,7 +1080,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                         var destPath = Path.Combine(itemPath, destFileName);
 
                         // Copy the image to the collection folder. With the badge enabled,
-                        // covers are center-cropped to Jellyfin's tile proportions at native
+                        // covers are center-cropped to Emby's tile proportions at native
                         // resolution (Primary 2:3 poster, Thumb 16:9) and stamped - off-ratio
                         // uploads would otherwise distort the collections overview grid and
                         // could hide the corner badge. With the badge disabled, uploads are
@@ -1100,7 +1100,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
                         _logger.LogDebug("Copied custom {ImageType} image to collection: {DestPath}", imageTypeName, destPath);
 
                         // Remove same-slot files after replacement so folder.jpg and folder.jpeg cannot compete.
-                        _imageService.DeleteJellyfinImageFilesForType(itemPath, imageType, destPath, cancellationToken);
+                        _imageService.DeleteEmbyImageFilesForType(itemPath, imageType, destPath, cancellationToken);
 
                         // Remove existing images of the same type
                         imageInfos.RemoveAll(i => i.Type == imageType);
@@ -1141,7 +1141,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         /// <summary>
         /// Cleans up auto-generated collages when custom Primary/Thumb images are uploaded via SmartLists.
         /// IMPORTANT: This method does NOT delete images like folder.png, backdrop.png, etc. because
-        /// we cannot distinguish between images uploaded via SmartLists vs. images uploaded via Jellyfin UI.
+        /// we cannot distinguish between images uploaded via SmartLists vs. images uploaded via Emby UI.
         /// We only clean up files we KNOW we created (smartlist-collage.jpg, smartlist-thumb-collage.jpg).
         /// </summary>
         /// <param name="collection">The collection item.</param>
@@ -1194,11 +1194,11 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         }
 
         /// <summary>
-        /// Gets the standard Jellyfin filename for an image type.
+        /// Gets the standard Emby filename for an image type.
         /// Delegates to the shared helper in SmartListImageService.
         /// </summary>
         private static string GetImageFileName(ImageType imageType, string extension)
-            => SmartListImageService.GetJellyfinImageFileName(imageType, extension);
+            => SmartListImageService.GetEmbyImageFileName(imageType, extension);
 
         private IEnumerable<BaseItem> GetAllMedia(List<string> mediaTypes, SmartCollectionDto? dto = null, User? ownerUser = null, ConcurrentDictionary<long, long>? extraOwnerMap = null)
         {
@@ -1219,7 +1219,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
             // Excludes internal folders like live TV recordings.
             var validTopParentIds = GetLibraryTopParentIds();
 
-            // Container kinds (BoxSet/Playlist) live in Jellyfin's internal collections/playlists
+            // Container kinds (BoxSet/Playlist) live in Emby's internal collections/playlists
             // folders and Live TV channels have no library parent at all - both sit outside the
             // library TopParentIds scope, so query them separately without it
             var unscopedKinds = baseItemKinds.Where(static k => k is ItemKinds.BoxSet or ItemKinds.Playlist or ItemKinds.LiveTvChannel).ToArray();
@@ -1274,7 +1274,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         /// <param name="knownItemIds">Optional pre-fetched member ids to use instead of querying the collection.
         /// This is used when items were just added and the collection object may have stale data.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path comes from Jellyfin's internal ItemImageInfo.Path property, which is validated by Jellyfin")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path comes from Emby's internal ItemImageInfo.Path property, which is validated by Emby")]
         private async Task RefreshCollectionMetadataAsync(BaseItem collection, long[]? knownItemIds, CancellationToken cancellationToken)
         {
             // Verify this is a BoxSet using ItemKind
@@ -1371,7 +1371,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         /// <param name="knownItemIds">Optional pre-fetched member ids to use instead of querying the collection.
         /// This is used when items were just added and the collection object may have stale data.</param>
         /// <param name="cancellationToken">Cancellation token</param>
-        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path comes from Jellyfin's internal ItemImageInfo.Path property, which is validated by Jellyfin")]
+        [System.Diagnostics.CodeAnalysis.SuppressMessage("Security", "CA3003:Review code for file path injection vulnerabilities", Justification = "File path comes from Emby's internal ItemImageInfo.Path property, which is validated by Emby")]
         private async Task SetPhotoForCollection(BaseItem collection, long[]? knownItemIds, CancellationToken cancellationToken)
         {
             try
@@ -1976,7 +1976,7 @@ namespace Emby.Plugin.SmartLists.Services.Collections
 
                     // With the badge enabled, don't reference the item's own image file
                     // (stamping it would deface the item's poster) - stamp a 2:3 cropped copy
-                    // instead, matching Jellyfin's poster tiles.
+                    // instead, matching Emby's poster tiles.
                     // The smartlist-collage.jpg name keeps it classified as auto-generated.
                     if (CoverBadgeHelper.IsEnabled && !string.IsNullOrEmpty(collectionPath))
                     {

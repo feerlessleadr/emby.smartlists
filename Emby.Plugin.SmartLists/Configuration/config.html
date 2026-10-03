@@ -66,7 +66,7 @@
                             <label class="inputLabel" for="playlistName">List Name</label>
                             <input type="text" id="playlistName" class="emby-input" required
                                 placeholder="e.g., 90s Action Movies">
-                            <div class="fieldDescription">The name of the list that will be created in Jellyfin. The
+                            <div class="fieldDescription">The name of the list that will be created in Emby. The
                                 suffix/prefix provided in Settings will always be added.</div>
                         </div>
 
@@ -377,7 +377,7 @@
                                 </span>
                             </label>
                             <div class="fieldDescription">When enabled, the list will be created and updated
-                                automatically. When disabled, the list will be removed from Jellyfin.</div>
+                                automatically. When disabled, the list will be removed from Emby.</div>
                         </div>
 
                         <div class="selectContainer" style="margin-bottom: 1em;">
@@ -424,7 +424,7 @@
                                 </a>
                             </label>
                             <div id="visibility-schedules-container"></div>
-                            <div class="fieldDescription">Control when this list appears in Jellyfin. Use Enable/Disable actions to automatically show or hide the list on specific dates (e.g., show Christmas movies only in December).</div>
+                            <div class="fieldDescription">Control when this list appears in Emby. Use Enable/Disable actions to automatically show or hide the list on specific dates (e.g., show Christmas movies only in December).</div>
                         </div>
 
                             <h3 id="sharingSectionTitle" class="sectionTitle playlist-only-field" style="margin-top: 1.5em;">Sharing</h3>
@@ -466,7 +466,7 @@
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
-                            <div class="fieldDescription">Every matched item that sits in a Jellyfin collection is replaced by that collection, so the result is a collection of collections. Items that aren't in any collection are kept as-is. Only direct membership counts &mdash; nested collections are not traversed. Grouping happens before sorting and before Max Items, so the limit counts collections, not the items inside them.</div>
+                            <div class="fieldDescription">Every matched item that sits in a Emby collection is replaced by that collection, so the result is a collection of collections. Items that aren't in any collection are kept as-is. Only direct membership counts &mdash; nested collections are not traversed. Grouping happens before sorting and before Max Items, so the limit counts collections, not the items inside them.</div>
                         </div>
                         <div class="inputContainer" style="margin-bottom: 1em;">
                             <label class="inputLabel" style="display: flex; align-items: center;">
@@ -511,7 +511,7 @@
                             <div style="margin-top: 0.5em;">
                                 <label class="inputLabel" for="metadataTagsContainer">Tags</label>
                                 <div id="metadataTagsContainer"></div>
-                                <div class="fieldDescription">Set tags on the Jellyfin playlist or collection. Any existing tags will be replaced.</div>
+                                <div class="fieldDescription">Set tags on the Emby playlist or collection. Any existing tags will be replaced.</div>
                             </div>
                             <div style="margin-top: 0.5em;">
                                 <label class="inputLabel" for="metadataFavorite">Favorite</label>
@@ -907,7 +907,7 @@
                                 style="padding: 0.5em; background: var(--jf-palette-background-paper); border: 1px solid var(--jf-palette-divider); border-radius: 4px; font-family: monospace; width: 100%; box-sizing: border-box;">
                                 <span id="previewText">My Awesome List</span>
                             </div>
-                            <div class="fieldDescription">Live preview of how list names will appear in Jellyfin. You
+                            <div class="fieldDescription">Live preview of how list names will appear in Emby. You
                                 can use both prefix and suffix, or just one, or neither.</div>
                         </div>
 
@@ -940,7 +940,7 @@
                                 </label>
                                 <div class="fieldDescription">Stamps a small badge in the corner of auto-generated and
                                     uploaded cover images so smart playlists and collections are easy to spot. Note:
-                                    when enabled, covers (including uploaded ones) are cropped to Jellyfin's tile
+                                    when enabled, covers (including uploaded ones) are cropped to Emby's tile
                                     proportions (square for playlists, poster/thumb for collections) so the badge
                                     stays visible and overview grids stay uniform. When disabled, covers keep their
                                     original proportions and uploads are used untouched. Changes are applied on the
@@ -1079,7 +1079,7 @@
                                 </label>
                                 <div class="fieldDescription">
                                     When enabled, SmartLists will automatically create daily backups of all list configurations and images.
-                                    The scheduled task can be managed in Jellyfin's <a href="#!/dashboard/tasks" style="color: inherit;">Scheduled Tasks</a> page.
+                                    The scheduled task can be managed in Emby's <a href="#!/dashboard/tasks" style="color: inherit;">Scheduled Tasks</a> page.
                                 </div>
                             </div>
                         </div>
@@ -1189,7 +1189,7 @@
                                 <div class="fieldDescription">If unchecked, lists with duplicate IDs will be skipped.</div>
                             </div>
                             <div class="fieldDescription" style="margin-top: 0.75em; padding: 0.5em; border-radius: 4px;">
-                                <strong>Note:</strong> After restoring, you must refresh the lists to create them in Jellyfin.
+                                <strong>Note:</strong> After restoring, you must refresh the lists to create them in Emby.
                             </div>
                         </div>
 
@@ -1265,12 +1265,12 @@
                             <label style="display: flex; align-items: center; cursor: pointer;">
                                 <input type="checkbox" id="delete-jellyfin-playlist-checkbox" checked
                                     style="margin-right: 0.5em;">
-                                <span>Also delete the Jellyfin list</span>
+                                <span>Also delete the Emby list</span>
                             </label>
                             <div style="font-size: 0.9em; opacity: 0.6; margin-top: 0.5em; margin-bottom: 0.5em;">
-                                <strong>Unchecked:</strong> Only delete the SmartList configuration. The Jellyfin list
+                                <strong>Unchecked:</strong> Only delete the SmartList configuration. The Emby list
                                 will remain and can be managed manually.<br><br>
-                                <strong>Checked:</strong> Delete both the SmartList configuration and the Jellyfin list.
+                                <strong>Checked:</strong> Delete both the SmartList configuration and the Emby list.
                             </div>
                         </div>
                     </div>
@@ -1328,7 +1328,7 @@
                             </div>
                         </div>
                         <div style="margin-top: 1em; margin-bottom: 1em; padding: 0.5em; border-radius: 4px; font-size: 0.9em;">
-                            <strong>Note:</strong> After restoring, you must refresh the list to create it in Jellyfin.
+                            <strong>Note:</strong> After restoring, you must refresh the list to create it in Emby.
                         </div>
                     </div>
                     <div class="custom-modal-footer">

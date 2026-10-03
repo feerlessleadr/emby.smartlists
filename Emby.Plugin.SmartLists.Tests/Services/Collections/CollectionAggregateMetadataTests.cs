@@ -12,7 +12,7 @@ namespace Emby.Plugin.SmartLists.Tests.Services.Collections;
 /// Covers <see cref="CollectionService.UpdateAggregateMetadata"/> - the roll-up of member
 /// genres, studios, official rating and cumulative runtime onto a smart collection's BoxSet.
 ///
-/// Smart collections are metadata-locked by design (#433), which also suppresses Jellyfin's own
+/// Smart collections are metadata-locked by design (#433), which also suppresses Emby's own
 /// child aggregation - so unlike the PlaylistService counterpart this roll-up must run DESPITE
 /// the lock, and it must report whether anything actually changed so no-op refreshes skip the
 /// repository write.

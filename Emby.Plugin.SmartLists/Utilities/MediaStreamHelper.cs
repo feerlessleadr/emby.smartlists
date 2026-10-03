@@ -13,7 +13,7 @@ namespace Emby.Plugin.SmartLists.Utilities
     /// (<c>OperandFactory.ExtractResolution</c>) and sorting (<c>ResolutionOrder</c>).
     ///
     /// Both need the same thing - the maximum video stream height for an item, read through
-    /// reflection so it stays ABI-portable across Jellyfin versions, and served from
+    /// reflection so it stays ABI-portable across Emby versions, and served from
     /// <c>RefreshCache.MediaStreamsCache</c> so a refresh reads each item's streams once.
     /// This is the single implementation of that; neither caller re-derives it.
     /// </summary>
@@ -100,14 +100,14 @@ namespace Emby.Plugin.SmartLists.Utilities
         }
 
         /// <summary>
-        /// Gets Jellyfin's stored display aspect ratio from the first video stream that has a
+        /// Gets Emby's stored display aspect ratio from the first video stream that has a
         /// valid ratio. The stored value is authoritative because it accounts for anamorphic
         /// display metadata that cannot be reconstructed from encoded width and height alone.
         /// </summary>
         /// <param name="item">The item whose video streams should be inspected.</param>
         /// <param name="cache">Optional per-refresh media-stream cache.</param>
         /// <param name="logger">Optional logger for stream-read failures.</param>
-        /// <returns>The original Jellyfin ratio string, or an empty string when unavailable.</returns>
+        /// <returns>The original Emby ratio string, or an empty string when unavailable.</returns>
         public static string GetAspectRatio(BaseItem item, RefreshQueueService.RefreshCache? cache, ILogger? logger)
         {
             foreach (var stream in GetMediaStreams(item, cache, logger))

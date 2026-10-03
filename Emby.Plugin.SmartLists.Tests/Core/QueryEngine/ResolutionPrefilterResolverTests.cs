@@ -19,7 +19,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 /// - NotEqual, unsupported operators, and values the compiled rule would reject all stay
 ///   per-item (null window).
 ///
-/// The GetItemIds query itself needs a live Jellyfin and is exercised there, not here.
+/// The GetItemIds query itself needs a live Emby and is exercised there, not here.
 /// </summary>
 public class ResolutionPrefilterResolverTests
 {

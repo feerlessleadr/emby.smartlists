@@ -619,7 +619,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 progressCallback,
                 cancellationToken);
 
-            // The refresh wrote (or deleted) this list's Jellyfin playlist, so cached media for
+            // The refresh wrote (or deleted) this list's Emby playlist, so cached media for
             // Playlist-typed lists is now stale. Drop those entries so later container lists in
             // the same drain re-query - matching the per-refresh query the legacy include-only
             // path performed. No-op when no list uses the Playlist media type.
@@ -703,7 +703,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 progressCallback,
                 cancellationToken);
 
-            // The refresh wrote (or deleted) this list's Jellyfin collection, so cached media for
+            // The refresh wrote (or deleted) this list's Emby collection, so cached media for
             // Collection-typed lists is now stale. Drop those entries so later container lists in
             // the same drain re-query - matching the per-refresh query the legacy include-only
             // path performed. No-op when no list uses the Collection media type.
@@ -1078,7 +1078,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                         break;
                     case Audio audio:
                         // Direct parent is normally the album. Tracks nested in a sub-folder are not covered here
-                        // (Jellyfin resolved AlbumEntity for them; Emby has no equivalent).
+                        // (Emby resolved AlbumEntity for them; Emby has no equivalent).
                         ids.Add(audio.ParentId);
                         break;
                     case Season or Series or MusicAlbum:

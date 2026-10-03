@@ -28,7 +28,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 ///    exclusions and went blind to playlist/collection A.
 ///
 /// The fix also changed WHAT counts as "myself": identity only - the SmartLists provider-ID
-/// tether, or a stored Jellyfin item id - never the name. Name matching wrongly excluded an
+/// tether, or a stored Emby item id - never the name. Name matching wrongly excluded an
 /// unrelated, manually created list that merely shared the name - see
 /// <see cref="ExtractCollections_KeepsAManuallyCreatedCollectionWithTheSameName"/>.
 ///
@@ -75,7 +75,7 @@ public class ListOriginTests
     // Fixture builders
     // ---------------------------------------------------------------------------------------
 
-    /// <summary>A BoxSet - what Jellyfin calls a collection. Name before SortName, as ever.</summary>
+    /// <summary>A BoxSet - what Emby calls a collection. Name before SortName, as ever.</summary>
     private static BoxSet CollectionNamed(string name)
     {
         var boxSet = new BoxSet { Id = Guid.NewGuid(), InternalId = TestItems.NextId(), Name = name };
@@ -140,7 +140,7 @@ public class ListOriginTests
 
     /// <summary>
     /// The name-collision half of the ID-based design. The origin here is a smart PLAYLIST named
-    /// "Movies" that has already been created in Jellyfin, so it has an id - and that id is not
+    /// "Movies" that has already been created in Emby, so it has an id - and that id is not
     /// the BoxSet's. Under the old base-name comparison (what ExtractPlaylists used to do) the
     /// BoxSet would be excluded purely because "Movies [Smart]" strips to "Movies", silently
     /// hiding a collection the user never asked to hide.
@@ -154,7 +154,7 @@ public class ListOriginTests
         var cache = new RefreshQueueService.RefreshCache();
         SeedCollection(cache, boxSet, movie);
 
-        // Same base name, different Jellyfin item - a smart playlist, not this collection.
+        // Same base name, different Emby item - a smart playlist, not this collection.
         var origin = new ListOrigin("pl-1", [TestItems.NextId()]);
 
         Assert.Equal(["Movies [Smart]"], ExtractCollections(movie, cache, depth: 1, origin));
@@ -272,9 +272,9 @@ public class ListOriginTests
     // ---------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Identity is the whole rule: the SmartLists provider-ID tether, or a stored Jellyfin item id.
+    /// Identity is the whole rule: the SmartLists provider-ID tether, or a stored Emby item id.
     /// A name is never consulted, so an identically named container belonging to somebody else is
-    /// always visible - including before this list has been created in Jellyfin, when the id set is
+    /// always visible - including before this list has been created in Emby, when the id set is
     /// still empty and there is no container of ours for an item to be a member of anyway.
     /// </summary>
     [Fact]
@@ -288,7 +288,7 @@ public class ListOriginTests
     }
 
     /// <summary>
-    /// The SmartLists provider-ID tether identifies the list even when the stored Jellyfin id has
+    /// The SmartLists provider-ID tether identifies the list even when the stored Emby id has
     /// gone stale. This matters because the recovery that repairs a stale id runs AFTER filtering
     /// (PlaylistService.ProcessPlaylistRefreshAsync filters at ~line 177 and recovers at ~line 263;
     /// CollectionService filters at ~line 252 and recovers at ~line 341), so on a recovery refresh
@@ -345,7 +345,7 @@ public class ListOriginTests
         var cache = new RefreshQueueService.RefreshCache();
         SeedCollection(cache, boxSet, movie);
 
-        // No JellyfinPlaylistId and no tether: the playlist has never been created, so this origin
+        // No PlaylistId and no tether: the playlist has never been created, so this origin
         // has no identity at all and must not reach across to the same-named collection.
         var list = new SmartList(new SmartPlaylistDto { Id = "pl-1", Name = "Marvel" });
 
@@ -353,11 +353,11 @@ public class ListOriginTests
     }
 
     // ---------------------------------------------------------------------------------------
-    // SmartList carries the Jellyfin ids into the origin
+    // SmartList carries the Emby ids into the origin
     // ---------------------------------------------------------------------------------------
 
     /// <summary>
-    /// An AllUsers playlist is ONE smart list rendered as one Jellyfin playlist PER USER, each
+    /// An AllUsers playlist is ONE smart list rendered as one Emby playlist PER USER, each
     /// with its own id in <c>UserPlaylists</c> (plus the legacy top-level id). A single scalar
     /// origin id would exclude one user's copy and leave every other user's copy visible to the
     /// list's own Playlists rules, so the origin has to carry the whole set.
@@ -367,7 +367,7 @@ public class ListOriginTests
     /// is the same self-reference bug wearing a different id.
     /// </summary>
     [Fact]
-    public void SmartList_Origin_CoversEveryJellyfinIdOfAnAllUsersPlaylist()
+    public void SmartList_Origin_CoversEveryEmbyIdOfAnAllUsersPlaylist()
     {
         var legacyId = TestItems.NextId();
         var firstUserId = TestItems.NextId();
@@ -378,11 +378,11 @@ public class ListOriginTests
             Id = "pl-1",
             Name = "Movies",
             AllUsers = true,
-            JellyfinPlaylistId = legacyId.ToString(),
+            PlaylistId = legacyId.ToString(),
             UserPlaylists =
             [
-                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u1", JellyfinPlaylistId = firstUserId.ToString() },
-                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u2", JellyfinPlaylistId = secondUserId.ToString() },
+                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u1", PlaylistId = firstUserId.ToString() },
+                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u2", PlaylistId = secondUserId.ToString() },
             ],
         });
 
@@ -418,8 +418,8 @@ public class ListOriginTests
             AllUsers = true,
             UserPlaylists =
             [
-                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u1", JellyfinPlaylistId = firstCopy.InternalId.ToString() },
-                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u2", JellyfinPlaylistId = secondCopy.InternalId.ToString() },
+                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u1", PlaylistId = firstCopy.InternalId.ToString() },
+                new SmartPlaylistDto.UserPlaylistMapping { UserId = "u2", PlaylistId = secondCopy.InternalId.ToString() },
             ],
         });
 
@@ -433,7 +433,7 @@ public class ListOriginTests
     /// moment the collection is created, including when the stored id later goes stale.
     /// </summary>
     [Fact]
-    public void SmartList_Origin_UsesTheJellyfinCollectionId()
+    public void SmartList_Origin_UsesTheCollectionId()
     {
         var boxSet = CollectionNamed("Movies [Smart]");
 
@@ -441,7 +441,7 @@ public class ListOriginTests
         {
             Id = "col-1",
             Name = "Movies",
-            JellyfinCollectionId = boxSet.InternalId.ToString(),
+            CollectionId = boxSet.InternalId.ToString(),
         });
 
         Assert.True(created.Origin.Matches(boxSet));

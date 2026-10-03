@@ -216,7 +216,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
             }
 
             // Check if user has the "Allow this user to manage collections" permission
-            // Uses the HasPermission extension method from Jellyfin.Extensions
+            // Uses the HasPermission extension method from Emby.Extensions
             return user.HasPermission(PermissionKind.EnableCollectionManagement);
         }
 
@@ -298,7 +298,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     new SmartPlaylistDto.UserPlaylistMapping
                     {
                         UserId = userId.ToString("N"),
-                        JellyfinPlaylistId = null
+                        PlaylistId = null
                     }
                 ];
 
@@ -331,7 +331,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
 
                     var collectionStore = _collectionStore;
 
-                    // Check for duplicate collection names (Jellyfin doesn't allow collections with the same name)
+                    // Check for duplicate collection names (Emby doesn't allow collections with the same name)
                     var formattedName = Utilities.NameFormatter.FormatPlaylistName(collectionDto.Name);
                     var duplicateCollection = await Utilities.CollectionNameConflict.FindAsync(collectionStore, formattedName, collectionDto.Id).ConfigureAwait(false);
                     
@@ -354,7 +354,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     // Clear the rule cache
                     SmartList.ClearRuleCache(_logger);
 
-                    // Enqueue refresh operation to actually create the Jellyfin collection
+                    // Enqueue refresh operation to actually create the Emby collection
                     if (createdCollection.Enabled)
                     {
                         _logger.LogDebug("Enqueuing refresh for newly created collection {CollectionName}", createdCollection.Name);
@@ -393,7 +393,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     // Clear the rule cache
                     SmartList.ClearRuleCache(_logger);
 
-                    // Enqueue refresh operation to actually create the Jellyfin playlist
+                    // Enqueue refresh operation to actually create the Emby playlist
                     if (createdPlaylist.Enabled)
                     {
                         _logger.LogDebug("Enqueuing refresh for newly created playlist {PlaylistName}", createdPlaylist.Name);
@@ -646,7 +646,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         new SmartPlaylistDto.UserPlaylistMapping
                         {
                             UserId = userId.ToString("N"),
-                            JellyfinPlaylistId = null
+                            PlaylistId = null
                         }
                     ]
                 };
@@ -670,7 +670,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 // Clear the rule cache
                 SmartList.ClearRuleCache(_logger);
 
-                // Enqueue refresh operation to actually create the Jellyfin playlist
+                // Enqueue refresh operation to actually create the Emby playlist
                 if (smartPlaylistDto.Enabled)
                 {
                     _logger.LogDebug("Enqueuing refresh for newly created playlist {PlaylistName}", smartPlaylistDto.Name);
@@ -956,7 +956,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         catch (Exception ex)
                         {
                             playlist.Enabled = originalEnabledState;
-                            _logger.LogError(ex, "Failed to enable Jellyfin playlist for {PlaylistId} - {PlaylistName}", id, playlist.Name);
+                            _logger.LogError(ex, "Failed to enable Emby playlist for {PlaylistId} - {PlaylistName}", id, playlist.Name);
                             throw;
                         }
                     },
@@ -987,7 +987,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         catch (Exception ex)
                         {
                             collection.Enabled = originalEnabledState;
-                            _logger.LogError(ex, "Failed to enable Jellyfin collection for {CollectionId} - {CollectionName}", id, collection.Name);
+                            _logger.LogError(ex, "Failed to enable Emby collection for {CollectionId} - {CollectionName}", id, collection.Name);
                             throw;
                         }
                     });
@@ -1026,7 +1026,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                             var playlistService = _playlistService;
                             // The service clears the IDs of successfully deleted playlists on the
                             // DTO; failed deletions keep their ID so deletion can be retried later
-                            await playlistService.DeleteAllJellyfinPlaylistsForUsersAsync(playlist);
+                            await playlistService.DeleteAllEmbyPlaylistsForUsersAsync(playlist);
 
                             await playlistStore.SaveAsync(playlist);
                             Services.Shared.AutoRefreshService.Instance?.UpdatePlaylistInCache(playlist);
@@ -1037,7 +1037,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         catch (Exception ex)
                         {
                             playlist.Enabled = originalEnabledState;
-                            _logger.LogError(ex, "Failed to disable Jellyfin playlist for {PlaylistId} - {PlaylistName}", id, playlist.Name);
+                            _logger.LogError(ex, "Failed to disable Emby playlist for {PlaylistId} - {PlaylistName}", id, playlist.Name);
                             throw;
                         }
                     },
@@ -1049,7 +1049,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
 
                         try
                         {
-                            // DisableAsync (via DeleteAsync) clears the ID if the Jellyfin collection
+                            // DisableAsync (via DeleteAsync) clears the ID if the Emby collection
                             // is gone; a failed deletion keeps it so deletion can be retried later
                             var collectionService = _collectionService;
                             await collectionService.DisableAsync(collection);
@@ -1063,7 +1063,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         catch (Exception ex)
                         {
                             collection.Enabled = originalEnabledState;
-                            _logger.LogError(ex, "Failed to disable Jellyfin collection for {CollectionId} - {CollectionName}", id, collection.Name);
+                            _logger.LogError(ex, "Failed to disable Emby collection for {CollectionId} - {CollectionName}", id, collection.Name);
                             throw;
                         }
                     });
@@ -1265,7 +1265,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         return BadRequest(new { error = validationResult.ErrorMessage });
                     }
 
-                    // Check for duplicate collection names (Jellyfin doesn't allow collections with the same name)
+                    // Check for duplicate collection names (Emby doesn't allow collections with the same name)
                     // Only check if the name is changing
                     bool nameChanging = !string.Equals(existingCollection.Name, collectionDto.Name, StringComparison.OrdinalIgnoreCase);
                     if (nameChanging)
@@ -1325,10 +1325,10 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
         /// Delete a smart list (playlist or collection) for the current user.
         /// </summary>
         /// <param name="id">The list ID.</param>
-        /// <param name="deleteJellyfinList">Whether to delete the actual Jellyfin list or just the configuration.</param>
+        /// <param name="deleteEmbyList">Whether to delete the actual Emby list or just the configuration.</param>
         /// <returns>No content on success.</returns>
         [HttpDelete("{id}")]
-        public async Task<ActionResult> DeleteSmartList([FromRoute, Required] string id, [FromQuery] bool deleteJellyfinList = true)
+        public async Task<ActionResult> DeleteSmartList([FromRoute, Required] string id, [FromQuery] bool deleteEmbyList = true)
         {
             // Check if user page is enabled
             var accessCheck = CheckUserPageAccess();
@@ -1362,10 +1362,10 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         return Forbid();
                     }
 
-                    if (deleteJellyfinList)
+                    if (deleteEmbyList)
                     {
                         var playlistService = _playlistService;
-                        await playlistService.DeleteAllJellyfinPlaylistsForUsersAsync(playlist);
+                        await playlistService.DeleteAllEmbyPlaylistsForUsersAsync(playlist);
                         _logger.LogInformation("Deleted smart playlist: {PlaylistName}", playlist.Name);
                     }
 
@@ -1398,7 +1398,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     }
 
                     var collectionService = _collectionService;
-                    if (deleteJellyfinList)
+                    if (deleteEmbyList)
                     {
                         await collectionService.DeleteAsync(collection);
                         _logger.LogInformation("Deleted smart collection: {CollectionName}", collection.Name);
@@ -1579,7 +1579,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
             var collectionDto = list as SmartCollectionDto ?? DtoMapper.ToCollectionDto(list);
             collectionDto.Id = id;
             collectionDto.FileName = existingPlaylist.FileName;
-            collectionDto.JellyfinCollectionId = null;
+            collectionDto.CollectionId = null;
             collectionDto.Type = Core.Enums.SmartListType.Collection;
             
             // Set owner to current user (they're converting their own playlist)
@@ -1643,21 +1643,21 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to save collection. Original playlist was not modified." });
             }
             
-            // Delete old Jellyfin playlists
+            // Delete old Emby playlists
             // Note: We don't call playlistStore.DeleteAsync() because SaveAsync already overwrote the config file
             // (both stores use the same folder structure: /smartlists/{guid}/config.json)
             try
             {
-                await _playlistService.DeleteAllJellyfinPlaylistsForUsersAsync(existingPlaylist).ConfigureAwait(false);
+                await _playlistService.DeleteAllEmbyPlaylistsForUsersAsync(existingPlaylist).ConfigureAwait(false);
             }
             catch (Exception deleteEx)
             {
-                // Log but don't fail - the conversion itself succeeded, just cleanup of old Jellyfin playlists failed
-                _logger.LogWarning(deleteEx, "Failed to delete old Jellyfin playlists during conversion for user {UserId}, list '{Name}'. Collection was created successfully.",
+                // Log but don't fail - the conversion itself succeeded, just cleanup of old Emby playlists failed
+                _logger.LogWarning(deleteEx, "Failed to delete old Emby playlists during conversion for user {UserId}, list '{Name}'. Collection was created successfully.",
                     userId.ToString(), collectionDto.Name);
             }
 
-            // Always remove from playlist cache - the smart list is now a collection regardless of Jellyfin cleanup status
+            // Always remove from playlist cache - the smart list is now a collection regardless of Emby cleanup status
             Services.Shared.AutoRefreshService.Instance?.RemovePlaylistFromCache(guidId.ToString("D"));
 
             // Enqueue refresh if enabled
@@ -1701,7 +1701,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
             var playlistDto = list as SmartPlaylistDto ?? DtoMapper.ToPlaylistDto(list);
             playlistDto.Id = id;
             playlistDto.FileName = existingCollection.FileName;
-            playlistDto.JellyfinPlaylistId = null;
+            playlistDto.PlaylistId = null;
             playlistDto.Type = Core.Enums.SmartListType.Playlist;
             
             // Set up UserPlaylists for current user
@@ -1710,7 +1710,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 new SmartPlaylistDto.UserPlaylistMapping
                 {
                     UserId = normalizedUserId,
-                    JellyfinPlaylistId = null
+                    PlaylistId = null
                 }
             ];
             playlistDto.UserId = normalizedUserId; // For backwards compatibility
@@ -1756,7 +1756,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 return StatusCode(StatusCodes.Status500InternalServerError, new { error = "Failed to save playlist. Original collection was not modified." });
             }
             
-            // Delete old Jellyfin collection
+            // Delete old Emby collection
             // Note: We don't call collectionStore.DeleteAsync() because SaveAsync already overwrote the config file
             // (both stores use the same folder structure: /smartlists/{guid}/config.json)
             try
@@ -1765,12 +1765,12 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
             }
             catch (Exception deleteEx)
             {
-                // Log but don't fail - the conversion itself succeeded, just cleanup of old Jellyfin collection failed
-                _logger.LogWarning(deleteEx, "Failed to delete old Jellyfin collection during conversion for user {UserId}, list '{Name}'. Playlist was created successfully.",
+                // Log but don't fail - the conversion itself succeeded, just cleanup of old Emby collection failed
+                _logger.LogWarning(deleteEx, "Failed to delete old Emby collection during conversion for user {UserId}, list '{Name}'. Playlist was created successfully.",
                     userId.ToString(), playlistDto.Name);
             }
 
-            // Always remove from collection cache - the smart list is now a playlist regardless of Jellyfin cleanup status
+            // Always remove from collection cache - the smart list is now a playlist regardless of Emby cleanup status
             Services.Shared.AutoRefreshService.Instance?.RemoveCollectionFromCache(guidId.ToString("D"));
 
             // Enqueue refresh if enabled
@@ -1910,7 +1910,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     await _playlistStore.SaveAsync(playlist);
                     Services.Shared.AutoRefreshService.Instance?.UpdatePlaylistInCache(playlist);
 
-                    // Enqueue a refresh to apply the custom image to the Jellyfin playlist
+                    // Enqueue a refresh to apply the custom image to the Emby playlist
                     EnqueueRefreshOperation(normalizedId, playlist.Name, SmartListType.Playlist, playlist, normalizedUserId);
                 }
                 else if (collection != null)
@@ -1918,7 +1918,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     await _collectionStore.SaveAsync(collection);
                     Services.Shared.AutoRefreshService.Instance?.UpdateCollectionInCache(collection);
 
-                    // Enqueue a refresh to apply the custom image to the Jellyfin collection
+                    // Enqueue a refresh to apply the custom image to the Emby collection
                     EnqueueRefreshOperation(normalizedId, collection.Name, SmartListType.Collection, collection, normalizedUserId);
                 }
 
@@ -2007,8 +2007,8 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 // Delete the image file using normalized ID
                 await _imageService.DeleteImageAsync(normalizedId, imageType);
 
-                // Also delete from Jellyfin playlist/collection folder
-                // This is an explicit delete action, so we should remove the image from Jellyfin too
+                // Also delete from Emby playlist/collection folder
+                // This is an explicit delete action, so we should remove the image from Emby too
                 // For playlists, we need to delete from ALL user playlists (multi-user format) or the single playlist (legacy format)
                 var smartList = (SmartListDto?)playlist ?? collection;
                 var jellyfinItemsToUpdate = new List<MediaBrowser.Controller.Entities.BaseItem>();
@@ -2016,10 +2016,10 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 if (smartList is SmartPlaylistDto playlistDto)
                 {
                     // Check legacy single-user format first
-                    if (!string.IsNullOrEmpty(playlistDto.JellyfinPlaylistId) &&
-                        Guid.TryParse(playlistDto.JellyfinPlaylistId, out var playlistJellyfinId))
+                    if (!string.IsNullOrEmpty(playlistDto.PlaylistId) &&
+                        Guid.TryParse(playlistDto.PlaylistId, out var playlistEmbyId))
                     {
-                        var item = _libraryManager.GetItemById(playlistJellyfinId);
+                        var item = _libraryManager.GetItemById(playlistEmbyId);
                         if (item != null)
                         {
                             jellyfinItemsToUpdate.Add(item);
@@ -2031,10 +2031,10 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                     {
                         foreach (var userPlaylist in playlistDto.UserPlaylists)
                         {
-                            if (!string.IsNullOrEmpty(userPlaylist.JellyfinPlaylistId) &&
-                                Guid.TryParse(userPlaylist.JellyfinPlaylistId, out var userJellyfinId))
+                            if (!string.IsNullOrEmpty(userPlaylist.PlaylistId) &&
+                                Guid.TryParse(userPlaylist.PlaylistId, out var userEmbyId))
                             {
-                                var item = _libraryManager.GetItemById(userJellyfinId);
+                                var item = _libraryManager.GetItemById(userEmbyId);
                                 if (item != null && !jellyfinItemsToUpdate.Contains(item))
                                 {
                                     jellyfinItemsToUpdate.Add(item);
@@ -2045,10 +2045,10 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 }
                 else if (smartList is SmartCollectionDto collectionDto)
                 {
-                    if (!string.IsNullOrEmpty(collectionDto.JellyfinCollectionId) &&
-                        Guid.TryParse(collectionDto.JellyfinCollectionId, out var collectionJellyfinId))
+                    if (!string.IsNullOrEmpty(collectionDto.CollectionId) &&
+                        Guid.TryParse(collectionDto.CollectionId, out var collectionEmbyId))
                     {
-                        var item = _libraryManager.GetItemById(collectionJellyfinId);
+                        var item = _libraryManager.GetItemById(collectionEmbyId);
                         if (item != null)
                         {
                             jellyfinItemsToUpdate.Add(item);
@@ -2058,7 +2058,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
 
                 foreach (var jellyfinItem in jellyfinItemsToUpdate)
                 {
-                    await _imageService.DeleteImageFromJellyfinItemAsync(jellyfinItem, imageType);
+                    await _imageService.DeleteImageFromEmbyItemAsync(jellyfinItem, imageType);
                 }
 
                 // Update the smart list's CustomImages
@@ -2070,7 +2070,7 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                         smartList.CustomImages = null;
                     }
 
-                    // Save the updated DTO - the next refresh will clean up orphaned images from Jellyfin
+                    // Save the updated DTO - the next refresh will clean up orphaned images from Emby
                     if (playlist != null)
                     {
                         await _playlistStore.SaveAsync(playlist);
@@ -2232,8 +2232,8 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
     {
         public static Guid GetUserId(this System.Security.Claims.ClaimsPrincipal user)
         {
-            // Jellyfin uses the "Jellyfin-UserId" claim for authenticated users
-            var userIdClaim = user.FindFirst("Jellyfin-UserId");
+            // Emby uses the "Emby-UserId" claim for authenticated users
+            var userIdClaim = user.FindFirst("Emby-UserId");
             if (userIdClaim != null && Guid.TryParse(userIdClaim.Value, out var userId))
             {
                 return userId;

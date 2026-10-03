@@ -30,7 +30,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         private string LegacyImagesBasePath { get; }
 
         /// <summary>
-        /// Allowed image extensions (matching Jellyfin's supported formats).
+        /// Allowed image extensions (matching Emby's supported formats).
         /// </summary>
         private static readonly string[] SupportedImageExtensions =
         {
@@ -171,7 +171,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             // Note: Don't clean up empty directory here - keep it as a marker that this smart list
             // has/had managed images. This allows RemoveOrphanedCustomImages to clean up
-            // Jellyfin images on the next refresh. The folder will be deleted when the smart list itself is deleted.
+            // Emby images on the next refresh. The folder will be deleted when the smart list itself is deleted.
 
             return Task.CompletedTask;
         }
@@ -407,7 +407,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 return (false, $"Invalid file type. Allowed: {string.Join(", ", AllowedExtensions)}");
             }
 
-            // Check content type if provided (matching Jellyfin's supported image MIME types)
+            // Check content type if provided (matching Emby's supported image MIME types)
             if (!string.IsNullOrEmpty(contentType))
             {
                 var validContentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
@@ -462,18 +462,18 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Gets the standard Jellyfin filename for an image type.
+        /// Gets the standard Emby filename for an image type.
         /// This is a shared helper to avoid duplication between PlaylistService and CollectionService.
         /// </summary>
-        /// <param name="imageType">The Jellyfin image type.</param>
+        /// <param name="imageType">The Emby image type.</param>
         /// <param name="extension">The file extension (e.g., ".jpg").</param>
         /// <returns>The standard filename for the image type.</returns>
-        public static string GetJellyfinImageFileName(MediaBrowser.Model.Entities.ImageType imageType, string extension)
+        public static string GetEmbyImageFileName(MediaBrowser.Model.Entities.ImageType imageType, string extension)
         {
-            return GetJellyfinImageFileNameCore(imageType, NormalizeJellyfinImageExtension(extension));
+            return GetEmbyImageFileNameCore(imageType, NormalizeEmbyImageExtension(extension));
         }
 
-        private static string GetJellyfinImageFileNameCore(MediaBrowser.Model.Entities.ImageType imageType, string extension)
+        private static string GetEmbyImageFileNameCore(MediaBrowser.Model.Entities.ImageType imageType, string extension)
         {
             return imageType switch
             {
@@ -492,13 +492,13 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Normalizes aliases that Jellyfin commonly treats as the same image format.
+        /// Normalizes aliases that Emby commonly treats as the same image format.
         /// Keeping the collection/playlist side canonical avoids folder.jpg and folder.jpeg
         /// competing for the same image slot during later scans.
         /// </summary>
         /// <param name="extension">The file extension.</param>
-        /// <returns>The normalized extension for Jellyfin item folders.</returns>
-        public static string NormalizeJellyfinImageExtension(string extension)
+        /// <returns>The normalized extension for Emby item folders.</returns>
+        public static string NormalizeEmbyImageExtension(string extension)
         {
             return extension.Equals(".jpeg", StringComparison.OrdinalIgnoreCase) ? ".jpg" : extension;
         }
@@ -509,14 +509,14 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         public static readonly string[] ImageFileExtensions = SupportedImageExtensions;
 
         /// <summary>
-        /// Deletes standard Jellyfin image files for an image type from an item folder.
+        /// Deletes standard Emby image files for an image type from an item folder.
         /// </summary>
-        /// <param name="itemPath">The Jellyfin item folder path.</param>
+        /// <param name="itemPath">The Emby item folder path.</param>
         /// <param name="imageType">The image type to delete.</param>
         /// <param name="pathToKeep">Optional path that should not be deleted.</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>True if any files were deleted.</returns>
-        public bool DeleteJellyfinImageFilesForType(
+        public bool DeleteEmbyImageFilesForType(
             string itemPath,
             MediaBrowser.Model.Entities.ImageType imageType,
             string? pathToKeep = null,
@@ -529,7 +529,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
             var removedAny = false;
             var candidatePaths = ImageFileExtensions
-                .Select(ext => Path.Combine(itemPath, GetJellyfinImageFileNameCore(imageType, ext)))
+                .Select(ext => Path.Combine(itemPath, GetEmbyImageFileNameCore(imageType, ext)))
                 .Distinct(StringComparer.OrdinalIgnoreCase);
 
             foreach (var filePath in candidatePaths)
@@ -550,7 +550,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 {
                     File.Delete(filePath);
                     removedAny = true;
-                    _logger.LogDebug("Deleted existing {ImageType} image file from Jellyfin item folder: {FilePath}", imageType, filePath);
+                    _logger.LogDebug("Deleted existing {ImageType} image file from Emby item folder: {FilePath}", imageType, filePath);
                 }
                 catch (Exception ex)
                 {
@@ -562,14 +562,14 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         }
 
         /// <summary>
-        /// Deletes an image from a Jellyfin item's folder (playlist or collection).
+        /// Deletes an image from a Emby item's folder (playlist or collection).
         /// This is called when a user explicitly deletes an image through the SmartLists API.
         /// </summary>
-        /// <param name="jellyfinItem">The Jellyfin BaseItem (playlist or collection).</param>
+        /// <param name="jellyfinItem">The Emby BaseItem (playlist or collection).</param>
         /// <param name="imageType">The image type to delete (e.g., "Primary", "Backdrop").</param>
         /// <param name="cancellationToken">Cancellation token.</param>
         /// <returns>Task representing the async operation.</returns>
-        public async Task DeleteImageFromJellyfinItemAsync(
+        public async Task DeleteImageFromEmbyItemAsync(
             MediaBrowser.Controller.Entities.BaseItem jellyfinItem,
             string imageType,
             CancellationToken cancellationToken = default)
@@ -584,7 +584,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 // Parse the image type
                 if (!Enum.TryParse<MediaBrowser.Model.Entities.ImageType>(imageType, ignoreCase: true, out var jellyfinImageType))
                 {
-                    _logger.LogWarning("Invalid image type for Jellyfin deletion: {ImageType}", imageType);
+                    _logger.LogWarning("Invalid image type for Emby deletion: {ImageType}", imageType);
                     return;
                 }
 
@@ -607,7 +607,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                             try
                             {
                                 File.Delete(actualImagePath);
-                                _logger.LogDebug("Deleted {ImageType} image from Jellyfin item: {FilePath}", imageType, actualImagePath);
+                                _logger.LogDebug("Deleted {ImageType} image from Emby item: {FilePath}", imageType, actualImagePath);
                             }
                             catch (Exception ex)
                             {
@@ -620,7 +620,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                         await jellyfinItem.UpdateToRepositoryAsync(
                             MediaBrowser.Controller.Library.ItemUpdateType.ImageUpdate,
                             cancellationToken).ConfigureAwait(false);
-                        _logger.LogDebug("Removed {ImageType} from Jellyfin item ImageInfos", imageType);
+                        _logger.LogDebug("Removed {ImageType} from Emby item ImageInfos", imageType);
                     }
                 }
 
@@ -628,7 +628,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 var itemPath = jellyfinItem.GetItemImageFolder();
                 if (itemPath != null)
                 {
-                    DeleteJellyfinImageFilesForType(itemPath, jellyfinImageType, actualImagePath, cancellationToken);
+                    DeleteEmbyImageFilesForType(itemPath, jellyfinImageType, actualImagePath, cancellationToken);
                 }
             }
             catch (OperationCanceledException)
@@ -637,7 +637,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to delete image from Jellyfin item {ItemName}", jellyfinItem.Name);
+                _logger.LogError(ex, "Failed to delete image from Emby item {ItemName}", jellyfinItem.Name);
             }
         }
     }

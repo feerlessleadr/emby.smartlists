@@ -25,7 +25,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 ///   implies StudioIds-join reachability on both). A matching name without one means the
 ///   per-item path could match items no StudioIds query can reach - fall back.
 ///
-/// The two-query ancestor expansion and the CollectionFolder guard need a live Jellyfin
+/// The two-query ancestor expansion and the CollectionFolder guard need a live Emby
 /// and are exercised there, not here.
 /// </summary>
 public class ParentValuesPrefilterResolverTests
@@ -98,7 +98,7 @@ public class ParentValuesPrefilterResolverTests
     [Fact]
     public void Equal_MatchesPunctuationVariantRepresentative()
     {
-        // Jellyfin 12's clean also collapses punctuation, so "Sci-Fi" and "Sci Fi" share
+        // Emby 12's clean also collapses punctuation, so "Sci-Fi" and "Sci Fi" share
         // one group there and either spelling can be the dumped representative.
         var matched = ParentValuesPrefilterResolver.ResolveMatchingNames(["Sci Fi"], "Equal", "Sci-Fi");
 
@@ -241,7 +241,7 @@ public class ParentValuesPrefilterResolverTests
     public void Studios_PunctuationVariantIsNotAssumedCovered()
     {
         // CleanValue keeps punctuation (the 10.11 clean, the finest either ABI applies):
-        // "Sci-Fi" vs "Sci Fi" may share a group on Jellyfin 12 but not on 10.11, so
+        // "Sci-Fi" vs "Sci Fi" may share a group on Emby 12 but not on 10.11, so
         // coverage cannot be claimed and the rule must stay per-item.
         var ids = ParentValuesPrefilterResolver.ResolveStudioIds(
             ["Sci-Fi"],

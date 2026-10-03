@@ -33,7 +33,7 @@ namespace Emby.Plugin.SmartLists.Utilities
         private const int JpegQuality = 90;
 
         /// <summary>
-        /// Gets the Jellyfin tile aspect ratio covers are cropped to for an image type:
+        /// Gets the Emby tile aspect ratio covers are cropped to for an image type:
         /// playlists use square Primary tiles, collections 2:3 poster tiles; Thumb tiles
         /// are 16:9 for both. Single policy point - the upload paths and the generated-cover
         /// paths must stay in lockstep.
@@ -42,13 +42,13 @@ namespace Emby.Plugin.SmartLists.Utilities
             => imageType == MediaBrowser.Model.Entities.ImageType.Thumb ? (16, 9) : forPlaylist ? (1, 1) : (2, 3);
 
         /// <summary>
-        /// Creates a badged, center-cropped copy of a cover at the Jellyfin tile aspect ratio
+        /// Creates a badged, center-cropped copy of a cover at the Emby tile aspect ratio
         /// for the given image type. Shared by the upload and generated-cover paths of both
         /// playlists and collections so the crop policy stays in one place.
         /// </summary>
         /// <param name="sourcePath">The source image path.</param>
         /// <param name="outputPath">The destination path.</param>
-        /// <param name="imageType">The Jellyfin image type (drives the tile aspect ratio).</param>
+        /// <param name="imageType">The Emby image type (drives the tile aspect ratio).</param>
         /// <param name="forPlaylist">True for playlist covers (square Primary tiles), false for collections (2:3).</param>
         /// <param name="targetWidth">Output width in pixels, or 0 to crop at native resolution.</param>
         /// <param name="logger">Logger for failures.</param>
@@ -141,7 +141,7 @@ namespace Emby.Plugin.SmartLists.Utilities
         /// <summary>
         /// Creates a center-cropped copy of a single source image at the given aspect ratio,
         /// optionally stamping the smart list badge. Used for covers when the badge is enabled:
-        /// Jellyfin tiles crop covers (square for playlists, poster/thumb ratios for
+        /// Emby tiles crop covers (square for playlists, poster/thumb ratios for
         /// collections), so a badge in the corner of an off-ratio cover would fall outside the
         /// visible area — and off-ratio covers also distort overview grids. The encoder is
         /// inferred from the output extension (JPEG saved at quality 90).

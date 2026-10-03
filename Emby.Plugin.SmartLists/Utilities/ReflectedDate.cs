@@ -4,7 +4,7 @@ namespace Emby.Plugin.SmartLists.Utilities
 {
     /// <summary>
     /// Reads a date from a value obtained by reflection. Emby's date properties are <see cref="DateTimeOffset"/>
-    /// (<c>UserItemData.LastPlayedDate</c>, <c>BaseItem.PremiereDate</c>), where Jellyfin used <see cref="DateTime"/>:
+    /// (<c>UserItemData.LastPlayedDate</c>, <c>BaseItem.PremiereDate</c>), where Emby used <see cref="DateTime"/>:
     /// code that tested <c>value is DateTime</c> silently saw "no date" for every Emby item.
     /// </summary>
     public static class ReflectedDate

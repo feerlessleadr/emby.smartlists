@@ -19,7 +19,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.Orders;
 ///    as MinValue (never-watched tier) regardless of how recently it was actually watched.
 /// 2. <c>BuildGroupRecencyAndHoldState</c> - builds <c>GroupRecency</c> (and, when air blocks are
 ///    active, the hold's raw watch-state) for one user from the unfiltered item pool. The single
-///    most load-bearing rule here: only FULLY PLAYED items advance the rotation, because Jellyfin
+///    most load-bearing rule here: only FULLY PLAYED items advance the rotation, because Emby
 ///    stamps <c>LastPlayedDate</c> on any playback (including a half-watched one).
 /// 3. <c>ApplyMidBlockHold</c> (and the <c>PreComputePositions</c> override that calls it before
 ///    the base interleave runs) - the collections+air-date special case: a group whose most
@@ -242,7 +242,7 @@ public class RoundRobinLeastRecentlyWatchedTests
     }
 
     /// <summary>
-    /// THE single most valuable assertion in this file. Jellyfin stamps LastPlayedDate on ANY
+    /// THE single most valuable assertion in this file. Emby stamps LastPlayedDate on ANY
     /// playback, so a half-watched episode (Played == false) carries a real, possibly very recent,
     /// timestamp. If that timestamp were allowed to advance recency, stopping partway through an
     /// episode would send the whole show to the BACK of the rotation instead of leaving it at the

@@ -895,7 +895,7 @@
         if (navContainer._navInitialized) return;
         navContainer._navInitialized = true;
 
-        // Apply Jellyfin's native styling to the navigation container
+        // Apply Emby's native styling to the navigation container
         SmartLists.applyStyles(navContainer, {
             marginBottom: '0.5em'
         });
@@ -2735,7 +2735,7 @@
         }
     });
 
-    // Fallback initialization for pages loaded directly (not via Jellyfin navigation)
+    // Fallback initialization for pages loaded directly (not via Emby navigation)
     // This handles the case where pageshow doesn't fire for custom plugin pages
     document.addEventListener('DOMContentLoaded', function () {
         const page = SmartLists.getActivePage();
@@ -3125,7 +3125,7 @@
         });
     };
     
-    // Standard page events for normal Jellyfin page navigation
+    // Standard page events for normal Emby page navigation
     // Note: pageshow event target is the document, so we need to query for our page element
     document.addEventListener('pageshow', function (e) {
         var page = SmartLists.getActivePage();

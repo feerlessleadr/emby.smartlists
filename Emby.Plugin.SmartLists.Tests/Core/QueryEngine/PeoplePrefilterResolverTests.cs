@@ -21,7 +21,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 ///   silently dropping it could drop a true match).
 /// - An empty (non-null) result is a hard "no stored name matches" claim.
 ///
-/// The DB-dump and GetItemIds steps need a live Jellyfin and are exercised there, not here.
+/// The DB-dump and GetItemIds steps need a live Emby and are exercised there, not here.
 /// </summary>
 public class PeoplePrefilterResolverTests
 {

@@ -629,12 +629,12 @@
 
     // ===== TAG-BASED INPUT MANAGEMENT =====
     SmartLists.createTagBasedInput = function (valueContainer, currentValue) {
-        // Create the main container with EXACT same styling as standard Jellyfin inputs
+        // Create the main container with EXACT same styling as standard Emby inputs
         const tagContainer = document.createElement('div');
         tagContainer.className = 'tag-input-container emby-input';
         tagContainer.style.cssText = 'width: 100%; border: none; border-radius: 0; padding: 0.55em 0.5em; display: flex; flex-wrap: wrap; gap: 0.5em; align-items: center; box-sizing: border-box; align-content: flex-start; position: relative;';
 
-        // Create the input field with standard Jellyfin styling
+        // Create the input field with standard Emby styling
         const input = document.createElement('input');
         input.type = 'text';
         input.className = 'tag-input-field';
@@ -763,7 +763,7 @@
             return; // Tag already exists, don't add duplicate
         }
 
-        // Create tag element with subtle Jellyfin styling
+        // Create tag element with subtle Emby styling
         const tag = document.createElement('div');
         tag.className = 'tag-item';
         tag.style.cssText = 'background: var(--jf-palette-background-paper); padding: 0.3em 0.6em; border-radius: 2px; font-size: 0.85em; display: inline-flex; align-items: center; gap: 0.5em; max-width: none; flex: 0 0 auto; border: 1px solid var(--jf-palette-divider); white-space: nowrap; overflow: hidden;';

@@ -908,10 +908,10 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             {
                 var mediaType = GetMediaTypeFromItem(item);
 
-                // For Removed events, skip entirely (Jellyfin auto-removes items from playlists)
+                // For Removed events, skip entirely (Emby auto-removes items from playlists)
                 if (changeType == LibraryChangeType.Removed)
                 {
-                    _logger.LogDebug("Item '{ItemName}' removed - Jellyfin will auto-remove from playlists, no refresh needed", item.Name);
+                    _logger.LogDebug("Item '{ItemName}' removed - Emby will auto-remove from playlists, no refresh needed", item.Name);
                     return [];
                 }
 
@@ -1025,10 +1025,10 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             {
                 var mediaType = GetMediaTypeFromItem(item);
 
-                // For Removed events, skip entirely (Jellyfin auto-removes items from collections)
+                // For Removed events, skip entirely (Emby auto-removes items from collections)
                 if (changeType == LibraryChangeType.Removed)
                 {
-                    _logger.LogDebug("Item '{ItemName}' removed - Jellyfin will auto-remove from collections, no refresh needed", item.Name);
+                    _logger.LogDebug("Item '{ItemName}' removed - Emby will auto-remove from collections, no refresh needed", item.Name);
                     return [];
                 }
 
@@ -1042,7 +1042,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     }
 
                     // When an episode's watch status changes, also check for Series-based collections
-                    // This is needed because marking a series as watched/unwatched in Jellyfin only fires
+                    // This is needed because marking a series as watched/unwatched in Emby only fires
                     // UserDataSaved events for individual episodes, not for the Series item itself
                     if (item is MediaBrowser.Controller.Entities.TV.Episode episode && episode.SeriesId != 0)
                     {
@@ -1263,7 +1263,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     playlist.AutoRefresh >= AutoRefreshMode.OnLibraryChanges,
 
                 LibraryChangeType.Removed =>
-                    // Removed events never trigger refreshes - Jellyfin automatically removes items from playlists
+                    // Removed events never trigger refreshes - Emby automatically removes items from playlists
                     // No playlist refresh needed regardless of AutoRefreshMode setting
                     false,
 
@@ -1359,7 +1359,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     collection.AutoRefresh >= AutoRefreshMode.OnLibraryChanges,
 
                 LibraryChangeType.Removed =>
-                    // Removed events never trigger refreshes - Jellyfin automatically removes items from collections
+                    // Removed events never trigger refreshes - Emby automatically removes items from collections
                     // No collection refresh needed regardless of AutoRefreshMode setting
                     false,
 
@@ -2391,13 +2391,13 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 {
                     _logger.LogInformation("Visibility schedule: Disabling playlist '{Name}'", playlist.Name);
                     
-                    // Delete all Jellyfin playlists for all users using service method.
+                    // Delete all Emby playlists for all users using service method.
                     // It clears the IDs of successfully deleted playlists on the DTO; failed
                     // deletions keep their ID so deletion can be retried later.
                     // Cast to PlaylistService to access the helper method
                     if (_playlistService is Emby.Plugin.SmartLists.Services.Playlists.PlaylistService playlistServiceImpl)
                     {
-                        await playlistServiceImpl.DeleteAllJellyfinPlaylistsForUsersAsync(playlist).ConfigureAwait(false);
+                        await playlistServiceImpl.DeleteAllEmbyPlaylistsForUsersAsync(playlist).ConfigureAwait(false);
                     }
                     else
                     {
@@ -2477,19 +2477,19 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 {
                     _logger.LogInformation("Visibility schedule: Disabling collection '{Name}'", collection.Name);
                     
-                    // Delete Jellyfin collection before disabling.
-                    // DeleteAsync clears the ID if the Jellyfin collection is gone; a failed
+                    // Delete Emby collection before disabling.
+                    // DeleteAsync clears the ID if the Emby collection is gone; a failed
                     // deletion keeps it so deletion can be retried later.
-                    if (!string.IsNullOrEmpty(collection.JellyfinCollectionId))
+                    if (!string.IsNullOrEmpty(collection.CollectionId))
                     {
                         try
                         {
                             await _collectionService.DeleteAsync(collection).ConfigureAwait(false);
-                            _logger.LogDebug("Deleted Jellyfin collection for collection '{Name}' via visibility schedule", collection.Name);
+                            _logger.LogDebug("Deleted Emby collection for collection '{Name}' via visibility schedule", collection.Name);
                         }
                         catch (Exception deleteEx)
                         {
-                            _logger.LogWarning(deleteEx, "Failed to delete Jellyfin collection for '{Name}'", collection.Name);
+                            _logger.LogWarning(deleteEx, "Failed to delete Emby collection for '{Name}'", collection.Name);
                         }
                     }
 

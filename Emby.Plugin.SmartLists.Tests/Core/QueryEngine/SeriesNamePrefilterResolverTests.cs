@@ -25,7 +25,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core.QueryEngine;
 ///   with no map at all every extra is kept.
 /// - Narrowing requires both the pool and the dump; otherwise the rule stays per-item (null).
 ///
-/// The warmup query itself needs a live Jellyfin and is exercised there, not here.
+/// The warmup query itself needs a live Emby and is exercised there, not here.
 /// </summary>
 public class SeriesNamePrefilterResolverTests
 {

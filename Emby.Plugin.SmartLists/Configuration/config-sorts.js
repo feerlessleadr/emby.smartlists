@@ -47,7 +47,7 @@
             input = document.createElement('select');
             input.setAttribute('is', 'emby-select');
             input.className = 'emby-select-withcolor emby-select';
-            // Let Jellyfin theme handle background color
+            // Let Emby theme handle background color
             if (options) {
                 SmartLists.populateSelectElement(input, options);
             }

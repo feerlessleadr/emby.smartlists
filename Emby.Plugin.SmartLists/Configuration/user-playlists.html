@@ -73,7 +73,7 @@
                             <label class="inputLabel" for="playlistName">List Name</label>
                             <input type="text" id="playlistName" class="emby-input" required
                                 placeholder="e.g., 90s Action Movies">
-                            <div class="fieldDescription">The name of the list that will be created in Jellyfin.</div>
+                            <div class="fieldDescription">The name of the list that will be created in Emby.</div>
                         </div>
 
                         <div class="inputContainer">
@@ -336,7 +336,7 @@
                                 </span>
                             </label>
                             <div class="fieldDescription">When enabled, the list will be created and updated
-                                automatically. When disabled, the list will be removed from Jellyfin.</div>
+                                automatically. When disabled, the list will be removed from Emby.</div>
                         </div>
 
                         <div class="selectContainer" style="margin-bottom: 1em;">
@@ -383,7 +383,7 @@
                                 </a>
                             </label>
                             <div id="visibility-schedules-container"></div>
-                            <div class="fieldDescription">Control when this list appears in Jellyfin. Use Enable/Disable actions to automatically show or hide the list on specific dates (e.g., show Christmas movies only in December).</div>
+                            <div class="fieldDescription">Control when this list appears in Emby. Use Enable/Disable actions to automatically show or hide the list on specific dates (e.g., show Christmas movies only in December).</div>
                         </div>
 
                             <h3 id="sharingSectionTitle" class="sectionTitle playlist-only-field" style="margin-top: 1.5em;">Sharing</h3>
@@ -425,7 +425,7 @@
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
-                            <div class="fieldDescription">Every matched item that sits in a Jellyfin collection is replaced by
+                            <div class="fieldDescription">Every matched item that sits in a Emby collection is replaced by
                                 that collection, so the result is a collection of collections. Items that aren't in any
                                 collection are kept as-is. Only direct membership counts &mdash; nested collections are
                                 not traversed. Grouping happens before sorting and before Max Items, so the limit counts
@@ -463,7 +463,7 @@
                                 <label class="inputLabel" for="metadataSortTitle">Sort Title</label>
                                 <input type="text" id="metadataSortTitle" class="emby-input"
                                     placeholder="Leave empty to use default" />
-                                <div class="fieldDescription">Override the sort title used when sorting lists in Jellyfin.</div>
+                                <div class="fieldDescription">Override the sort title used when sorting lists in Emby.</div>
                             </div>
                             <div style="margin-top: 0.5em;">
                                 <label class="inputLabel" for="metadataOverview">Overview</label>
@@ -474,7 +474,7 @@
                             <div style="margin-top: 0.5em;">
                                 <label class="inputLabel" for="metadataTagsContainer">Tags</label>
                                 <div id="metadataTagsContainer"></div>
-                                <div class="fieldDescription">Set tags on the Jellyfin playlist or collection. Any existing tags will be replaced.</div>
+                                <div class="fieldDescription">Set tags on the Emby playlist or collection. Any existing tags will be replaced.</div>
                             </div>
                             <div style="margin-top: 0.5em;">
                                 <label class="inputLabel" for="metadataFavorite">Favorite</label>
@@ -657,12 +657,12 @@
                             <label style="display: flex; align-items: center; cursor: pointer;">
                                 <input type="checkbox" id="delete-jellyfin-playlist-checkbox" checked
                                     style="margin-right: 0.5em;">
-                                <span>Also delete the Jellyfin list</span>
+                                <span>Also delete the Emby list</span>
                             </label>
                             <div style="font-size: 0.9em; opacity: 0.6; margin-top: 0.5em; margin-bottom: 0.5em;">
-                                <strong>Unchecked:</strong> Only delete the SmartList configuration. The Jellyfin list
+                                <strong>Unchecked:</strong> Only delete the SmartList configuration. The Emby list
                                 will remain and can be managed manually.<br><br>
-                                <strong>Checked:</strong> Delete both the SmartList configuration and the Jellyfin list.
+                                <strong>Checked:</strong> Delete both the SmartList configuration and the Emby list.
                             </div>
                         </div>
                     </div>

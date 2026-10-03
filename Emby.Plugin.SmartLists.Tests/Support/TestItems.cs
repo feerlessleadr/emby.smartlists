@@ -41,7 +41,7 @@ public class TestLibraryManager : DispatchProxy
     /// Answers <c>GetCollectionFolders(BaseItem)</c>, keyed by the id of the item the resolver
     /// passes as the anchor - i.e. the CHAIN-TOP folder, deliberately NOT the leaf item id.
     ///
-    /// This arm exists because a Jellyfin library (a <c>CollectionFolder</c>) is never in an
+    /// This arm exists because a Emby library (a <c>CollectionFolder</c>) is never in an
     /// item's <c>ParentId</c> chain: it hangs off the UserRootFolder as a sibling structure.
     /// A parents-only walk therefore finds season tags but never library tags, so without this
     /// stub the library half of the ancestor walk could not be tested at all.
@@ -65,7 +65,7 @@ public class TestLibraryManager : DispatchProxy
     /// <summary>
     /// Answers <c>GetItemList(InternalItemsQuery)</c>, keyed by the query's <c>ParentId</c>.
     /// Used to test proactive container-cache warming (SmartList's aggregate-user cache warm-up)
-    /// without needing a live Jellyfin: tests register the children a container "has" here, then
+    /// without needing a live Emby: tests register the children a container "has" here, then
     /// assert the refresh cache picks them up for every configured aggregate user.
     /// </summary>
     internal static readonly ConcurrentDictionary<long, List<BaseItem>> ItemListByParentId = new();
@@ -182,7 +182,7 @@ public class TestUserManager : DispatchProxy
 /// <summary>
 /// Builders for the item shapes the round-robin orders group and interleave.
 ///
-/// Two Jellyfin traps these builders exist to close, both of which throw
+/// Two Emby traps these builders exist to close, both of which throw
 /// <see cref="NullReferenceException"/> rather than failing an assertion, and both of which have
 /// already cost a debugging session:
 ///

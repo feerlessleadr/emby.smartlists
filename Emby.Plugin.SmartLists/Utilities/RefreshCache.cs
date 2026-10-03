@@ -127,7 +127,7 @@ namespace Emby.Plugin.SmartLists
                             PlaylistName = playlist.Name,
                             Success = false,
                             Message = "Missing or invalid User",
-                            JellyfinPlaylistId = string.Empty,
+                            EmbyPlaylistId = string.Empty,
                         });
                     }
                 }
@@ -196,7 +196,7 @@ namespace Emby.Plugin.SmartLists
                                 PlaylistName = playlist.Name,
                                 Success = false,
                                 Message = $"User {userId} not found in system",
-                                JellyfinPlaylistId = string.Empty,
+                                EmbyPlaylistId = string.Empty,
                             });
                         }
                         continue;
@@ -327,7 +327,7 @@ namespace Emby.Plugin.SmartLists
                         Success = success,
                         Message = message,
                         ElapsedMilliseconds = playlistStopwatch.ElapsedMilliseconds,
-                        JellyfinPlaylistId = jellyfinPlaylistId,
+                        EmbyPlaylistId = jellyfinPlaylistId,
                     });
 
                     if (success)
@@ -377,7 +377,7 @@ namespace Emby.Plugin.SmartLists
         public bool Success { get; set; }
         public string Message { get; set; } = string.Empty;
         public long ElapsedMilliseconds { get; set; }
-        public string JellyfinPlaylistId { get; set; } = string.Empty;
+        public string EmbyPlaylistId { get; set; } = string.Empty;
     }
 
 }

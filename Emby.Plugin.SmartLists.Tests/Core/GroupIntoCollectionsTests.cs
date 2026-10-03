@@ -15,7 +15,7 @@ namespace Emby.Plugin.SmartLists.Tests.Core;
 
 /// <summary>
 /// Covers <c>GroupIntoCollections</c> - the smart-collection toggle that replaces every matched item
-/// with the Jellyfin collections that DIRECTLY contain it, turning an item search into a search that
+/// with the Emby collections that DIRECTLY contain it, turning an item search into a search that
 /// produces collections.
 ///
 /// The semantics pinned here, all of which depend on the step running at exactly one point in
@@ -47,7 +47,7 @@ public class GroupIntoCollectionsTests
     // Fixture builders
     // ---------------------------------------------------------------------------------------
 
-    /// <summary>A BoxSet - what Jellyfin calls a collection. Name before SortName, as ever.</summary>
+    /// <summary>A BoxSet - what Emby calls a collection. Name before SortName, as ever.</summary>
     private static BoxSet CollectionNamed(string name, params string[] genres)
     {
         var boxSet = new BoxSet { Id = Guid.NewGuid(), InternalId = TestItems.NextId(), Name = name, Genres = genres };
@@ -145,7 +145,7 @@ public class GroupIntoCollectionsTests
             MatchByMembers = matchByMembers,
             GroupIntoCollections = groupIntoCollections,
             MaxItems = maxItems,
-            JellyfinCollectionId = jellyfinCollectionId,
+            CollectionId = jellyfinCollectionId,
             ExpressionSets = expressionSets,
             Order = orderName == null ? null : new OrderDto { Name = orderName },
         };

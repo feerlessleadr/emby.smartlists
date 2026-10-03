@@ -15,7 +15,7 @@ namespace Emby.Plugin.SmartLists.Core.Models
         }
 
         // Collection-specific properties
-        public string? JellyfinCollectionId { get; set; }  // Jellyfin collection (BoxSet) ID for reliable lookup
+        public string? CollectionId { get; set; }  // Emby collection (BoxSet) ID for reliable lookup
     }
 }
 
