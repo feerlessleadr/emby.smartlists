@@ -1,55 +1,30 @@
 ---
 name: verify
-description: Drive the SmartLists plugin against the local dev Jellyfin container to verify a change end-to-end. Use after building any plugin change that has runtime behavior.
+description: Build and deploy the SmartLists plugin to the local Emby test server and exercise a change end-to-end. Use after any change with runtime behaviour (services, API, page).
 ---
 
-# Verifying SmartLists changes against the dev container
+# Verifying SmartLists changes against a local Emby
 
-## Build + deploy (from repo root; works from worktrees too)
+Unit tests do not touch Emby. Anything that creates playlists/collections, refreshes, reacts to library/user-data events, or changes the page must be checked on a live server.
 
-Before deploying, compile-check the plugin (net10.0 / Jellyfin 12):
+## Deploy
 
-```bash
-dotnet build Jellyfin.Plugin.SmartLists/Jellyfin.Plugin.SmartLists.csproj -c Release --no-incremental
+```powershell
+./dev/deploy-local.ps1 -EmbyRoot '<folder containing Emby system + programdata>'
 ```
 
-Then build + deploy the container framework:
+It builds with a timestamped version (Emby caches plugin files by version), stops the server, copies `Emby.Plugin.SmartLists.dll` + `SixLabors.ImageSharp.dll` into `programdata\plugins` and restarts. Then check the log for `SmartLists started` (`programdata\logs\embyserver.txt`, lines `SmartLists: ...`).
 
-```bash
-# ALWAYS --no-incremental: incremental deploy builds have served stale DLLs
-dotnet build Jellyfin.Plugin.SmartLists/Jellyfin.Plugin.SmartLists.csproj \
-  --framework net10.0 --configuration Release --no-incremental \
-  -o <MAIN_CHECKOUT>/build_output /p:Version=12.0.0.0 /p:AssemblyVersion=12.0.0.0
-docker restart jellyfin
-```
+## Exercise
 
-`<MAIN_CHECKOUT>/build_output` is bind-mounted to `/config/plugins/SmartLists` (see dev/docker-compose.yml). Alternatively `cd dev && ./build-local.sh` does the full cycle from the main checkout.
+- **API**: with an Emby API key (never print it; send as `X-Emby-Token` to localhost only) call `/emby/Plugins/SmartLists` (GET list, POST create, PUT/DELETE by id, `/{id}/refresh`, `/Status`, `/backups`). Then read the result back through Emby (`/emby/Items?IncludeItemTypes=Playlist,BoxSet&UserId=...`).
+- **Page**: sign in to the dev server in the in-app browser (the pane must be visible), open *Dashboard → SmartLists* by clicking the sidebar entry, and drive forms through the DOM (set value, dispatch `input`/`change`, click the real button). See `CLAUDE.md` "UI gotchas".
+- **Events**: add/remove a media file and trigger a library scan, or favourite an item, to check auto-refresh.
 
-After a code change, confirm the deployed DLL actually contains it — .NET string literals are UTF-16, ASCII `strings` misses them:
+## Clean-profile check (before a release)
 
-```js
-const buf = require('fs').readFileSync('.../build_output/Jellyfin.Plugin.SmartLists.dll');
-buf.toString('utf16le').includes('some new log message')
-  || buf.slice(1).toString('utf16le').includes('some new log message')  // odd byte offset
-```
+Install the release zip into a copy of the Emby `system` folder with a fresh `programdata` and a different port (see `docs/development.md`), then create a playlist and a collection, restart, and confirm they persist.
 
-## Drive the API
+## Clean up
 
-- Wait ready (bounded; plain `timeout` is not available on macOS): `for i in $(seq 1 60); do curl -s -o /dev/null -w "%{http_code}" http://localhost:8096/health | grep -q 200 && break; sleep 2; done` — if it never turns healthy, check `docker logs jellyfin` for startup errors
-- API key: `sqlite3 "file:<MAIN>/dev/jellyfin-data/config/data/jellyfin.db?mode=ro" "SELECT AccessToken FROM ApiKeys"` (dev-only key)
-- Auth header (query-param api_key returns 401): `Authorization: MediaBrowser Token="<key>"`
-- Endpoints: `GET /Plugins/SmartLists` (list), `POST /Plugins/SmartLists/{id}/refresh|enable|disable`
-- Refresh is queued; wait for `docker logs jellyfin | grep "Completed Refresh operation for list <id>"`
-
-## Observable state
-
-- Plugin DTOs: `<MAIN>/dev/jellyfin-data/config/data/smartlists/{listId}/config.json` (edit only while container stopped — plugin caches DTOs and writes back)
-- Jellyfin playlists on disk: `<MAIN>/dev/jellyfin-data/config/data/playlists/<Name> [Smart]*/playlist.xml`
-- DB (read-only!): `sqlite3 "file:<MAIN>/dev/jellyfin-data/config/data/jellyfin.db?mode=ro"` — tables `BaseItems`, `BaseItemProviders` (provider-ID tether rows: `ProviderId='SmartLists'`)
-- Logs: `docker logs jellyfin 2>&1 | grep -i smart` (debug logging enabled via dev/logging.json)
-
-## Gotchas
-
-- Item IDs are deterministic (type+path hash): deleting and recreating a playlist at the same folder path yields the same item GUID.
-- Simulating a stale `JellyfinPlaylistId`: stop container, edit config.json mapping to a bogus GUID, start, trigger refresh.
-- Jellyfin core appends `1` to the playlist folder name per collision (`GetTargetPath`) — folder names with trailing 1s are normal on multi-user lists.
+Delete test lists (`DELETE /emby/Plugins/SmartLists/{id}` removes the Emby item too), stop extra servers and `Stop-Process -Name embytray`.

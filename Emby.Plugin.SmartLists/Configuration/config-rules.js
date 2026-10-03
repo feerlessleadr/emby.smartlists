@@ -1042,7 +1042,7 @@
         input.style.cssText = 'width: 120px; display: inline-block;';
 
         const infoLink = document.createElement('a');
-        infoLink.href = 'https://jellyfin-smartlists-plugin.dinsten.se/user-guide/sorting-and-limits/#per-group-max-items';
+        infoLink.href = 'B/docs/reference/user-guide/sorting-and-limits.md#per-group-max-items';
         infoLink.target = '_blank';
         infoLink.rel = 'noopener noreferrer';
         infoLink.title = 'Documentation';
@@ -1173,7 +1173,7 @@
             '<div class="rule-collections-depth" style="margin-bottom: 0;">' +
             '<label style="display: flex; align-items: center; margin-bottom: 0.25em; font-size: 0.85em; opacity: 0.8; font-weight: 500;">' +
             'Collection search depth:' +
-            '<a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/fields-and-operators/#collection-search-depth" target="_blank" rel="noopener noreferrer" title="Documentation" style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">' +
+            '<a href="B/docs/reference/user-guide/fields-and-operators.md#collection-search-depth" target="_blank" rel="noopener noreferrer" title="Documentation" style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">' +
             '<span class="md-icon" aria-hidden="true" style="font-size: 1.1em; line-height: 0;">info_outline</span>' +
             '</a>' +
             '</label>' +
@@ -1184,7 +1184,7 @@
             '<div class="rule-externallist-options" style="display: none; margin-bottom: 0.75em; padding: 0.5em; background: var(--jf-palette-background-paper); border: 1px solid var(--jf-palette-divider); border-radius: 4px;">' +
             '<div style="font-size: 0.85em; opacity: 0.8; display: flex; align-items: center;">' +
             '<span>Enter an external list URL. Supported: MDBList, IMDb, Trakt, TMDB, Letterboxd, ListenBrainz, Scrob. Music lists match by MusicBrainz tags, with title/artist fallback.</span>' +
-            '<a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/external-lists/" target="_blank" rel="noopener noreferrer" title="Documentation" style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">' +
+            '<a href="B/docs/reference/user-guide/external-lists.md" target="_blank" rel="noopener noreferrer" title="Documentation" style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">' +
             '<span class="md-icon" aria-hidden="true" style="font-size: 1.1em; line-height: 0;">info_outline</span>' +
             '</a>' +
             '</div>' +

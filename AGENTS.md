@@ -1,185 +1,124 @@
-# Jellyfin Smart Lists Plugin
+# SmartLists for Emby
 
-A Jellyfin plugin that creates dynamic playlists and collections based on user-defined rules (genres, ratings, years, etc.) with automatic refresh capabilities.
+An Emby Server plugin that creates dynamic playlists and collections from user-defined rules (genres, ratings, years, play state, and so on) and keeps them up to date automatically.
 
-## Development Commands
+This is a straight port of the Jellyfin SmartLists plugin to **Emby Server 4.10.1.0 (net8.0)**. Jellyfin support was dropped on purpose and upstream is not tracked. Read `docs/port/status.md` for the decision log, progress history and open items, and `docs/port/api-notes.md` for verified Emby API behaviour before touching anything that calls Emby.
 
-```bash
-# Build + restart local Jellyfin Docker container (from /dev directory)
-./build-local.sh                        # builds for Jellyfin 12 (net10.0)
+## Scope
 
-# View logs
-docker logs jellyfin 2>&1 | grep -i "Smart"
-# or
-tail -f dev/jellyfin-data/config/log/log_*.log | grep "Smart"
+In: rules, smart playlists and collections, manual / scheduled / automatic refresh, the admin page, images, backups, templates.
 
-# Run the test suite
-dotnet test Jellyfin.Plugin.SmartLists.Tests/Jellyfin.Plugin.SmartLists.Tests.csproj
+Out (hidden in the UI, not built): external lists (MDBList, Trakt, ...), the end-user page and its endpoints (`UserPagesController`, `UserSmartListController` are excluded from the build), people roles Emby cannot represent, `VideoRangeType`.
+
+## Development commands (Windows, PowerShell)
+
+```powershell
+# The plugin and tests compile against the Emby server assemblies, which are not on NuGet.
+# Point EmbySystemDir at the "system" folder of an Emby Server 4.10.1.0 install.
+$sys = 'C:\path\to\embyserver-win-x64-4.10.1.0\system'
+
+dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj "-p:EmbySystemDir=$sys"
+dotnet test  Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj "-p:EmbySystemDir=$sys"
 ```
 
-The project targets `net10.0` (Jellyfin 12). The build treats all warnings as errors with `AnalysisMode=Recommended` — CA analyzer warnings (e.g. CA1822 make-static, CA1305 locale) fail the build.
+The build treats all warnings as errors with `AnalysisMode=Recommended`: CA/SA analyzer findings (CA1822 make-static, CA1305 locale, SA1300 naming, ...) fail it.
 
-### Tests
+### Deploying to a local Emby
 
-Unit tests live in `Jellyfin.Plugin.SmartLists.Tests` (xunit, ~1,640 tests). They cover the pure-C# surface — the query engine (operators, prefilter resolvers, `FieldRegistry` invariants), the sort implementations in `Core/Orders/`, the external-list providers, and `Utilities/`. Every file under test is plain C# with no Jellyfin dependencies.
+1. Stop the server (`Stop-Process -Name EmbyServer`).
+2. Copy `Emby.Plugin.SmartLists.dll` and `SixLabors.ImageSharp.dll` from `bin\<config>\net8.0` into `<programdata>\plugins`.
+3. Start `system\EmbyServer.exe -programdata <programdata>`. Logs: `<programdata>\logs\embyserver.txt` (plugin lines are `SmartLists: <Class>: ...`).
 
-The test project targets `net10.0`, same as the plugin. Warnings-as-errors and analyzers are deliberately relaxed in the test project, since tests do things production code must not.
+Things that will bite you:
 
-Tests do **not** cover anything that touches Jellyfin at runtime — playlist and collection creation, refresh scheduling, or the config UI. Verify those by building and exercising the plugin against the local Jellyfin instance (<http://localhost:8096>); the `/verify` skill drives that flow.
+- **Plugin resources are cached by version.** Emby serves the page, controller and JS with an ETag derived from the plugin *version* only, so a rebuild at the same version leaves the browser on stale code. For dev builds pass a changing version, e.g. `-p:Version=0.$(Get-Date -Format MMdd).$(Get-Date -Format HHmm)` (three parts; .NET appends the fourth). Releases change version anyway.
+- **One server per exe path.** Emby refuses to start a second instance from the same `EmbyServer.exe`. For a second (clean) profile copy the `system` folder, give it its own `-programdata`, and set `HttpServerPortNumber`/`HttpsPortNumber` in `config/system.xml`.
+- Each server start spawns an `embytray.exe`; they accumulate. Kill them with `Stop-Process -Name embytray`.
 
-CI (`.github/workflows/ci.yml`) builds the plugin and runs the tests on every pull request and on pushes to `main` and `10.11-release`.
+### Testing
 
-## Project Structure
+`Emby.Plugin.SmartLists.Tests` (xunit, ~1,770 tests, net10.0). It covers the query engine (operators, prefilter resolvers, `FieldRegistry` invariants), `Core/Orders`, `Utilities`, the `ControllerRouter`, and the error-filter. Fixtures build real Emby `BaseItem`s in `Support/TestItems.cs`.
+
+- The test project targets net10.0 but the ASP.NET 8 runtime is not required: three `MediaBrowser.*` DLLs are copied next to the tests and `Support/EmbyAssemblyResolver.cs` resolves the rest from `EmbySystemDir`. If you see Jellyfin or wrong-version assemblies, delete the test `bin`/`obj` folders.
+- Tests do **not** cover anything that talks to a running Emby (playlist/collection creation, refresh queue, auto-refresh events, the page). Verify those on a live server; `docs/port/api-notes.md` records what has been verified and how.
+
+## Project structure
 
 ```text
-Jellyfin.Plugin.SmartLists/
-├── Core/                    # Business logic
-│   ├── Constants/           # MediaTypes, Operators, ResolutionTypes, AspectRatioTypes, ProviderKeys
-│   ├── Enums/               # SmartListType, RuleLogic, AutoRefreshMode, etc.
-│   ├── Models/              # DTOs: SmartListDto, SmartPlaylistDto, SmartCollectionDto
-│   ├── Orders/              # 25+ sort implementations (NameOrder, RandomOrder, etc.)
-│   ├── QueryEngine/         # Rule evaluation: Engine, Expression, Factory, Operand, FieldRegistry
-│   └── SmartList.cs         # Main filtering logic
-├── Api/Controllers/         # SmartListController, UserSmartListController
-├── Services/
-│   ├── Abstractions/        # ISmartListService, ISmartListStore
-│   ├── Playlists/           # PlaylistService, PlaylistStore
-│   ├── Collections/         # CollectionService, CollectionStore
-│   ├── ExternalList/        # External list providers: MDBList, IMDb, Trakt, TMDB
-│   ├── Users/               # User resolution/lookup services
-│   └── Shared/              # AutoRefreshService, RefreshQueueService, etc.
-├── Configuration/           # Two HTML pages + shared config-*.js modules
-│   ├── config.html          # Admin configuration page
-│   └── user-playlists.html  # User configuration page
-└── Utilities/               # DtoMapper, InputValidator, LibraryManagerHelper, etc.
+Emby.Plugin.SmartLists/
+├── Plugin.cs                 BasePlugin<PluginConfiguration> + IHasWebPages; plugin Id = assembly [Guid]
+├── Host/                     Composition root: SmartListsHost (hand-built service graph), StartupEntryPoint
+│                             (IServerEntryPoint), EmbyLoggerProvider (MEL -> Emby ILogger)
+├── Api/                      EmbyApiService (one wildcard /Plugins/SmartLists/{Path*} endpoint),
+│                             ControllerRouter (maps [Http*] attributes of SmartListController), Controllers/
+├── Core/                     Business logic: Constants, Enums, Models, Orders (sorts), QueryEngine, SmartList.cs
+├── Services/                 Playlists, Collections, Shared (AutoRefresh, RefreshQueue, Backup/Cleanup tasks,
+│                             images, status), ExternalList (compiled, not wired), Abstractions
+├── Utilities/                DtoMapper, InputValidator, Emby* extension helpers, ContainerMembers, ...
+└── Configuration/            config.html + config-*.js (admin page), config-controller.js (Emby page controller)
 ```
 
-## Key Principles
+### How it runs on Emby
 
-### DRY (Don't Repeat Yourself)
-Extract duplicated code into helpers. Check `Utilities/` and existing helpers before creating new functionality.
+- Emby has no plugin service registrator and no hosted services. `StartupEntryPoint` (constructor-injected with Emby managers) builds `SmartListsHost`, which news up the stores, services, `RefreshQueueService`, `AutoRefreshService`, `BackupService` by hand. Scheduled tasks (`CleanupTask`, `BackupTask`) are instantiated by Emby with no arguments, so they read services from `SmartListsHost.Instance`.
+- Emby does not host ASP.NET MVC. `SmartListController` is still written with `[HttpGet]`/`[FromBody]`/`ActionResult`; `ControllerRouter` reads those attributes and dispatches Emby's wildcard request to it, turning results into Emby responses (errors become `{title,status,detail}`, GUIDs serialize without dashes, multipart comes from Emby's `Request.Files`). Adding a controller action needs no extra wiring. The caller id comes from `CallerUserId`, set from the Emby session.
+- The admin page is an Emby view (root `<div is="emby-scroller" ... data-controller="__plugin/smartlistsjs">` with a `.scrollSlider` child), not a Jellyfin page. `config-controller.js` (AMD `define`) loads the `config-*.js` modules, injects a stylesheet mapping `--jf-palette-*` to Emby theme variables, and records the shown view in `SmartLists.activePage`.
 
-### Thread Safety
-List item processing is sequential (enforced by `SemaphoreSlim(1,1)` in `RefreshQueueService`), but background task scheduling and cache access use concurrent collections (`ConcurrentDictionary`, `ConcurrentQueue`). Use thread-safe collections for shared caches accessed across the background refresh task and API layer.
+## Key principles
 
-### Two-Phase Filtering
-Expensive fields (People, AudioLanguages, Collections, etc.) use two-phase filtering in `SmartList.cs`:
-1. Phase 1: Evaluate cheap rules first
-2. Phase 2: Only extract expensive data for items passing Phase 1
+### DRY
+Extract duplicated code into helpers. Check `Utilities/` before adding new ones.
 
-Expensive fields are defined in `FieldRegistry.cs` via `ExtractionGroup` flags. Use `FieldRegistry.IsExpensiveField(fieldName)` to check if a field is expensive.
+### Thread safety
+List processing is sequential (`SemaphoreSlim(1,1)` in `RefreshQueueService`), but background scheduling and caches use concurrent collections (`ConcurrentDictionary`, `ConcurrentQueue`). Use thread-safe collections for anything shared between the background refresh task and the API.
 
-### Adding New Rule Fields
-`FieldRegistry.cs` is the single source of truth for field definitions. Adding a new field requires updates in: `FieldRegistry.cs` (definition), `Operand.cs` (property), and `Factory.cs` (extraction logic). The field dropdown in the UI is populated from the API, but `config-core.js` has hardcoded `FIELD_TYPES` arrays (e.g., `STRING_FIELDS`, `LIST_FIELDS`, `NUMERIC_FIELDS`) that control which input controls and operators are shown. New fields must be added to the appropriate array in `config-core.js`.
+### Two-phase filtering
+Expensive fields (People, AudioLanguages, Collections, ...) are evaluated in two phases in `SmartList.cs`: cheap rules first, expensive extraction only for items that pass. Expensive fields are flagged in `FieldRegistry.cs` via `ExtractionGroup`; use `FieldRegistry.IsExpensiveField(name)`.
 
-## Critical Gotchas
+### Adding rule fields
+`FieldRegistry.cs` is the source of truth. A new field needs `FieldRegistry.cs` (definition), `Operand.cs` (property) and `Factory.cs` (extraction). The UI dropdown is populated from the API, but `config-core.js` has hard-coded `FIELD_TYPES` arrays (`STRING_FIELDS`, `LIST_FIELDS`, `NUMERIC_FIELDS`, ...) that decide which inputs and operators show: add the field there too.
 
-### Sorting Architecture
-Sorting uses `Order` classes in `Core/Orders/`. Each order must implement:
-- `GetSortKey()` - Returns `IComparable` for multi-sort scenarios
-- `OrderBy()` - Single-sort optimization path
+### Sorting
+Each `Order` in `Core/Orders/` implements `GetSortKey()` (multi-sort) and `OrderBy()` (single-sort). Multi-sort flow: `ApplyMultipleOrders()` -> `WrapOrdersWithChildAggregation()` -> `ApplySortingCore()`. Early-return paths in `FilterPlaylistItems()` must still apply sorting. A new sort needs: `Core/Orders/`, `OrderFactory.cs`, `IsDescendingOrder()` in `SmartList.cs`, and `config-sorts.js`.
 
-**Multi-sort flow**: `ApplyMultipleOrders()` → `WrapOrdersWithChildAggregation()` → `ApplySortingCore()`
+## Emby facts worth remembering
 
-**Early return paths**: `FilterPlaylistItems()` has multiple early returns (e.g., when all rules use `IncludeCollectionOnly`). These must still apply sorting - check that `ApplyMultipleOrders()` is called before returning.
+Full detail in `docs/port/api-notes.md`. The ones that cause bugs:
 
-Adding new sort options requires updates in: `Core/Orders/`, `OrderFactory.cs`, `IsDescendingOrder()` in SmartList.cs, and frontend `config-sorts.js`.
+- **Item ids are `long InternalId`** (REST, queries, playlist/collection APIs); users are `Guid`. `BaseItem.Id` is a Guid but the plugin keys everything by `InternalId`. Item type names are strings (`ItemKinds`, e.g. `BoxSet`, `Playlist`, `MusicAlbum`) equal to `GetClientTypeName()`.
+- `PremiereDate`, `DateCreated`, `LastPlayedDate` are `DateTimeOffset`. `BaseItem.MediaType` is null for containers. `Genres/Studios/Tags/Artists/Album` load lazily from the DB on first read (watch per-item cost on big libraries).
+- `BaseItem.SortName`'s setter needs the static `BaseItem.LocalizationManager`. A forced sort title = `SetSortNameDirect` + lock `MetadataFields.SortName`; Emby's post-create refresh can revert it, so both services re-apply it after creation.
+- Playlists: owner = the user share with `ManageDelete`; refresh = remove all entries, then add (`IPlaylistManager`). Collections: `ICollectionManager.CreateCollection` (created locked), membership by add/remove diff; BoxSets are virtual (no containing folder: images live under `GetInternalMetadataPath()`, see `GetItemImageFolder`). `UpdateRatingToItems` does nothing on locked items.
+- Emby's logger is a different interface from Microsoft's; the plugin code uses `Microsoft.Extensions.Logging` and `EmbyLoggerProvider` bridges it (text is passed as a `"{0}"` argument; the `ReadOnlyMemory` overloads are obsolete errors).
+- Emby loads `SixLabors.ImageSharp.dll` from the plugins folder at start-up and logs a harmless `Error loading types from assembly` for it; `Plugin.cs` resolves it from `IApplicationPaths.PluginsPath` because `Assembly.Location` is empty.
+- `ILibraryManager`/`IUserManager` return arrays; `IUserManager.Users` is obsolete (use `GetUserList(new UserQuery())`); `BaseItem.IsFolder` is obsolete (`is Folder`).
 
-### Jellyfin UI (config-*.js)
-- **No ES6 template literals** - use string concatenation
-- **Never use `is="emby-input"`** - causes htmlFor errors, use `class="emby-input"` instead
-- Use `showNotification()` for user messages, not `Dashboard.alert()`
-- **New JS files must be registered in TWO places**: `.csproj` (as `<EmbeddedResource>`) AND `Plugin.cs` (in `GetPages()` as `PluginPageInfo`)
+## UI gotchas (config-*.js and config.html)
 
-### Multipart uploads break OpenAPI if bound wrong
-Bind uploaded files as a bare `IFormFile` parameter — **never** `[FromForm] IFormFile`. MVC already
-binds `IFormFile` from the multipart body, so the attribute is a runtime no-op, but it downgrades the
-binding source to `BindingSource.Form`, which makes Swashbuckle throw and return **HTTP 500 for
-`/api-docs/openapi.json` server-wide** — breaking API-doc generation for all of Jellyfin, not just this
-plugin. Add `[Consumes("multipart/form-data")]` alongside so the schema declares the right shape.
-`[FromForm]` on plain scalar parameters (e.g. `string imageType`) is fine.
+- **No ES6 template literals** in the JS: use string concatenation.
+- Use `class="emby-input"`, never `is="emby-input"`. Use `showNotification()` for messages, not `Dashboard.alert()`.
+- Icons are `<span class="md-icon">name</span>` (Emby), not `material-icons`. Do not hand-draw checkbox icons: Emby's `emby-checkbox` renders its own.
+- **Never use `document.querySelector('.SmartListsConfigurationPage')`**: Emby keeps visited views in the DOM, so several can exist. Use `SmartLists.getActivePage()`.
+- **Do not write the tab to the URL / do not listen to `hashchange`**: Emby's router treats any hash change as a navigation and rebuilds the view. The tab lives in `SmartLists.currentTab`.
+- Emby's `.emby-select-withcolor` forces white text: colours for the custom selects are overridden in the stylesheet injected by `config-controller.js`.
+- **New JS files must be registered in two places**: `Emby.Plugin.SmartLists.csproj` (`<EmbeddedResource>`) and `Plugin.cs` `GetPages()` (`PluginPageInfo`), and loaded from the module list in `config-controller.js`.
+- The plugin id used by `getPluginConfiguration` (`SmartLists.PLUGIN_ID`) must equal the assembly `[Guid]` in `Plugin.cs`.
+- Verifying in the in-app browser: the browser pane must be **visible** or Emby's view transitions never finish; navigate to `.../index.html?fresh=N#!/dashboard` and click the SmartLists sidebar entry (same-URL hash navigation and `location.reload()` leave stale views). Drive forms through the DOM (set value, dispatch `input`/`change`, click the real button).
 
-### Media Type Constants
-Use `MediaTypes.Episode` instead of `"Episode"` - see `Core/Constants/MediaTypes.cs`.
+## Conventions
 
-### Manual Service Construction
-`RefreshQueueService` creates `PlaylistService`/`CollectionService` via `new`, not DI. New constructor dependencies for those services must be threaded through `RefreshQueueService` manually.
+- `RefreshQueueService` constructs `PlaylistService`/`CollectionService` with `new`: a new constructor dependency must be threaded through `RefreshQueueService` (and `ManualRefreshService`, and `SmartListsHost`).
+- Use `MediaTypes.Episode`-style constants (`Core/Constants/`) and `ItemKinds` instead of string literals.
+- Per-item exceptions in `SmartList` go through `ReportSkippedItem` (first few at Warning, rest at Debug).
+- DTO JSON uses `PlaylistId` / `CollectionId` for the Emby item id (renamed from the Jellyfin names; data written by a pre-rename build is not read back).
 
-## Versioning & Releases
+## Versioning and releases
 
-Releases are triggered by pushing a git tag matching `v*` (see `.github/workflows/release.yml`).
+Personal project: no release automation beyond a CI build. A release is a zip of `Emby.Plugin.SmartLists.dll` + `SixLabors.ImageSharp.dll` built with `-c Release -p:Version=x.y.z`, extracted into Emby's `plugins` folder (see `docs/install.md`). The Emby plugin version is the assembly version; change it for every distributed build because it is also the resource cache key.
 
-### Cutting releases
+## When making changes
 
-Releases are tagged with the `/release` skill; the project-specific flow (branch lines, RC-in-Revision numbering, tag-message format) lives in `.agents/skills/release/SKILL.md` — the personal `/release` skill reads it as a reference document, since personal skills shadow same-named project skills. The workflow publishes the annotated tag message body (`%(contents:body)` — everything after the first line) as both the GitHub release body and the plugin-manifest changelog. Tags without an annotated message fall back to GitHub auto-generated notes (PR titles + labels per `.github/release.yml`).
-
-### Version Format
-
-Jellyfin plugins use .NET `System.Version` (`Major.Minor.Build.Revision` — four integers). Unlike SemVer, there are **no pre-release labels** (`-rc.1`, `-alpha`, etc.) and comparison is purely numeric left-to-right. The convention below encodes RC status into the four-part version instead:
-
-- **Revision > 0** → Release Candidate (the revision number is the RC number)
-- **Revision = 0** → Stable release
-
-The `-rc` suffix on the git tag is only a workflow marker — it routes the build to the **unstable** manifest branch and marks the GitHub release as a prerelease. It is stripped before building (the .NET version is the four-part number).
-
-### Tag Examples
-
-| Git Tag | Manifest Version | Manifest Branch | Notes |
-|---|---|---|---|
-| `v12.0.0.1-rc` | `12.0.0.1` | unstable | First RC for 12.0 |
-| `v12.0.0.2-rc` | `12.0.0.2` | unstable | Second RC |
-| `v12.0.1.0` | `12.0.1.0` | stable (main) | Final stable release |
-| `v12.0.2.0` | `12.0.2.0` | stable (main) | Hotfix (no RC) |
-| `v12.1.0.1-rc` | `12.1.0.1` | unstable | RC for next minor |
-| `v12.1.1.0` | `12.1.1.0` | stable (main) | Stable for next minor |
-
-Ordering always holds: `12.0.0.1 < 12.0.0.2 < 12.0.1.0` — so RC users auto-update through RCs and into the final stable release. Because Revision is reserved for RC numbers, stable releases always bump the **Build** component (never use Revision for stable).
-
-### Release Line — single `12.x` line (decided 2026-08-14)
-
-**All version numbers are `v12.x.y.z`.** The old split scheme (RCs on `main`, `v10.11.X.0` stables on `10.11-release`) is **retired** — no routine stable releases are cut on the `10.11-release` branch. It is kept as history and as the escape hatch for a Jellyfin 10.11 hotfix (see the branch table below).
-
-Releases now **ship forward to Jellyfin 12 only** — `TARGETS` in release.yml is `[{"abi":"12.0.0.0","framework":"net10.0"}]`, and each tag writes a single `targetAbi` entry to the manifest. The manifest branch (stable = main, unstable) is the release *channel*; git branches only anchor where tags are cut.
-
-**Jellyfin 10.11 servers are not broken by this, but they stop receiving new releases.** Jellyfin offers every version whose `targetAbi` is at or below the running server, so a 10.11 server simply stays on `v12.0.1.0` — the last version published with a 10.11 build — and keeps working. `main` builds `net10.0` only; a 10.11 hotfix is still possible from `10.11-release`, which sits at `v12.0.1.0`, the last commit that carried the `net9.0` target. This replaces the old dual-ABI-per-tag scheme, which had two problems: `targetAbi` is a *minimum* supported version with no maximum, so two entries sharing one version number showed as duplicate rows in the plugin UI; and worse, a server running the 10.11 build that upgraded to Jellyfin 12 was stranded — Jellyfin compares version numbers only, and since the version hadn't changed it offered no update, while the installed net9.0 build could not load on Jellyfin 12, leaving the plugin stuck showing "Not supported" with no way out but a manual reinstall.
-
-#### Branches
-
-| Branch | Role |
-|---|---|
-| `main` | Trunk. All development lands here. **RCs are tagged here.** |
-| `12-release` | Tracks the **last stable release**. Fast-forwarded to `main` at each stable. **Stables are tagged here.** The mkdocs Cloudflare Worker publishes from this branch, so the docs site shows released state rather than unreleased trunk. |
-| `10.11-release` | Pinned at `v12.0.1.0` — the last commit that still built `net9.0`, and the last version 10.11 servers were offered. Outside the normal release flow — tag here **only** for a Jellyfin 10.11 hotfix, with `TARGETS` temporarily set to `[{"abi":"10.11.0.0","framework":"net9.0"}]` so the build targets `net9.0`. Never merge into. |
-
-#### Cutting a release
-
-- **RC** — on `main`: tag `v12.x.y.z-rc` → unstable manifest, GitHub prerelease. Revision *is* the RC number.
-- **Stable** — fast-forward `12-release` up to `main`, then tag there:
-
-  ```bash
-  git checkout 12-release
-  git fetch origin main
-  git merge --ff-only origin/main   # origin/main, not local main — a stale local ref ships old code
-  git push origin 12-release        # the docs Worker publishes from this branch
-  git tag -a v12.0.X.0 -m "..."     # Build bumps; Revision resets to 0
-  ```
-
-  `--ff-only` is deliberate: `12-release` must never carry commits of its own, or it stops being a pointer at a `main` commit and the next fast-forward fails. This is the key difference from `10.11-release`, which did carry its own commits and needed merging both ways.
-
-Bump the **Build** segment for stables; Revision is reserved exclusively for RC numbers. Ordering holds across the whole line, so RC users now roll straight into stables — the old trade-off where a `10.11.X.0` stable sorted *below* the `12.x` RCs and was never offered to RC users is gone with the split.
-
-Smoke testing the 10.11 ABI is no longer a routine pre-stable step, since 10.11 is no longer shipped by normal releases. 10.11 can't be smoke-tested from `main` any more (no `net9.0` target); when preparing a 10.11 hotfix, check out `10.11-release` and use that branch's own `build-local.sh` with `JELLYFIN_ABI=10.11.0`.
-
-## When Making Changes
-
-
-- Update the mkdocs `/docs/content/` when adding user-facing features. Put any examples in the example sections.
-- **UI changes must update both HTML files**: `config.html` (admin) and `user-playlists.html` (user) - the JS modules are shared
-- Form fields need updates in: HTML (both pages), JS (create/edit/display), and backend DTOs
-- **Create-form fields and the "More options" fold**: required inputs must never
-  be placed inside `#advanced-options-body` (collapsed `display:none` hides native
-  validation). New advanced fields go under the matching sub-heading inside the fold
-  (Limits / Bumpers / Automation / Sharing / Presentation); new core fields go above
-  it. If a new advanced field has an unambiguous non-default state, add a signal for
-  it in `syncAdvancedSection` (config-lists.js) so edit mode surfaces it as a chip
-  and auto-expands.
+- Update `docs/` when behaviour changes, and append to the progress log in `docs/port/status.md` for anything a later session needs to know.
+- UI changes: `config.html` plus the shared `config-*.js`. `user-playlists.html` and the end-user controllers are unused on Emby.
+- Create-form fields: required inputs must never sit inside `#advanced-options-body` (collapsed `display:none` hides native validation). New advanced fields go under the matching sub-heading in the fold (Limits / Bumpers / Automation / Sharing / Presentation); new core fields go above it. If a new advanced field has an unambiguous non-default state, add a signal in `syncAdvancedSection` (`config-lists.js`) so edit mode surfaces it as a chip and expands the fold.
+- Form fields need updates in HTML, JS (create/edit/display) and the backend DTOs.

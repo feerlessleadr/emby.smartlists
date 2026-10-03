@@ -1,261 +1,68 @@
-name: Build and Release
+name: Release
 
 on:
   push:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 env:
   DOTNET_VERSION: 10.0.x
-  PRERELEASE_STR: false
-  # Ship-forward: releases target Jellyfin 12 only. Jellyfin 10.11 servers stay on the last
-  # version published for them (v12.0.1.0) - Jellyfin offers every version whose targetAbi is at
-  # or below the running server, so they keep a working build without being offered newer ones.
-  # A 10.11 hotfix, if ever needed, is cut from the 10.11-release branch with this set to
-  # '[{"abi":"10.11.0.0","framework":"net9.0"}]'. That branch sits at v12.0.1.0, the last
-  # commit that still carried the net9.0 target, so its hotfix workflow can build net9.0
-  # while main (net10.0-only) cannot.
-  TARGETS: '[{"abi":"12.0.0.0","framework":"net10.0"}]'
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
-      - name: Setup jq
-        run: sudo apt-get install -y jq
-
-      - name: Check if tag is preview
-        id: check_preview
-        run: |
-          # Check if tag name contains "preview" or "rc" after version
-          TAG_NAME="$GITHUB_REF_NAME"
-          if echo "$TAG_NAME" | grep -E "preview|rc" > /dev/null; then
-            echo "is_preview=true" >> $GITHUB_OUTPUT
-            echo "Preview tag detected: $TAG_NAME"
-          else
-            echo "is_preview=false" >> $GITHUB_OUTPUT
-            echo "Release tag detected: $TAG_NAME"
-          fi
-
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build plugin
-        run: |
-          # Strip preview/rc suffixes for .NET versioning
-          VERSION=$(echo "$GITHUB_REF_NAME" | sed -E 's/(preview|rc).*$//' | sed 's/v//' | sed 's/-$//')
-          echo "Building version: $VERSION (stripped from tag: $GITHUB_REF_NAME)"
-          echo "$TARGETS" | jq -c '.[]' | while read -r target; do
-            TARGET_ABI=$(echo "$target" | jq -r '.abi')
-            TARGET_FRAMEWORK=$(echo "$target" | jq -r '.framework')
-            echo "Building Jellyfin ABI ${TARGET_ABI} (${TARGET_FRAMEWORK})"
-            dotnet build Jellyfin.Plugin.SmartLists/Jellyfin.Plugin.SmartLists.csproj \
-              --framework "$TARGET_FRAMEWORK" \
-              --configuration Release --no-restore -o "./build_output/${TARGET_ABI}" \
-              /p:Version=$VERSION /p:AssemblyVersion=$VERSION
-          done
-
-      - name: Create Plugin Zip
-        run: |
-          echo "$TARGETS" | jq -c '.[]' | while read -r target; do
-            TARGET_ABI=$(echo "$target" | jq -r '.abi')
-            STAGING_DIR="staging/${TARGET_ABI}"
-            mkdir -p "$STAGING_DIR"
-            cp "./build_output/${TARGET_ABI}/Jellyfin.Plugin.SmartLists.dll" "$STAGING_DIR/"
-            cp "./build_output/${TARGET_ABI}/SixLabors.ImageSharp.dll" "$STAGING_DIR/"
-            cp "./build_output/${TARGET_ABI}/Jellyfin.Plugin.SmartLists.deps.json" "$STAGING_DIR/"
-            cp images/logo.jpg "$STAGING_DIR/logo.jpg"
-            cd "$STAGING_DIR"
-            zip -X "../../Jellyfin.Plugin.SmartLists_${GITHUB_REF_NAME}_${TARGET_ABI}.zip" *
-            cd ../..
-          done
-
-      - name: Read tag message
-        id: tag_message
-        run: |
-          # actions/checkout replaces the annotated tag with a lightweight ref
-          # pointing at the commit (actions/checkout#290) — re-fetch to get the
-          # real tag object back before reading its message.
-          git fetch --tags --force
-          BODY=""
-          if [ "$(git cat-file -t "$GITHUB_REF_NAME")" = "tag" ]; then
-            BODY=$(git tag -l --format='%(contents:body)' "$GITHUB_REF_NAME")
-          fi
-          if [ -n "$BODY" ]; then
-            echo "has_message=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_message=false" >> "$GITHUB_OUTPUT"
-          fi
-          {
-            echo 'body<<EOM'
-            echo "$BODY"
-            echo 'EOM'
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create Release
-        id: create_release
-        uses: softprops/action-gh-release@v3
-        with:
-          name: Release ${{ github.ref_name }}
-          # Changelog from the annotated tag message (written by the /release
-          # skill). Falls back to GitHub auto-generated notes (PR titles +
-          # labels) when the tag has no annotated message.
-          body: ${{ steps.tag_message.outputs.body }}
-          files: ./Jellyfin.Plugin.SmartLists_${{ github.ref_name }}_*.zip
-          draft: false
-          # Use the dynamically determined prerelease status
-          prerelease: ${{ steps.check_preview.outputs.is_preview }}
-          generate_release_notes: ${{ steps.tag_message.outputs.has_message != 'true' }}
-          token: ${{ secrets.PAT }}
-
-      - name: Read Release Body
-        id: read_release
+      # See ci.yml: the Emby server assemblies come from the EMBY_SERVER_URL repository variable.
+      - name: Fetch Emby server assemblies
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT }}
+          EMBY_SERVER_URL: ${{ vars.EMBY_SERVER_URL }}
         run: |
-          set -e
-          resp=$(curl -s -H "Authorization: token $GITHUB_TOKEN" \
-                 "https://api.github.com/repos/${GITHUB_REPOSITORY}/releases/tags/${GITHUB_REF_NAME}")
-          body=$(echo "$resp" | jq -r '.body // ""')
-          {
-            echo 'body<<EOM'
-            echo "$body"
-            echo 'EOM'
-          } >> "$GITHUB_OUTPUT"
+          if [ -z "$EMBY_SERVER_URL" ]; then
+            echo "::error::Repository variable EMBY_SERVER_URL is not set (see docs/development.md, CI)."
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/emby"
+          curl -fsSL "$EMBY_SERVER_URL" -o "$RUNNER_TEMP/emby/server.archive"
+          case "$EMBY_SERVER_URL" in
+            *.zip) unzip -q "$RUNNER_TEMP/emby/server.archive" -d "$RUNNER_TEMP/emby/x" ;;
+            *)     mkdir "$RUNNER_TEMP/emby/x" && tar -xf "$RUNNER_TEMP/emby/server.archive" -C "$RUNNER_TEMP/emby/x" ;;
+          esac
+          model=$(find "$RUNNER_TEMP/emby/x" -name MediaBrowser.Model.dll | head -1)
+          if [ -z "$model" ]; then echo "::error::MediaBrowser.Model.dll not found in the archive"; exit 1; fi
+          echo "EMBY_SYSTEM_DIR=$(dirname "$model")" >> "$GITHUB_ENV"
 
-      - name: Update External Manifest (Stable)
-        if: steps.check_preview.outputs.is_preview != 'true'
+      - name: Build and test
+        run: |
+          dotnet restore Emby.Plugin.SmartLists.sln
+          dotnet test Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj --configuration Release --no-restore
+
+      - name: Package
+        id: package
+        run: |
+          # Tag v1.2.3 (optionally -rc.1 etc.) -> assembly version 1.2.3
+          VERSION=$(echo "$GITHUB_REF_NAME" | sed -E 's/^v//; s/-.*$//')
+          dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj --configuration Release -p:Version="$VERSION" --no-restore
+          mkdir -p artifacts
+          out=Emby.Plugin.SmartLists/bin/Release/net8.0
+          zip -j "artifacts/Emby.Plugin.SmartLists-$VERSION.zip" "$out/Emby.Plugin.SmartLists.dll" "$out/SixLabors.ImageSharp.dll"
+          echo "zip=artifacts/Emby.Plugin.SmartLists-$VERSION.zip" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
         env:
-          GITHUB_TOKEN: ${{ secrets.PAT }}
-          CHANGELOG_BODY: ${{ steps.read_release.outputs.body }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Strip preview/rc suffixes for .NET versioning
-          VERSION=$(echo "$GITHUB_REF_NAME" | sed -E 's/(preview|rc).*$//' | sed 's/v//' | sed 's/-$//')
-          ASSEMBLY_VERSION="${VERSION}"
-          TIMESTAMP=$(date -u +'%Y-%m-%d')
-          # Sanitize changelog: remove trailing "by @user in <link>" fragments GitHub adds
-          CLEAN_CHANGELOG=$(echo "$CHANGELOG_BODY" | sed -E 's/[[:space:]]*by @[[:alnum:]-]+ in https?:\/\/[^[:space:]]+//g')
-          MANIFEST_REPO="jyourstone/jellyfin-plugin-manifest"
-          PLUGIN_GUID="A0A2A7B2-747A-4113-8B39-757A9D267C79"
-
-          git clone https://x-access-token:${{ secrets.PAT }}@github.com/${MANIFEST_REPO}.git manifest-repo
-          cd manifest-repo
-          MANIFEST_FILE="manifest.json"
-
-          if [ ! -f "$MANIFEST_FILE" ]; then
-            echo "[]" > "$MANIFEST_FILE"
-          fi
-
-          if ! jq -e --arg guid "$PLUGIN_GUID" 'any(.[]; .guid == $guid)' "$MANIFEST_FILE" > /dev/null; then
-            PLUGIN_ENTRY=$(jq -n \
-              --arg name "SmartLists" \
-              --arg guid "$PLUGIN_GUID" \
-              --arg overview "Smart, self-updating playlists and collections." \
-              --arg description "Create smart, rule-based playlists and collections in Jellyfin — for movies, shows, music, or anything your library holds. A single genre rule takes seconds; stack rules into groups and you can express almost anything. Either way, they keep themselves up to date." \
-              --arg category "General" \
-              --arg owner "jyourstone" \
-              --arg imageUrl "https://raw.githubusercontent.com/jyourstone/jellyfin-smartlists-plugin/main/images/logo.jpg" \
-              '{name: $name, guid: $guid, overview: $overview, description: $description, category: $category, owner: $owner, imageUrl: $imageUrl, versions: []}')
-            jq --argjson new_entry "$PLUGIN_ENTRY" '. += [$new_entry]' "$MANIFEST_FILE" > tmp && mv tmp "$MANIFEST_FILE"
-          fi
-
-          echo "$TARGETS" | jq -c '.[]' | while read -r target; do
-            TARGET_ABI=$(echo "$target" | jq -r '.abi')
-            ZIP_NAME="Jellyfin.Plugin.SmartLists_${GITHUB_REF_NAME}_${TARGET_ABI}.zip"
-            CHECKSUM=$(md5sum "../${ZIP_NAME}" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-            DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${ZIP_NAME}"
-            NEW_PACKAGE=$(jq -n \
-              --arg version "$ASSEMBLY_VERSION" \
-              --arg abi "$TARGET_ABI" \
-              --arg url "$DOWNLOAD_URL" \
-              --arg checksum "$CHECKSUM" \
-              --arg changelog "$CLEAN_CHANGELOG" \
-              --arg timestamp "$TIMESTAMP" \
-              '{version: $version, targetAbi: $abi, sourceUrl: $url, checksum: $checksum, changelog: $changelog, timestamp: $timestamp}')
-            jq --argjson new_package "$NEW_PACKAGE" --arg guid "$PLUGIN_GUID" \
-              '(.[] | select(.guid == $guid).versions) |=
-                 ([$new_package] + map(select(.version != $new_package.version or .targetAbi != $new_package.targetAbi)))' \
-              "$MANIFEST_FILE" > tmp_manifest.json && mv tmp_manifest.json "$MANIFEST_FILE"
-          done
-
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add manifest.json
-          git commit -m "Update manifest for SmartLists v${VERSION}"
-          git push
-
-      - name: Update External Manifest (Unstable)
-        if: steps.check_preview.outputs.is_preview == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.PAT }}
-          CHANGELOG_BODY: ${{ steps.read_release.outputs.body }}
-        run: |
-          # Strip preview/rc suffixes for .NET versioning
-          VERSION=$(echo "$GITHUB_REF_NAME" | sed -E 's/(preview|rc).*$//' | sed 's/v//' | sed 's/-$//')
-          FULL_VERSION=$(echo "$GITHUB_REF_NAME" | sed 's/v//')
-          TIMESTAMP=$(date -u +'%Y-%m-%d')
-          # Sanitize changelog: remove trailing "by @user in <link>" fragments GitHub adds
-          CLEAN_CHANGELOG=$(echo "$CHANGELOG_BODY" | sed -E 's/[[:space:]]*by @[[:alnum:]-]+ in https?:\/\/[^[:space:]]+//g')
-          MANIFEST_REPO="jyourstone/jellyfin-plugin-manifest"
-          PLUGIN_GUID="A0A2A7B2-747A-4113-8B39-757A9D267C79"
-
-          git clone https://x-access-token:${{ secrets.PAT }}@github.com/${MANIFEST_REPO}.git manifest-repo
-          cd manifest-repo
-          
-          # Switch to unstable branch (create if it doesn't exist)
-          git checkout unstable 2>/dev/null || git checkout -b unstable
-          
-          MANIFEST_FILE="manifest.json"
-
-          if [ ! -f "$MANIFEST_FILE" ]; then
-            echo "[]" > "$MANIFEST_FILE"
-          fi
-
-          if ! jq -e --arg guid "$PLUGIN_GUID" 'any(.[]; .guid == $guid)' "$MANIFEST_FILE" > /dev/null; then
-            PLUGIN_ENTRY=$(jq -n \
-              --arg name "SmartLists" \
-              --arg guid "$PLUGIN_GUID" \
-              --arg overview "Smart, self-updating playlists and collections (Unstable)." \
-              --arg description "Create smart, rule-based playlists and collections in Jellyfin — for movies, shows, music, or anything your library holds. A single genre rule takes seconds; stack rules into groups and you can express almost anything. Either way, they keep themselves up to date. This is an unstable/preview version." \
-              --arg category "General" \
-              --arg owner "jyourstone" \
-              --arg imageUrl "https://raw.githubusercontent.com/jyourstone/jellyfin-smartlists-plugin/main/images/logo.jpg" \
-              '{name: $name, guid: $guid, overview: $overview, description: $description, category: $category, owner: $owner, imageUrl: $imageUrl, versions: []}')
-            jq --argjson new_entry "$PLUGIN_ENTRY" '. += [$new_entry]' "$MANIFEST_FILE" > tmp && mv tmp "$MANIFEST_FILE"
-          fi
-
-          echo "$TARGETS" | jq -c '.[]' | while read -r target; do
-            TARGET_ABI=$(echo "$target" | jq -r '.abi')
-            ZIP_NAME="Jellyfin.Plugin.SmartLists_${GITHUB_REF_NAME}_${TARGET_ABI}.zip"
-            CHECKSUM=$(md5sum "../${ZIP_NAME}" | cut -d' ' -f1 | tr '[:lower:]' '[:upper:]')
-            DOWNLOAD_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}/${ZIP_NAME}"
-            NEW_PACKAGE=$(jq -n \
-              --arg version "$VERSION" \
-              --arg abi "$TARGET_ABI" \
-              --arg url "$DOWNLOAD_URL" \
-              --arg checksum "$CHECKSUM" \
-              --arg changelog "$CLEAN_CHANGELOG" \
-              --arg timestamp "$TIMESTAMP" \
-              '{version: $version, targetAbi: $abi, sourceUrl: $url, checksum: $checksum, changelog: $changelog, timestamp: $timestamp}')
-            jq --argjson new_package "$NEW_PACKAGE" --arg guid "$PLUGIN_GUID" \
-              '(.[] | select(.guid == $guid).versions) |=
-                 ([$new_package] + map(select(.version != $new_package.version or .targetAbi != $new_package.targetAbi)))' \
-              "$MANIFEST_FILE" > tmp_manifest.json && mv tmp_manifest.json "$MANIFEST_FILE"
-          done
-
-          git config --global user.name 'github-actions[bot]'
-          git config --global user.email 'github-actions[bot]@users.noreply.github.com'
-          git add manifest.json
-          git commit -m "Update unstable manifest for SmartLists v${FULL_VERSION}"
-          git push origin unstable
+          flags=""
+          case "$GITHUB_REF_NAME" in *-*) flags="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" "${{ steps.package.outputs.zip }}" --title "$GITHUB_REF_NAME" --generate-notes $flags
