@@ -157,4 +157,4 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 
 ### Checkpoint O — security review (see docs/security.md)
 - Probed the admin API (authn, traversal, upload, malicious backup zip, JSON/regex/size fuzzing), UI script injection, dependencies and static patterns. Findings fixed: uploaded/restored images were accepted by extension only and SVG was allowed -> `Utilities/ImageContentValidator` (magic bytes), SVG removed, rejected uploads now return 400. No traversal, injection or auth bypass found.
-- Not yet run: a non-administrator session against the API (needs a non-admin signed in to the browser pane).
+- Non-administrator session (test1) verified: 403 on every endpoint tried, including the plugin configuration GET.

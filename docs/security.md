@@ -15,7 +15,7 @@ Written for running the plugin on an internet-facing Emby server. This is a revi
 | Area | Test | Result |
 |---|---|---|
 | Authentication | All endpoints and verbs with no token and with a bad token | 401 everywhere |
-| Authorization | Non-administrator session | **Not yet run** (needs a signed-in non-admin; see below) |
+| Authorization | Non-administrator session (user `test1`, `IsAdministrator=false`) calling list, users, fields, libraries, status, backups (list and create), timer, refresh-all, create, delete, and the plugin configuration endpoint | 403 on every call |
 | Path traversal | `..`, encoded `%2e%2e%2f`, backslashes, NUL, in list ids, image types, backup file names; GET, DELETE | Rejected (400/404), no file outside the plugin folders touched |
 | Backup restore | Crafted zip with `../` and `..\` entry names, non-GUID folders, hostile `config.json` (path-like `CustomImages`, HTML in fields) | Entries confined to the list's own GUID folder by file name only; traversal entries skipped or flattened; nothing written outside the plugin folder |
 | Image upload | Name traversal, double extensions, NUL, 23 MB file, random bytes, executable bytes named `.jpg`, SVG with a script | Stored under fixed names (`primary.<ext>`); size cap enforced. **Found:** bytes were not checked and SVG was accepted. **Fixed:** magic-byte validation, SVG removed (`ImageContentValidator`), also applied to restored zips |
@@ -44,4 +44,4 @@ Written for running the plugin on an internet-facing Emby server. This is a revi
 
 ## Re-running the checks
 
-The probes above are plain HTTP calls with an admin API key against a test server (see `docs/development.md`); the unit tests `ControllerRouterTests` and `ImageContentValidatorTests` pin the router and image rules. A non-admin check needs a non-administrator Emby user signed in to the browser: call `ApiClient.ajax({type:'GET', url: ApiClient.getUrl('Plugins/SmartLists')})` from the console and expect 403.
+The probes above are plain HTTP calls with an admin API key against a test server (see `docs/development.md`); the unit tests `ControllerRouterTests` and `ImageContentValidatorTests` pin the router and image rules. The non-admin check needs a non-administrator Emby user signed in to the browser: call `ApiClient.ajax({type:'GET', url: ApiClient.getUrl('Plugins/SmartLists')})` from the console and expect 403.
