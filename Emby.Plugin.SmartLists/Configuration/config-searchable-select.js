@@ -15,7 +15,7 @@
      * Call this after the select has been populated with options/optgroups.
      * @param {HTMLSelectElement} selectElement - The native select to enhance
      * @param {Object} [options] - Configuration options
-     * @param {AbortSignal} [options.signal] - AbortController signal for cleanup
+     * @param {AbortSignal} [options.signal] - Ignored (kept for callers): the widget cleans up with its own DOM elements
      * @param {string} [options.searchPlaceholder] - Placeholder for the search input (default 'Search fields...')
      * @param {string} [options.placeholder] - Display text when nothing is selected (default '-- Field --')
      * @param {string} [options.noResultsText] - Message when no options match the search (default 'No matching fields')
@@ -309,7 +309,11 @@
 
         // ===== EVENT LISTENERS =====
 
-        const listenerOptions = options.signal ? { signal: options.signal } : {};
+        // Listeners on the wrapper's own elements are deliberately NOT tied to options.signal. The rule row's abort
+        // controller is aborted and replaced when rules are re-initialised (page re-show, form reset), but this widget
+        // is only built once per select; tying its listeners to a signal that later gets aborted left the field
+        // dropdown permanently dead until a page reload. They go away with the elements instead.
+        const listenerOptions = {};
 
         // Toggle on display click
         display.addEventListener('click', function (e) {
@@ -366,12 +370,18 @@
             e.stopPropagation();
         }, listenerOptions);
 
-        // Close on outside click
-        document.addEventListener('click', function (e) {
+        // Close on outside click. This one is on the document, so it removes itself once the widget has left the DOM.
+        const onDocumentClick = function (e) {
+            if (!wrapper.isConnected) {
+                document.removeEventListener('click', onDocumentClick);
+                return;
+            }
+
             if (isOpen && !wrapper.contains(e.target)) {
                 closeDropdown();
             }
-        }, listenerOptions);
+        };
+        document.addEventListener('click', onDocumentClick);
 
         // Keep display text in sync when the native select changes outside the
         // overlay (e.g. a label click focuses the hidden select and arrow keys
