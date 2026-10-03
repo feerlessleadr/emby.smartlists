@@ -167,46 +167,6 @@
             }
         },
         {
-            id: 'trakt-trending',
-            name: 'Trending Now (Trakt)',
-            category: 'Movies',
-            description: 'A collection of the movies trending on Trakt right now, refreshed daily. Requires a Trakt Client ID in the plugin settings (admin, Settings tab). Hidden while empty.',
-            adminOnly: false,
-            inputHint: null,
-            dto: {
-                Type: 'Collection',
-                MediaTypes: ['Movie'],
-                ExpressionSets: [{
-                    Expressions: [
-                        { MemberName: 'ExternalList', Operator: 'Equal', TargetValue: 'https://trakt.tv/movies/trending' }
-                    ]
-                }],
-                Order: { SortOptions: [{ SortBy: 'External List Order', SortOrder: 'Ascending' }] },
-                Schedules: [{ Trigger: 'Daily', Time: '06:00:00' }],
-                MinItems: 1,
-                MaxItems: 50
-            }
-        },
-        {
-            id: 'weekly-jams',
-            name: 'Weekly Jams (ListenBrainz)',
-            category: 'Music',
-            description: 'Your personalized ListenBrainz Weekly Jams as a playlist, in list order, refreshed weekly. No API key needed — just your ListenBrainz username in the feed URL.',
-            adminOnly: false,
-            inputHint: 'Paste your feed URL in the empty rule value: https://listenbrainz.org/syndication-feed/user/YOUR_USERNAME/recommendations?recommendation_type=weekly-jams',
-            dto: {
-                Type: 'Playlist',
-                MediaTypes: ['Audio'],
-                ExpressionSets: [{
-                    Expressions: [
-                        { MemberName: 'ExternalList', Operator: 'Equal', TargetValue: '' }
-                    ]
-                }],
-                Order: { SortOptions: [{ SortBy: 'External List Order', SortOrder: 'Ascending' }] },
-                Schedules: [{ Trigger: 'Weekly', DayOfWeek: 1, Time: '08:00:00' }]
-            }
-        },
-        {
             id: 'album-roulette',
             name: 'Album Roulette',
             category: 'Music',

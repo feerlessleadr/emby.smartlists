@@ -286,7 +286,6 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             AddField(fields, "Album", "Album", FieldType.Text, FieldCategory.Collection, StringOperators, ExtractionGroup.AudioMetadata);
             AddField(fields, "Artists", "Artists", FieldType.List, FieldCategory.Collection, MultiValueOperators, ExtractionGroup.AudioMetadata);
             AddField(fields, "AlbumArtists", "Album Artists", FieldType.List, FieldCategory.Collection, MultiValueOperators, ExtractionGroup.AudioMetadata);
-            AddField(fields, "ExternalList", "External List", FieldType.List, FieldCategory.Collection, SimpleOperators, ExtractionGroup.ExternalLists);
 
             // Provider ID Fields (direct BaseItem property access - zero cost)
             AddField(fields, "ImdbId", "IMDb ID", FieldType.Text, FieldCategory.Content, StringOperators);
@@ -580,8 +579,6 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                 new { Value = "LastPlayed (owner) Descending", Label = "Last Played (owner) Descending" },
                 new { Value = "LastPlayed (all users) Ascending", Label = "Last Played (all users) Ascending" },
                 new { Value = "LastPlayed (all users) Descending", Label = "Last Played (all users) Descending" },
-                new { Value = "External List Order Ascending", Label = "External List Order Ascending" },
-                new { Value = "External List Order Descending", Label = "External List Order Descending" },
             ];
         }
     }

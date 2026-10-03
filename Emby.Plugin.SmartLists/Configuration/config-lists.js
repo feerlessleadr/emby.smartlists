@@ -1878,22 +1878,22 @@
         }
 
         // Helper function to build Emby URL from ID
-        const buildEmbyUrl = function (jellyfinId) {
-            if (!jellyfinId || jellyfinId === '' || jellyfinId === '00000000-0000-0000-0000-000000000000') {
+        const buildEmbyUrl = function (embyId) {
+            if (!embyId || embyId === '' || embyId === '00000000-0000-0000-0000-000000000000') {
                 return null;
             }
             try {
                 const apiClient = SmartLists.getApiClient();
                 const serverId = apiClient.serverId();
                 const baseUrl = apiClient.serverAddress();
-                return baseUrl + '/web/#/details?id=' + encodeURIComponent(jellyfinId) + '&serverId=' + encodeURIComponent(serverId);
+                return baseUrl + '/web/index.html#!/item?id=' + encodeURIComponent(embyId) + '&serverId=' + encodeURIComponent(serverId);
             } catch (err) {
                 console.error('Error building Emby URL:', err);
                 // Fallback: try without serverId
                 try {
                     const apiClient = SmartLists.getApiClient();
                     const baseUrl = apiClient.serverAddress();
-                    return baseUrl + '/web/#/details?id=' + encodeURIComponent(jellyfinId);
+                    return baseUrl + '/web/index.html#!/item?id=' + encodeURIComponent(embyId);
                 } catch (fallbackErr) {
                     console.error('Error building Emby URL (fallback):', fallbackErr);
                     return null;
@@ -1904,15 +1904,15 @@
         // Build Emby playlist/collection link info
         // For playlists: show current user's link (if any) + count of others
         // For collections: show single link
-        let jellyfinLinkHtml = '';
+        let embyLinkHtml = '';
 
         if (isEnabled) {
             if (isCollection) {
                 // Collections: single ID, show simple link
-                const jellyfinId = playlist.CollectionId;
-                const url = buildEmbyUrl(jellyfinId);
+                const embyId = playlist.CollectionId;
+                const url = buildEmbyUrl(embyId);
                 if (url) {
-                    jellyfinLinkHtml = ' - <a href="' + SmartLists.escapeHtmlAttribute(url) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary-main); text-decoration: none;">View in Emby</a>';
+                    embyLinkHtml = ' - <a href="' + SmartLists.escapeHtmlAttribute(url) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary-main); text-decoration: none;">View in Emby</a>';
                 }
             } else {
                 // Playlists: show current user's playlist (if they have one) + count of others
@@ -1938,28 +1938,28 @@
                         if (currentUserPlaylist) {
                             const url = buildEmbyUrl(currentUserPlaylist.PlaylistId);
                             if (url) {
-                                jellyfinLinkHtml = ' - <a href="' + SmartLists.escapeHtmlAttribute(url) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary-main); text-decoration: none;">View in Emby</a>';
+                                embyLinkHtml = ' - <a href="' + SmartLists.escapeHtmlAttribute(url) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary-main); text-decoration: none;">View in Emby</a>';
 
                                 // Add count of other users if any
                                 if (otherUsersCount > 0) {
-                                    jellyfinLinkHtml += ' <span style="opacity: 0.6; font-size: 0.9em;">(+' + otherUsersCount + ' other' + (otherUsersCount === 1 ? '' : 's') + ')</span>';
+                                    embyLinkHtml += ' <span style="opacity: 0.6; font-size: 0.9em;">(+' + otherUsersCount + ' other' + (otherUsersCount === 1 ? '' : 's') + ')</span>';
                                 }
                             }
                         } else if (otherUsersCount > 0) {
                             // Current user doesn't have this playlist, just show count
-                            jellyfinLinkHtml = ' - <span style="opacity: 0.6; font-style: italic;">(' + playlist.UserPlaylists.length + ' user' + (playlist.UserPlaylists.length === 1 ? '' : 's') + ')</span>';
+                            embyLinkHtml = ' - <span style="opacity: 0.6; font-style: italic;">(' + playlist.UserPlaylists.length + ' user' + (playlist.UserPlaylists.length === 1 ? '' : 's') + ')</span>';
                         }
                     } catch (err) {
                         console.error('Error getting current user ID:', err);
                         // Fallback: show count only
-                        jellyfinLinkHtml = ' - <span style="opacity: 0.6; font-style: italic;">(' + playlist.UserPlaylists.length + ' user' + (playlist.UserPlaylists.length === 1 ? '' : 's') + ')</span>';
+                        embyLinkHtml = ' - <span style="opacity: 0.6; font-style: italic;">(' + playlist.UserPlaylists.length + ' user' + (playlist.UserPlaylists.length === 1 ? '' : 's') + ')</span>';
                     }
                 } else {
                     // Fallback: single playlist (backwards compatibility)
-                    const jellyfinId = playlist.PlaylistId;
-                    const url = buildEmbyUrl(jellyfinId);
+                    const embyId = playlist.PlaylistId;
+                    const url = buildEmbyUrl(embyId);
                     if (url) {
-                        jellyfinLinkHtml = ' - <a href="' + SmartLists.escapeHtmlAttribute(url) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary-main); text-decoration: none;">View in Emby</a>';
+                        embyLinkHtml = ' - <a href="' + SmartLists.escapeHtmlAttribute(url) + '" target="_blank" rel="noopener noreferrer" style="color: var(--jf-palette-primary-main); text-decoration: none;">View in Emby</a>';
                     }
                 }
             }
@@ -2043,7 +2043,7 @@
             '<tr style="border-bottom: 1px solid var(--jf-palette-divider);">' +
             '<td style="padding: 0.5em 0.75em; font-weight: bold; opacity: 0.8; width: 40%; border-right: 1px solid var(--jf-palette-divider);">Type</td>' +
             '<td style="padding: 0.5em 0.75em; ">' + eListType +
-            jellyfinLinkHtml +
+            embyLinkHtml +
             '</td>' +
             '</tr>' +
             // Hide File property on user pages

@@ -53,6 +53,17 @@ define(['baseView', 'emby-input', 'emby-button', 'emby-select', 'emby-checkbox',
         '--jf-palette-common-white: #fff;',
         '--jf-palette-LinearProgress-warningBg: rgba(255, 167, 38, .3);',
         '--jf-palette-Alert-warningColor: #ffa726;',
+        '}',
+        // Emby's .emby-select-withcolor forces white text (it is meant for dark pill selects), which is unreadable on
+        // the light theme; keep the custom selects on the theme text colour and give their dropdowns a solid fill.
+        '.SmartListsConfigurationPage .searchable-select-display, .SmartListsConfigurationPage .searchable-select-display-text,',
+        '.SmartListsConfigurationPage .multi-select-display, .SmartListsConfigurationPage .multi-select-display * {',
+        'color: var(--jf-palette-text-primary) !important;',
+        '}',
+        '.SmartListsConfigurationPage .searchable-select-dropdown, .SmartListsConfigurationPage .multi-select-dropdown {',
+        'background: var(--jf-palette-background-default) !important;',
+        'backdrop-filter: none !important;',
+        'border: 1px solid var(--jf-palette-divider);',
         '}'
     ].join('\n');
 

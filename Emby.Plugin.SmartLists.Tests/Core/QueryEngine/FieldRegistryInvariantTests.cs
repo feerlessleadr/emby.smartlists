@@ -483,7 +483,6 @@ public class FieldRegistryInvariantTests
     [InlineData("SeriesName", true)]         // SeriesName
     [InlineData("NextUnwatched", true)]      // NextUnwatched
     [InlineData("LastEpisodeAirDate", true)] // LastEpisodeAirDate
-    [InlineData("ExternalList", true)]       // ExternalLists
     [InlineData("SimilarTo", true)]          // SimilarTo
     public void IsExpensiveField_PinsTheKnownTierOfEachExtractionGroup(string fieldName, bool expected)
     {
