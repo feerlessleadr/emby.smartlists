@@ -48,7 +48,10 @@ Tips:
 
 Produces `artifacts/Emby.Plugin.SmartLists-0.1.0.zip` containing `Emby.Plugin.SmartLists.dll` and `SixLabors.ImageSharp.dll`. Use a new version for every distributed build.
 
-## CIThere is no CI: the repository has no GitHub workflows. Build and test locally with the commands above (the plugin needs Emby's own assemblies, which cannot be committed, so a hosted runner would need them supplied separately).
+## CI
+
+There is no CI: the repository has no GitHub workflows. Build and test locally with the commands above (the plugin needs Emby's own assemblies, which cannot be committed, so a hosted runner would need them supplied separately).
+
 ## Project layout and architecture
 
 See `CLAUDE.md` for the layout, how the plugin is composed on Emby (host, entry point, API router, page controller), the conventions, and the list of Emby behaviours that have caused bugs. `docs/port/api-notes.md` has the verified Emby API facts and `docs/port/status.md` the history.
