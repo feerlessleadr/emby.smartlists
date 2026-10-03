@@ -230,7 +230,7 @@
             dropZoneDefault.style.cssText = 'display: flex; align-items: center; gap: 0.5em;';
 
             var dropIcon = document.createElement('span');
-            dropIcon.className = 'material-icons';
+            dropIcon.className = 'md-icon';
             dropIcon.style.cssText = 'font-size: 1.5em; color: var(--jf-palette-text-disabled);';
             dropIcon.textContent = 'upload_file';
             dropZoneDefault.appendChild(dropIcon);
@@ -252,7 +252,7 @@
             previewContainer.style.cssText = 'width: 40px; height: 40px; flex: 0 0 auto; display: flex; align-items: center; justify-content: center; border: 1px solid var(--jf-palette-divider); border-radius: 4px; overflow: hidden; background: var(--jf-palette-background-paper);';
 
             var placeholderIcon = document.createElement('span');
-            placeholderIcon.className = 'material-icons';
+            placeholderIcon.className = 'md-icon';
             placeholderIcon.style.cssText = 'color: var(--jf-palette-text-secondary); font-size: 18px;';
             placeholderIcon.textContent = 'image';
             previewContainer.appendChild(placeholderIcon);
@@ -264,7 +264,7 @@
             dropZoneSelected.appendChild(fileNameSpan);
 
             var checkIcon = document.createElement('span');
-            checkIcon.className = 'material-icons';
+            checkIcon.className = 'md-icon';
             checkIcon.style.cssText = 'font-size: 1.2em; color: var(--jf-palette-success-main); flex: 0 0 auto;';
             checkIcon.textContent = 'check_circle';
             dropZoneSelected.appendChild(checkIcon);
@@ -301,7 +301,7 @@
                 // Reset preview
                 previewContainer.innerHTML = '';
                 var icon = document.createElement('span');
-                icon.className = 'material-icons';
+                icon.className = 'md-icon';
                 icon.style.cssText = 'color: var(--jf-palette-text-secondary); font-size: 18px;';
                 icon.textContent = 'image';
                 previewContainer.appendChild(icon);

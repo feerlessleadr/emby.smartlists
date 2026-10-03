@@ -343,8 +343,8 @@
         html += '<input type="checkbox" id="selectAllCheckbox" data-embycheckbox="true" class="emby-checkbox">';
         html += '<span class="checkboxLabel">Select All</span>';
         html += '<span class="checkboxOutline">';
-        html += '<span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>';
-        html += '<span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>';
+        html += '<span class="md-icon checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>';
+        html += '<span class="md-icon checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>';
         html += '</span>';
         html += '</label>';
 

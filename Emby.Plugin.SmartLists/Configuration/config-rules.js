@@ -985,7 +985,7 @@
         moveUpBtn.type = 'button';
         moveUpBtn.className = 'rule-action-btn clone-btn move-group-up-btn';
         moveUpBtn.title = 'Move Rule Group Up';
-        moveUpBtn.innerHTML = '<span class="material-icons" style="font-size: 1.2em; height: 31px; display: flex; justify-content: center; align-items: center;">keyboard_arrow_up</span>';
+        moveUpBtn.innerHTML = '<span class="md-icon" style="font-size: 1.2em; height: 31px; display: flex; justify-content: center; align-items: center;">keyboard_arrow_up</span>';
 
         // Style the move button using the clone button styling
         SmartLists.styleRuleActionButton(moveUpBtn, 'clone');
@@ -994,7 +994,7 @@
         moveDownBtn.type = 'button';
         moveDownBtn.className = 'rule-action-btn clone-btn move-group-down-btn';
         moveDownBtn.title = 'Move Rule Group Down';
-        moveDownBtn.innerHTML = '<span class="material-icons" style="font-size: 1.2em; height: 31px; display: flex; justify-content: center; align-items: center;">keyboard_arrow_down</span>';
+        moveDownBtn.innerHTML = '<span class="md-icon" style="font-size: 1.2em; height: 31px; display: flex; justify-content: center; align-items: center;">keyboard_arrow_down</span>';
 
         // Style the move button using the clone button styling
         SmartLists.styleRuleActionButton(moveDownBtn, 'clone');
@@ -1003,7 +1003,7 @@
         cloneBtn.type = 'button';
         cloneBtn.className = 'rule-action-btn clone-btn clone-group-btn';
         cloneBtn.title = 'Clone Rule Group';
-        cloneBtn.innerHTML = '<span class="material-icons" style="font-size: 1em; height: 31px; display: flex; justify-content: center; align-items: center;">content_copy</span>';
+        cloneBtn.innerHTML = '<span class="md-icon" style="font-size: 1em; height: 31px; display: flex; justify-content: center; align-items: center;">content_copy</span>';
 
         // Style the clone button using the styling system
         SmartLists.styleRuleActionButton(cloneBtn, 'clone');
@@ -1049,7 +1049,7 @@
         infoLink.style.cssText = 'text-decoration: none; color: inherit; opacity: 0.6; display: inline-flex; align-items: center; margin-left: 8px;';
 
         const infoIcon = document.createElement('span');
-        infoIcon.className = 'material-icons';
+        infoIcon.className = 'md-icon';
         infoIcon.setAttribute('aria-hidden', 'true');
         infoIcon.textContent = 'info_outline';
         infoIcon.style.cssText = 'font-size: 1.1em; line-height: 0;';
@@ -1130,7 +1130,7 @@
             '<div class="rule-actions" style="display: flex; gap: 4px; align-items: center;">' +
             '<button type="button" class="rule-action-btn and-btn" title="Add AND rule">AND</button>' +
             '<button type="button" class="rule-action-btn or-btn" title="Add OR group">OR</button>' +
-            '<button type="button" class="rule-action-btn clone-btn clone-rule-btn" title="Clone rule"><span class="material-icons" style="font-size: 1.2em; height: 31px; display: flex; justify-content: center; align-items: center;">content_copy</span></button>' +
+            '<button type="button" class="rule-action-btn clone-btn clone-rule-btn" title="Clone rule"><span class="md-icon" style="font-size: 1.2em; height: 31px; display: flex; justify-content: center; align-items: center;">content_copy</span></button>' +
             '<button type="button" class="rule-action-btn delete-btn" title="Remove rule">×</button>' +
             '</div>' +
             '</div>' +
@@ -1174,7 +1174,7 @@
             '<label style="display: flex; align-items: center; margin-bottom: 0.25em; font-size: 0.85em; opacity: 0.8; font-weight: 500;">' +
             'Collection search depth:' +
             '<a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/fields-and-operators/#collection-search-depth" target="_blank" rel="noopener noreferrer" title="Documentation" style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">' +
-            '<span class="material-icons" aria-hidden="true" style="font-size: 1.1em; line-height: 0;">info_outline</span>' +
+            '<span class="md-icon" aria-hidden="true" style="font-size: 1.1em; line-height: 0;">info_outline</span>' +
             '</a>' +
             '</label>' +
             '<input type="number" class="emby-input rule-collections-depth-input" min="0" max="10" step="1" value="0" style="width: 100%;">' +
@@ -1185,7 +1185,7 @@
             '<div style="font-size: 0.85em; opacity: 0.8; display: flex; align-items: center;">' +
             '<span>Enter an external list URL. Supported: MDBList, IMDb, Trakt, TMDB, Letterboxd, ListenBrainz, Scrob. Music lists match by MusicBrainz tags, with title/artist fallback.</span>' +
             '<a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/external-lists/" target="_blank" rel="noopener noreferrer" title="Documentation" style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">' +
-            '<span class="material-icons" aria-hidden="true" style="font-size: 1.1em; line-height: 0;">info_outline</span>' +
+            '<span class="md-icon" aria-hidden="true" style="font-size: 1.1em; line-height: 0;">info_outline</span>' +
             '</a>' +
             '</div>' +
             '</div>' +

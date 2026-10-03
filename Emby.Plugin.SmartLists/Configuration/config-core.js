@@ -2,7 +2,7 @@
     'use strict';
 
     // Constants
-    SmartLists.PLUGIN_ID = "A0A2A7B2-747A-4113-8B39-757A9D267C79";
+    SmartLists.PLUGIN_ID = "7f0b8a52-6c1d-4b57-9a2e-5d3b0c4e91a8";
     
     // Determine if we're in user mode (set by user-playlists.html before loading this script).
     // This value is refreshed for each page in setPageContext() to avoid SPA navigation leaks.
@@ -36,7 +36,23 @@
         SmartLists.ENDPOINTS = SmartLists.buildEndpoints(SmartLists.IS_USER_PAGE);
     };
 
-    SmartLists.setPageContext(document.querySelector('.SmartListsConfigurationPage'));
+    // Emby keeps previously visited views in the DOM, so more than one .SmartListsConfigurationPage can exist at
+    // once; the controller records the view that is being shown, with the visible one as the fallback.
+    SmartLists.getActivePage = function () {
+        var forced = SmartLists.activePage;
+        if (forced && forced.isConnected && !forced.classList.contains('page-hidden')) {
+            return forced;
+        }
+
+        var all = Array.prototype.slice.call(document.querySelectorAll('.SmartListsConfigurationPage'));
+        var visible = all.filter(function (p) {
+            return !p.classList.contains('page-hidden') && !p.classList.contains('hide');
+        });
+        var pool = visible.length ? visible : all;
+        return pool.length ? pool[pool.length - 1] : null;
+    };
+
+    SmartLists.setPageContext(SmartLists.getActivePage());
 
     // Field type constants to avoid duplication
     SmartLists.FIELD_TYPES = {
@@ -958,7 +974,7 @@
                 linkElement.addEventListener('click', function (e) {
                     e.preventDefault();
                     e.stopPropagation();
-                    var page = document.querySelector('.SmartListsConfigurationPage');
+                    var page = SmartLists.getActivePage();
                     if (page && window.SmartLists && window.SmartLists.switchToTab) {
                         window.SmartLists.switchToTab(page, 'status');
                     }

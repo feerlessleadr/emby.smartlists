@@ -1363,7 +1363,7 @@
             // Auto-refresh the playlist list to show updated LastRefreshed timestamp
             // Commented out to prevent page jump/scroll to top
             /*
-            const page = document.querySelector('.SmartListsConfigurationPage');
+            const page = SmartLists.getActivePage();
             if (page) {
                 SmartLists.loadPlaylistList(page);
             }
@@ -1974,8 +1974,8 @@
             '<input type="checkbox" is="emby-checkbox" data-embycheckbox="true" class="emby-checkbox playlist-checkbox" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '">' +
             '<span class="checkboxLabel" style="display: none;"></span>' +
             '<span class="checkboxOutline">' +
-            '<span class="material-icons checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>' +
-            '<span class="material-icons checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>' +
+            '<span class="md-icon checkboxIcon checkboxIcon-checked check" aria-hidden="true"></span>' +
+            '<span class="md-icon checkboxIcon checkboxIcon-unchecked" aria-hidden="true"></span>' +
             '</span>' +
             '</label>' +
             '<span class="playlist-expand-icon" style="margin-right: 0.5em; font-family: monospace; font-size: 1.2em; opacity: 0.6; flex-shrink: 0;">▶</span>' +
@@ -1994,33 +1994,33 @@
             '<div class="playlist-quick-actions" style="margin-left: -0.5em;">' +
             '<div class="playlist-kebab-container">' +
             '<button type="button" class="playlist-quick-action-btn kebab-btn" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" title="Actions">' +
-            '<span class="material-icons">more_vert</span>' +
+            '<span class="md-icon">more_vert</span>' +
             '</button>' +
             '<div class="playlist-kebab-menu paperList" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '">' +
             '<button type="button" class="playlist-kebab-menu-item kebab-edit-btn" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" data-playlist-name="' + SmartLists.escapeHtmlAttribute(playlist.Name || '') + '">' +
-            '<span class="material-icons">edit</span><span>Edit</span>' +
+            '<span class="md-icon">edit</span><span>Edit</span>' +
             '</button>' +
             '<button type="button" class="playlist-kebab-menu-item kebab-clone-btn" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" data-playlist-name="' + SmartLists.escapeHtmlAttribute(playlist.Name || '') + '">' +
-            '<span class="material-icons">content_copy</span><span>Clone</span>' +
+            '<span class="md-icon">content_copy</span><span>Clone</span>' +
             '</button>' +
             '<button type="button" class="playlist-kebab-menu-item kebab-refresh-btn' + (isEnabled ? '' : ' disabled') + '" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" data-playlist-name="' + SmartLists.escapeHtmlAttribute(playlist.Name || '') + '"' +
             (isEnabled ? '' : ' title="Cannot refresh disabled list"') + '>' +
-            '<span class="material-icons">refresh</span><span>Refresh</span>' +
+            '<span class="md-icon">refresh</span><span>Refresh</span>' +
             '</button>' +
             (isEnabled ?
                 '<button type="button" class="playlist-kebab-menu-item kebab-disable-btn" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" data-playlist-name="' + SmartLists.escapeHtmlAttribute(playlist.Name || '') + '">' +
-                '<span class="material-icons">pause_circle</span><span>Disable</span>' +
+                '<span class="md-icon">pause_circle</span><span>Disable</span>' +
                 '</button>' :
                 '<button type="button" class="playlist-kebab-menu-item kebab-enable-btn" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" data-playlist-name="' + SmartLists.escapeHtmlAttribute(playlist.Name || '') + '">' +
-                '<span class="material-icons">play_circle</span><span>Enable</span>' +
+                '<span class="md-icon">play_circle</span><span>Enable</span>' +
                 '</button>'
             ) +
             '<button type="button" class="playlist-kebab-menu-item kebab-convert-btn" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" data-playlist-name="' + SmartLists.escapeHtmlAttribute(playlist.Name || '') + '" data-target-type="' + (listType === 'Playlist' ? 'Collection' : 'Playlist') + '">' +
-            '<span class="material-icons">swap_horiz</span><span>Convert to ' + (listType === 'Playlist' ? 'Collection' : 'Playlist') + '</span>' +
+            '<span class="md-icon">swap_horiz</span><span>Convert to ' + (listType === 'Playlist' ? 'Collection' : 'Playlist') + '</span>' +
             '</button>' +
             '<div class="playlist-kebab-menu-divider"></div>' +
             '<button type="button" class="playlist-kebab-menu-item kebab-delete-btn danger" data-playlist-id="' + SmartLists.escapeHtmlAttribute(playlistId) + '" data-playlist-name="' + SmartLists.escapeHtmlAttribute(playlist.Name || '') + '">' +
-            '<span class="material-icons">delete</span><span>Delete</span>' +
+            '<span class="md-icon">delete</span><span>Delete</span>' +
             '</button>' +
             '</div>' +
             '</div>' +

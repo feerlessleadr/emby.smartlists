@@ -19,7 +19,7 @@
      * Get the active configuration page element
      */
     function getActiveConfigPage() {
-        return document.querySelector('.SmartListsConfigurationPage:not(.hide)');
+        return SmartLists.getActivePage();
     }
 
     /**

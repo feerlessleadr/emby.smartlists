@@ -780,30 +780,17 @@
 
     // ===== NAVIGATION =====
     SmartLists.getCurrentTab = function () {
-        const hash = window.location.hash;
-        const match = hash.match(/[?&]tab=([^&]*)/);
+        if (SmartLists.currentTab) {
+            return SmartLists.currentTab;
+        }
+        var match = window.location.hash.match(/[?&]tab=([^&]*)/);
         return match ? decodeURIComponent(match[1]) : 'create';
     };
 
+    // Emby's router treats any hash change as a navigation and rebuilds the page, so the current tab is kept in
+    // memory instead of being written to the URL (the original plugin used history.replaceState here).
     SmartLists.updateUrl = function (tabId) {
-        let hash = window.location.hash;
-        let newHash;
-
-        // Ensure hash starts with # for proper parsing by getCurrentTab
-        if (!hash) {
-            hash = '#';
-        }
-
-        if (hash.includes('tab=')) {
-            // Replace existing tab parameter
-            newHash = hash.replace(/([?&])tab=[^&]*/, '$1tab=' + encodeURIComponent(tabId));
-        } else {
-            // Add tab parameter
-            const separator = hash.includes('?') ? '&' : '?';
-            newHash = hash + separator + 'tab=' + encodeURIComponent(tabId);
-        }
-
-        window.history.replaceState({}, '', window.location.pathname + window.location.search + newHash);
+        SmartLists.currentTab = tabId;
     };
 
     SmartLists.switchToTab = function (page, tabId) {
@@ -958,16 +945,8 @@
             }, SmartLists.getEventListenerOptions(navSignal));
         });
 
-        // Handle browser back/forward navigation via hashchange
-        // This ensures status page data loads when navigating via browser buttons
-        window.addEventListener('hashchange', function () {
-            // Get the current tab from the URL hash
-            const currentTab = SmartLists.getCurrentTab();
-            // Switch to that tab, which will trigger data loading for status page
-            SmartLists.switchToTab(page, currentTab);
-        }, SmartLists.getEventListenerOptions(navSignal));
-
-        // Note: No popstate handler needed - hashchange handles browser navigation
+        // No hashchange handler: the tab is not stored in the URL on Emby (see updateUrl), and a stale view's
+        // handler would otherwise keep reacting to every navigation.
 
         // Initial tab already set above to prevent flash
     };
@@ -1761,7 +1740,7 @@
                 if (loadingEl) loadingEl.style.display = 'none';
                 if (emptyEl) {
                     emptyEl.style.display = 'block';
-                    emptyEl.innerHTML = '<span class="material-icons" style="font-size: 2em; display: block; margin-bottom: 0.5em;">error_outline</span><div>Failed to load backups. Please try again.</div>';
+                    emptyEl.innerHTML = '<span class="md-icon" style="font-size: 2em; display: block; margin-bottom: 0.5em;">error_outline</span><div>Failed to load backups. Please try again.</div>';
                 }
             });
     };
@@ -1790,13 +1769,13 @@
             html += '<td style="padding: 0.5em 0.5em; text-align: right; white-space: nowrap;">' + SmartLists.escapeHtml(formattedSize) + '</td>';
             html += '<td style="padding: 0.5em 0.75em; text-align: center; white-space: nowrap;">';
             html += '<button is="emby-button" type="button" class="backup-restore-btn emby-button raised" data-filename="' + escapedFilename + '" title="Restore" style="padding: 0.3em 0.6em; margin: 0 0.2em; min-width: auto;">';
-            html += '<span class="material-icons" style="font-size: 1.1em; vertical-align: middle;">restore</span>';
+            html += '<span class="md-icon" style="font-size: 1.1em; vertical-align: middle;">restore</span>';
             html += '</button>';
             html += '<button is="emby-button" type="button" class="backup-download-btn emby-button raised" data-filename="' + escapedFilename + '" title="Download" style="padding: 0.3em 0.6em; margin: 0 0.2em; min-width: auto;">';
-            html += '<span class="material-icons" style="font-size: 1.1em; vertical-align: middle;">download</span>';
+            html += '<span class="md-icon" style="font-size: 1.1em; vertical-align: middle;">download</span>';
             html += '</button>';
             html += '<button is="emby-button" type="button" class="backup-delete-btn emby-button raised danger" data-filename="' + escapedFilename + '" title="Delete" style="padding: 0.3em 0.6em; margin: 0 0.2em; min-width: auto;">';
-            html += '<span class="material-icons" style="font-size: 1.1em; vertical-align: middle;">close</span>';
+            html += '<span class="md-icon" style="font-size: 1.1em; vertical-align: middle;">close</span>';
             html += '</button>';
             html += '</td>';
             html += '</tr>';
@@ -2539,7 +2518,7 @@
                 background: var(--jf-palette-action-focus);
             }
 
-            .playlist-quick-action-btn .material-icons {
+            .playlist-quick-action-btn .md-icon {
                 font-size: 1.25em;
             }
 
@@ -2586,7 +2565,7 @@
                 background: var(--jf-palette-action-hover);
             }
 
-            .playlist-kebab-menu-item .material-icons {
+            .playlist-kebab-menu-item .md-icon {
                 font-size: 1.2em;
                 opacity: 0.8;
             }
@@ -2595,7 +2574,7 @@
                 color: var(--jf-palette-error-light);
             }
 
-            .playlist-kebab-menu-item.danger .material-icons {
+            .playlist-kebab-menu-item.danger .md-icon {
                 color: var(--jf-palette-error-light);
             }
 
@@ -2711,7 +2690,7 @@
 
     // ===== PAGE EVENT LISTENERS =====
     document.addEventListener('pageshow', function () {
-        const page = document.querySelector('.SmartListsConfigurationPage');
+        const page = SmartLists.getActivePage();
         if (page && page.classList && page.classList.contains('SmartListsConfigurationPage')) {
             if (SmartLists.setPageContext) {
                 SmartLists.setPageContext(page);
@@ -2759,7 +2738,7 @@
     // Fallback initialization for pages loaded directly (not via Jellyfin navigation)
     // This handles the case where pageshow doesn't fire for custom plugin pages
     document.addEventListener('DOMContentLoaded', function () {
-        const page = document.querySelector('.SmartListsConfigurationPage');
+        const page = SmartLists.getActivePage();
         if (page && !page._pageInitialized) {
             SmartLists.initPage(page);
         }
@@ -3058,7 +3037,7 @@
         var maxRetries = 30; // 30 retries × 100ms = 3 seconds total
         
         // Use the specific page element if provided, otherwise find it
-        var page = targetPage || document.querySelector('.SmartListsConfigurationPage');
+        var page = targetPage || SmartLists.getActivePage();
         if (!page) {
             return;
         }
@@ -3149,7 +3128,7 @@
     // Standard page events for normal Jellyfin page navigation
     // Note: pageshow event target is the document, so we need to query for our page element
     document.addEventListener('pageshow', function (e) {
-        var page = document.querySelector('.SmartListsConfigurationPage');
+        var page = SmartLists.getActivePage();
         if (page && !page._pageInitialized && !page._initializationInProgress) {
             checkAndInit(0, page);
         }

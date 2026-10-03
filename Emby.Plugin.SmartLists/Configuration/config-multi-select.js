@@ -243,11 +243,11 @@
             checkboxOutline.className = 'checkboxOutline';
 
             const checkedIcon = document.createElement('span');
-            checkedIcon.className = 'material-icons checkboxIcon checkboxIcon-checked check';
+            checkedIcon.className = 'md-icon checkboxIcon checkboxIcon-checked check';
             checkedIcon.setAttribute('aria-hidden', 'true');
 
             const uncheckedIcon = document.createElement('span');
-            uncheckedIcon.className = 'material-icons checkboxIcon checkboxIcon-unchecked';
+            uncheckedIcon.className = 'md-icon checkboxIcon checkboxIcon-unchecked';
             uncheckedIcon.setAttribute('aria-hidden', 'true');
 
             checkboxOutline.appendChild(checkedIcon);

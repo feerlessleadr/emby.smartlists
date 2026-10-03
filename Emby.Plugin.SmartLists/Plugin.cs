@@ -69,6 +69,12 @@ namespace Emby.Plugin.SmartLists
                     EmbeddedResourcePath = GetType().Namespace + ".Configuration.config.html",
                     EnableInMainMenu = true
                 },
+                // Page controller: loads the modules below (Emby runs page code through data-controller)
+                new PluginPageInfo
+                {
+                    Name = "smartlistsjs",
+                    EmbeddedResourcePath = GetType().Namespace + ".Configuration.config-controller.js",
+                },
                 // Core utilities and constants (must load first)
                 new PluginPageInfo
                 {

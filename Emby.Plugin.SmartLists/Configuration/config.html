@@ -1,14 +1,5 @@
-<!DOCTYPE html>
-<html>
-
-<head>
-    <title>SmartLists</title>
-    <!-- All CSS styling is handled dynamically via JavaScript -->
-</head>
-
-<body>
-    <div data-role="page" class="page type-interior pluginConfigurationPage SmartListsConfigurationPage">
-        <div data-role="content">
+<div is="emby-scroller" class="view flex flex-direction-column scrollFrameY flex-grow SmartListsConfigurationPage" data-horizontal="false" data-forcescrollbar="true" data-centerfocus="true" data-bindheader="true" data-controller="__plugin/smartlistsjs" data-title="SmartLists">
+    <div class="scrollSlider flex-grow flex-direction-column padded-left padded-left-page padded-right padded-top-page padded-bottom-page">
             <div class="content-primary">
                 <div style="display: flex; align-items: center; margin-bottom: 1em;">
                     <h1>SmartLists</h1>
@@ -17,19 +8,6 @@
                         rel="noopener noreferrer" style="padding: 0.4em 0.8em; margin-left: 1em;">Help</a>
                 </div>
                 
-                <!-- User Config Page Link -->
-                <div style="margin-bottom: 1em;">
-                    <a href="#/userpluginsettings.html?pageUrl=/Plugins/SmartLists/Pages/UserPlaylists&amp;tab=create" 
-                       style="color: var(--jf-palette-primary-main); text-decoration: none;">
-                        Open User Config Page
-                    </a> (requires the plugins "File Transformation" and "Plugin Pages")
-                    <a href="https://jellyfin-smartlists-plugin.dinsten.se/getting-started/quick-start/"
-                        target="_blank" rel="noopener noreferrer" title="Documentation"
-                        style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                        <span class="material-icons" aria-hidden="true"
-                            style="font-size: 1.1em; line-height: 0;">info_outline</span>
-                    </a>
-                </div>
                 
                 <form style="margin: 0;">
                     <!-- Notification area removed - now using floating notifications -->
@@ -56,7 +34,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#start-from-a-template"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -73,7 +51,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#playlists-vs-collections"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -98,7 +76,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/media-types/"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -126,9 +104,9 @@
                                     data-embycheckbox="true" class="emby-checkbox">
                                 <span class="checkboxLabel">Include Extras</span>
                                 <span class="checkboxOutline">
-                                    <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                    <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                         aria-hidden="true"></span>
-                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                    <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
@@ -145,14 +123,14 @@
                                     <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/media-types/#match-by-members"
                                         target="_blank" rel="noopener noreferrer" title="Documentation"
                                         style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                        <span class="material-icons" aria-hidden="true"
+                                        <span class="md-icon" aria-hidden="true"
                                             style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                     </a>
                                 </span>
                                 <span class="checkboxOutline">
-                                    <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                    <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                         aria-hidden="true"></span>
-                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                    <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
@@ -165,7 +143,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/fields-and-operators/"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -181,7 +159,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/sorting-and-limits/"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -197,7 +175,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/user-selection/"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -214,9 +192,9 @@
                                         data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">All users</span>
                                     <span class="checkboxOutline">
-                                        <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                             aria-hidden="true"></span>
-                                        <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                             aria-hidden="true"></span>
                                     </span>
                                 </label>
@@ -261,7 +239,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/sorting-and-limits/#max-items"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -277,7 +255,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#min-items"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -294,7 +272,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/sorting-and-limits/#max-playtime"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -313,14 +291,14 @@
                                     <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/sorting-and-limits/#random-group-selection"
                                         target="_blank" rel="noopener noreferrer" title="Documentation"
                                         style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                        <span class="material-icons" aria-hidden="true"
+                                        <span class="md-icon" aria-hidden="true"
                                             style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                     </a>
                                 </span>
                                 <span class="checkboxOutline">
-                                    <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                    <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                         aria-hidden="true"></span>
-                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                    <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
@@ -387,14 +365,14 @@
                                     <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#enable-list"
                                         target="_blank" rel="noopener noreferrer" title="Documentation"
                                         style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                        <span class="material-icons" aria-hidden="true"
+                                        <span class="md-icon" aria-hidden="true"
                                             style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                     </a>
                                 </span>
                                 <span class="checkboxOutline">
-                                    <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                    <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                         aria-hidden="true"></span>
-                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                    <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
@@ -409,7 +387,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/auto-refresh/"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -426,7 +404,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/auto-refresh/#custom-list-scheduling"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -441,7 +419,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/auto-refresh/#visibility-scheduling"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -457,9 +435,9 @@
                                     class="emby-checkbox">
                                 <span class="checkboxLabel">Make playlist public</span>
                                 <span class="checkboxOutline">
-                                    <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                    <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                         aria-hidden="true"></span>
-                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                    <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
@@ -477,14 +455,14 @@
                                     <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/media-types/#group-into-collections"
                                         target="_blank" rel="noopener noreferrer" title="Documentation"
                                         style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                        <span class="material-icons" aria-hidden="true"
+                                        <span class="md-icon" aria-hidden="true"
                                             style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                     </a>
                                 </span>
                                 <span class="checkboxOutline">
-                                    <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                    <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                         aria-hidden="true"></span>
-                                    <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                    <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                         aria-hidden="true"></span>
                                 </span>
                             </label>
@@ -496,13 +474,13 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#custom-images"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
                             <div id="custom-images-container"></div>
                             <button type="button" id="addImageBtn" class="emby-button raised" style="margin-top: 0.5em;">
-                                <span class="material-icons" style="font-size: 1.2em;">add_photo_alternate</span>
+                                <span class="md-icon" style="font-size: 1.2em;">add_photo_alternate</span>
                                 Add Image
                             </button>
                             <div class="fieldDescription">Upload custom cover images for this list. <span class="collection-only-description">When auto-generate is enabled, Primary and Thumbnail uploads are ignored.</span></div>
@@ -514,7 +492,7 @@
                                 <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#metadata"
                                     target="_blank" rel="noopener noreferrer" title="Documentation"
                                     style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                    <span class="material-icons" aria-hidden="true"
+                                    <span class="md-icon" aria-hidden="true"
                                         style="font-size: 1.1em; line-height: 0;">info_outline</span>
                                 </a>
                             </label>
@@ -702,9 +680,9 @@
                                         data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Ignore Article 'The' for default sort</span>
                                     <span class="checkboxOutline">
-                                        <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                             aria-hidden="true"></span>
-                                        <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                             aria-hidden="true"></span>
                                     </span>
                                 </label>
@@ -721,9 +699,9 @@
                                         data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Make playlists public by default</span>
                                     <span class="checkboxOutline">
-                                        <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                             aria-hidden="true"></span>
-                                        <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                             aria-hidden="true"></span>
                                     </span>
                                 </label>
@@ -830,7 +808,7 @@
                             <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#performance-settings"
                                 target="_blank" rel="noopener noreferrer" title="Documentation"
                                 style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                <span class="material-icons" aria-hidden="true"
+                                <span class="md-icon" aria-hidden="true"
                                     style="font-size: 1em; line-height: 0;">info_outline</span>
                             </a>
                         </h2>
@@ -851,7 +829,7 @@
                             <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#user-page-access-control"
                                 target="_blank" rel="noopener noreferrer" title="Documentation"
                                 style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                <span class="material-icons" aria-hidden="true"
+                                <span class="md-icon" aria-hidden="true"
                                     style="font-size: 1em; line-height: 0;">info_outline</span>
                             </a>
                         </h2>
@@ -864,9 +842,9 @@
                                         data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Enable User Page</span>
                                     <span class="checkboxOutline">
-                                        <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                             aria-hidden="true"></span>
-                                        <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                             aria-hidden="true"></span>
                                     </span>
                                 </label>
@@ -904,7 +882,7 @@
                             <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#custom-list-naming"
                                 target="_blank" rel="noopener noreferrer" title="Documentation"
                                 style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                <span class="material-icons" aria-hidden="true"
+                                <span class="md-icon" aria-hidden="true"
                                     style="font-size: 1em; line-height: 0;">info_outline</span>
                             </a>
                         </h2>
@@ -941,7 +919,7 @@
                             <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#smart-list-badge"
                                 target="_blank" rel="noopener noreferrer" title="Documentation"
                                 style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                <span class="material-icons" aria-hidden="true"
+                                <span class="md-icon" aria-hidden="true"
                                     style="font-size: 1em; line-height: 0;">info_outline</span>
                             </a>
                         </h2>
@@ -954,9 +932,9 @@
                                         data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Show smart list badge on covers</span>
                                     <span class="checkboxOutline">
-                                        <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                             aria-hidden="true"></span>
-                                        <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                             aria-hidden="true"></span>
                                     </span>
                                 </label>
@@ -975,7 +953,7 @@
                             <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/external-lists/"
                                 target="_blank" rel="noopener noreferrer" title="Documentation"
                                 style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                <span class="material-icons" aria-hidden="true"
+                                <span class="md-icon" aria-hidden="true"
                                     style="font-size: 1em; line-height: 0;">info_outline</span>
                             </a>
                         </h2>
@@ -1078,7 +1056,7 @@
                             <a href="https://jellyfin-smartlists-plugin.dinsten.se/user-guide/configuration/#backup-restore"
                                 target="_blank" rel="noopener noreferrer" title="Documentation"
                                 style="margin-left: 0.5em; text-decoration: none; color: inherit; display: inline-flex; align-items: center;">
-                                <span class="material-icons" aria-hidden="true"
+                                <span class="md-icon" aria-hidden="true"
                                     style="font-size: 1em; line-height: 0;">info_outline</span>
                             </a>
                         </h2>
@@ -1093,9 +1071,9 @@
                                         data-embycheckbox="true" class="emby-checkbox">
                                     <span class="checkboxLabel">Enable automated backups</span>
                                     <span class="checkboxOutline">
-                                        <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                             aria-hidden="true"></span>
-                                        <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                             aria-hidden="true"></span>
                                     </span>
                                 </label>
@@ -1129,11 +1107,11 @@
                         <div class="inputContainer" style="margin-bottom: 1em; margin-top: 1em;">
                             <div id="backupListContainer" class="paperList" style="padding: 1em; border: 1px solid var(--jf-palette-divider);">
                                 <div id="backupListLoading" style="text-align: center; padding: 1em;">
-                                    <span class="material-icons" style="animation: spin 1s linear infinite;">sync</span>
+                                    <span class="md-icon" style="animation: spin 1s linear infinite;">sync</span>
                                     <div style="margin-top: 0.5em; opacity: 0.7;">Loading backups...</div>
                                 </div>
                                 <div id="backupListEmpty" style="display: none; text-align: center; padding: 1em; opacity: 0.7;">
-                                    <span class="material-icons" style="font-size: 2em; display: block; margin-bottom: 0.5em;">inventory_2</span>
+                                    <span class="md-icon" style="font-size: 2em; display: block; margin-bottom: 0.5em;">inventory_2</span>
                                     <div>No backups found. Enable automated backups or create one manually below.</div>
                                 </div>
                                 <div id="backupListTable" style="display: none; max-height: 300px; overflow-y: auto;">
@@ -1154,7 +1132,7 @@
                             </div>
                             <div style="margin-top: 0.5em;">
                                 <button type="button" is="emby-button" id="refreshBackupListBtn" class="emby-button raised block">
-                                    <span class="material-icons" style="font-size: 1.2em; vertical-align: middle; margin-right: 0.3em;">refresh</span>
+                                    <span class="md-icon" style="font-size: 1.2em; vertical-align: middle; margin-right: 0.3em;">refresh</span>
                                     Refresh List
                                 </button>
                             </div>
@@ -1174,21 +1152,21 @@
                             <input type="file" id="restoreFile" accept=".zip" style="display: none;">
                             <div id="restoreDropZone" style="border: 2px dashed var(--jf-palette-divider); border-radius: 8px; padding: 2em; text-align: center; cursor: pointer; transition: all 0.2s ease;">
                                 <div id="restoreDropZoneContent">
-                                    <span class="material-icons" style="font-size: 3em; color: var(--jf-palette-text-disabled); display: block; margin-bottom: 0.5em;">upload_file</span>
+                                    <span class="md-icon" style="font-size: 3em; color: var(--jf-palette-text-disabled); display: block; margin-bottom: 0.5em;">upload_file</span>
                                     <div style="font-size: 1.1em; margin-bottom: 0.25em;">Drop backup file here or click to browse</div>
                                     <div style="color: var(--jf-palette-text-secondary); font-size: 0.9em;">Accepts .zip backup files</div>
                                 </div>
                                 <div id="restoreFileSelected" style="display: none;">
-                                    <span class="material-icons" style="font-size: 3em; color: var(--jf-palette-success-main); display: block; margin-bottom: 0.5em;">folder_zip</span>
+                                    <span class="md-icon" style="font-size: 3em; color: var(--jf-palette-success-main); display: block; margin-bottom: 0.5em;">folder_zip</span>
                                     <div id="restoreSelectedFileName" style="font-size: 1.1em; margin-bottom: 0.25em; word-break: break-all;"></div>
                                     <div id="restoreSelectedListCount" style="color: var(--jf-palette-text-secondary); font-size: 0.9em; margin-bottom: 0.5em;"></div>
                                     <div style="display: flex; gap: 0.5em; justify-content: center; flex-wrap: wrap;">
                                         <button type="button" is="emby-button" id="restoreBtn" class="emby-button raised" style="background: var(--jf-palette-success-dark);">
-                                            <span class="material-icons" style="font-size: 1.2em; vertical-align: middle; margin-right: 0.25em;">restore</span>
+                                            <span class="md-icon" style="font-size: 1.2em; vertical-align: middle; margin-right: 0.25em;">restore</span>
                                             Restore
                                         </button>
                                         <button type="button" is="emby-button" id="restoreCancelBtn" class="emby-button raised">
-                                            <span class="material-icons" style="font-size: 1.2em; vertical-align: middle; margin-right: 0.25em;">close</span>
+                                            <span class="md-icon" style="font-size: 1.2em; vertical-align: middle; margin-right: 0.25em;">close</span>
                                             Cancel
                                         </button>
                                     </div>
@@ -1201,9 +1179,9 @@
                                             data-embycheckbox="true" class="emby-checkbox">
                                         <span class="checkboxLabel">Overwrite existing lists with the same ID</span>
                                         <span class="checkboxOutline">
-                                            <span class="material-icons checkboxIcon checkboxIcon-checked check"
+                                            <span class="md-icon checkboxIcon checkboxIcon-checked check"
                                                 aria-hidden="true"></span>
-                                            <span class="material-icons checkboxIcon checkboxIcon-unchecked"
+                                            <span class="md-icon checkboxIcon checkboxIcon-unchecked"
                                                 aria-hidden="true"></span>
                                         </span>
                                     </label>
@@ -1384,65 +1362,4 @@
             </div>
         </div>
 
-        <!--
-            Module loader. These must NOT be plain <script src> tags.
-
-            Jellyfin-web parses plugin pages with innerHTML (viewContainer.js
-            parseHtml), which permanently disables the parsed <script> tags, then
-            revives them by re-appending the page with jQuery. jQuery loads a
-            <script src> through jQuery._evalUrl, which is a SYNCHRONOUS XHR - so a
-            reverse proxy sending "Permissions-Policy: sync-xhr=()" (the example in
-            Jellyfin's own nginx docs) blocks every module and the page renders empty.
-
-            An inline block is evaluated directly by jQuery instead, with no request
-            of its own, so it can inject the modules itself. See issue #471.
-
-            data-cfasync="false" opts the block out of Cloudflare Rocket Loader, which
-            rewrites inline scripts in text/html responses to type="text/rocketscript".
-            jQuery only evaluates a script whose type matches its rscriptType regex
-            (/^$|^module$|\/(?:java|ecma)script/i), so a rewritten block is skipped
-            silently - no console error, no server log, just an empty page. The
-            injected module elements need no such attribute: Rocket Loader only
-            rewrites HTML at the edge and never sees them. See issue #475.
-        -->
-        <script data-cfasync="false">
-            (function () {
-                var modules = [
-                    'config-core.js',              // Core utilities and constants (must load first)
-                    'config-formatters.js',        // Formatters and option generators
-                    'config-schedules.js',         // Schedule management
-                    'config-images.js',            // Image management
-                    'config-sorts.js',             // Sort management
-                    'config-multi-select.js',      // Generic multi-select component
-                    'config-searchable-select.js', // Searchable single-select component
-                    'config-user-select.js',       // User multi-select for playlists
-                    'config-rules.js',             // Rule management
-                    'config-lists.js',             // List CRUD operations
-                    'config-templates.js',         // Template catalog and picker
-                    'config-filters.js',           // Filtering and search
-                    'config-bulk-actions.js',      // Bulk actions
-                    'config-status.js',            // Status page
-                    'config-api.js',               // API calls
-                    'config-init.js'               // Initialization (must load last)
-                ];
-
-                for (var i = 0; i < modules.length; i++) {
-                    var script = document.createElement('script');
-                    // Dynamically created scripts default to async; false keeps them
-                    // executing in the order above, which config-init.js depends on.
-                    script.async = false;
-                    script.src = 'configurationpage?name=' + modules[i];
-                    // The SPA re-runs this block on every visit to the page; drop the
-                    // element once it has settled so <head> does not grow unbounded.
-                    // onerror too, so a module that fails to load is not left behind.
-                    script.onload = script.onerror = function () {
-                        this.remove();
-                    };
-                    document.head.appendChild(script);
-                }
-            })();
-        </script>
-    </div>
-</body>
-
-</html>
+</div>

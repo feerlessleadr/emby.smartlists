@@ -31,6 +31,7 @@
     <!-- User-facing pages -->
     <EmbeddedResource Include="Configuration\user-playlists.html" />
     <!-- Core utilities and constants (must load first) -->
+    <EmbeddedResource Include="Configuration\config-controller.js" />
     <EmbeddedResource Include="Configuration\config-core.js" />
     <!-- Formatters and option generators -->
     <EmbeddedResource Include="Configuration\config-formatters.js" />
