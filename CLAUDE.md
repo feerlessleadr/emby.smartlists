@@ -37,7 +37,7 @@ Things that will bite you:
 
 ### Testing
 
-`Emby.Plugin.SmartLists.Tests` (xunit, ~1,770 tests, net10.0). It covers the query engine (operators, prefilter resolvers, `FieldRegistry` invariants), `Core/Orders`, `Utilities`, the `ControllerRouter`, and the error-filter. Fixtures build real Emby `BaseItem`s in `Support/TestItems.cs`.
+`Emby.Plugin.SmartLists.Tests` (xunit, ~1,790 tests, net10.0). It covers the query engine (operators, prefilter resolvers, `FieldRegistry` invariants), `Core/Orders`, `Utilities`, the `ControllerRouter`, and the error-filter. Fixtures build real Emby `BaseItem`s in `Support/TestItems.cs`.
 
 - The test project targets net10.0 but the ASP.NET 8 runtime is not required: three `MediaBrowser.*` DLLs are copied next to the tests and `Support/EmbyAssemblyResolver.cs` resolves the rest from `EmbySystemDir`. If you see Jellyfin or wrong-version assemblies, delete the test `bin`/`obj` folders.
 - Tests do **not** cover anything that talks to a running Emby (playlist/collection creation, refresh queue, auto-refresh events, the page). Verify those on a live server; `docs/port/api-notes.md` records what has been verified and how.

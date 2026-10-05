@@ -1,65 +1,60 @@
 # Emby port: running status and decision log
 
-Living handoff document. Read this first, then [plan.md](plan.md) (phases and known gaps) and [api-notes.md](api-notes.md) (verified Emby API facts). Last updated at the point described under "Where we are".
+Living handoff document. Read this first, then [CLAUDE.md](../../CLAUDE.md) (architecture, commands, gotchas), [plan.md](plan.md) (original phases and known gaps) and [api-notes.md](api-notes.md) (verified Emby API facts). The progress log and checkpoints at the bottom (A to V) are an append-only history; "Where we are", "Decisions", "How to build", "Test environment" and "What is left" are kept current.
+
+## Where we are (2026-10-05)
+
+- **All seven port phases are done and the plugin is released.** Releases published by the owner on GitHub (`feerlessleadr/emby.smartlists`): v0.1.0 (first), v0.1.1 (layout polish), v0.1.2 (single self-contained DLL), v0.1.3 (authenticated image previews and the Field-dropdown fix). Latest source is `main` at or after `2b79608`; `artifacts/` (git-ignored) holds the zips, bare DLLs and `RELEASE_NOTES-*.md`.
+- 1,790 unit tests pass; the plugin builds with 0 warnings (warnings-as-errors, full analyzers). Verified on a test Emby 4.10.1.0, on a clean second profile, and by the owner on their production Emby server (it works; the owner reported the issues fixed in 0.1.2 and 0.1.3).
+- Known limits: the People prefilter is off (per-item evaluation, correct but slower); external lists, the end-user page, unsupported person roles and `VideoRangeType` are hidden; collection display order has no Emby equivalent; the Help/Documentation links in the page point at `docs/reference` on GitHub (written for Jellyfin, mechanically adapted).
+- **No CI** (workflows deleted at the owner's choice). The owner builds the DLL locally with `dev/build-release.ps1`, publishes a GitHub release by hand (tag `vX.Y.Z`, ONE asset: the bare `Emby.Plugin.SmartLists.dll`), and their GitHub-repo-plugin-installer updates production.
 
 ## Decisions (do not relitigate without new evidence)
 
 | Decision | Detail |
 |---|---|
-| Jellyfin dropped | This repo becomes the Emby plugin. No upstream tracking, no compat layer, no Jellyfin-named shims. |
-| Target | Emby Server 4.10.1.0, net8.0. Local install at `C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0` (plugins in `programdata\plugins`, launch `system\EmbyServer.exe`). |
-| Layout | Converted in place: `Jellyfin.Plugin.SmartLists` renamed to `Emby.Plugin.SmartLists` (namespace, assembly, tests project, sln). Branch `emby/step3-shared-compile`. **Nothing is committed.** |
-| MVP | Rules, smart playlists and collections, manual and scheduled refresh, auto-refresh, admin config page. Deferred: external lists, end-user page, backups (images compile with ImageSharp bundled, unverified at runtime). |
-| Distribution | Manual DLL zip for now. |
-| Item identity | `long BaseItem.InternalId` for items (Emby's REST/query/playlist/collection APIs use it). User IDs stay `Guid`. `ItemKinds` string constants replace `BaseItemKind`. |
-| Playlist refresh | Remove all entries, then add, via `IPlaylistManager` (measured about 15 ms for 150 items, order preserved). |
-| Playlist owner | The user holding the `ManageDelete` share row (`PlaylistOwnership`). |
-| Forced sort title | `SetSortNameDirect` + lock `MetadataFields.SortName` (survives FullRefresh and ReplaceAllMetadata; verified). |
-| Collections | Create via `ICollectionManager.CreateCollection` (locked); membership changes by add/remove diff; members read with `InternalItemsQuery.CollectionIds` (unverified). |
-| Dates | Emby uses `DateTimeOffset`; shared reader `Utilities/ReflectedDate`, typed `DateUtils`. |
-| People prefilter | Disabled (returns null, per-item evaluation) until Emby `GetPeople` semantics are verified. |
-| Warnings | `TreatWarningsAsErrors` is ON for the plugin (0 warnings, 0 errors). Tests project is relaxed on purpose. |
+| Jellyfin dropped | This repo is the Emby plugin. No upstream tracking, no compat layer, no Jellyfin-named shims. The original Jellyfin code is kept on the `jellyfin-original` branch of the repo (old `main` at `e25f62f`). |
+| Target | Emby Server 4.10.1.0, net8.0. Local dev install: `C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0` (plugins in `programdata\plugins`, launch `system\EmbyServer.exe`). A clean second profile lives in `Downloads\emby-clean-test` (own copy of `system`, port 8097; stopped). |
+| Repo | `https://github.com/feerlessleadr/emby.smartlists` (renamed from `jellyfin-smartlists-plugin-emby`). The port was fast-forwarded onto `main` (no history rewrite) at the owner's choice ("option 2"); the local branch is `main`. Pushing and release publishing happen only when the owner says so. |
+| Scope | In: rules, smart playlists and collections, manual/scheduled/auto refresh, admin page, images, backups, templates. Out (hidden): external lists, end-user page, person roles Emby lacks, `VideoRangeType`. |
+| Distribution | A single self-contained `Emby.Plugin.SmartLists.dll` (ImageSharp embedded; a loose DLL is file-locked on Windows and broke in-place upgrades in 0.1.1). Installed by the owner's `Emby.GitHubRepoPluginInstall` plugin: it uses GitHub Releases (newest non-prerelease by published date), detects a new version by a differing **tag name**, prefers a loose `.dll` asset over a zip, extracts zips recursively over `plugins` with overwrite, and does not retry locked files. So: a new tag and a new assembly version for every release, one asset only. |
+| Versioning | Assembly version = tag (`-p:Version=x.y.z`). Emby caches plugin files by version (ETag), so dev builds use a timestamp version. |
+| Item identity | `long BaseItem.InternalId` for items; users stay `Guid`. `ItemKinds` strings replace `BaseItemKind`. DTO fields renamed `PlaylistId` / `CollectionId`. |
+| Playlist refresh | Remove all entries, then add, via `IPlaylistManager`. Owner = the user with the `ManageDelete` share row. |
+| Forced sort title | `SetSortNameDirect` + lock `MetadataFields.SortName`, re-applied after creation (Emby's post-create refresh can revert it). |
+| Collections | `ICollectionManager.CreateCollection` (locked), membership by add/remove diff, images under `GetInternalMetadataPath()`. |
+| Docs | Live on GitHub in the repo (`README.md`, `docs/install.md`, `using.md`, `development.md`, `security.md`, `reference/` carried over from upstream, `port/` history). No mkdocs site. |
+| License and credit | AGPL-3.0 (inherited, `LICENSE` kept). The README credits **jyourstone** (original Jellyfin SmartLists plugin: idea and much of the design) and **ankenyr** (original SmartPlaylist plugin), states the AGPL source-availability obligations, is explicitly unaffiliated with Emby, and carries an AI disclosure and no-warranty section ("ported exclusively with Claude ... if you are not comfortable with that, do not use this plugin"). |
+| Security posture | Admin-only API (`[Authenticated(Roles="Admin")]` on one wildcard route); `docs/security.md` lists the tests run (authn/authz incl. non-admin 403, traversal, malicious backup zip, upload validation, fuzzing, XSS in the UI, dependencies). Advice given to the owner for the internet-facing server: block `/emby/Plugins/*`, `/Plugins/*`, `/web/configurationpage*` and `/emby/web/configurationpages*` at Caddy for non-private source IPs (`respond 403`, `not remote_ip private_ranges`), keep Emby patched, use strong admin passwords. Not yet verified against the owner's Caddy. |
+| People prefilter | Disabled (returns null) until Emby `GetPeople` semantics are verified. |
+| Warnings | `TreatWarningsAsErrors` ON for the plugin; the tests project is relaxed on purpose. |
 
-## How to build and test (Windows)
+## How to build, test, deploy (Windows)
+
+See `docs/development.md`. Short version (from the repo root):
 
 ```powershell
-$e = 'C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0\system'
-dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj -p:EmbySystemDir=$e
-dotnet test  Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj -p:EmbySystemDir=$e
+$env:EMBY_SYSTEM_DIR = 'C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0\system'
+dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj
+dotnet test  Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj
+./dev/deploy-local.ps1 -EmbyRoot 'C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0'   # run from the repo root
+./dev/build-release.ps1 -Version 0.1.4                                                     # -> artifacts\*.dll and *.zip
 ```
 
-- Tests run on net10.0 (ASP.NET 8 runtime is not installed here). The three `MediaBrowser.*` DLLs are copied next to the tests (`Private=true`); `Support/EmbyAssemblyResolver.cs` resolves anything else from `EmbySystemDir`.
-- If tests load the wrong `MediaBrowser.Controller` (version 12.0.0 = Jellyfin), the test `bin/obj` still holds stale Jellyfin DLLs: delete `Emby.Plugin.SmartLists.Tests/bin` and `obj` and rebuild.
+- Tests run on net10.0 (the ASP.NET 8 runtime is not installed). Stale Jellyfin DLLs in the test `bin`/`obj` must be deleted.
+- Each server start leaves an `embytray.exe` (`Stop-Process -Name embytray`). Emby refuses a second instance from the same exe path.
+- Browser-pane testing: the pane must be visible; the owner has to type the sign-in password; click the SmartLists sidebar entry after loading `.../index.html?fresh=N#!/dashboard`. Click coordinates are in the screenshot frame, not CSS pixels.
+- A chained shell command that `cd`s elsewhere and then calls `dev/deploy-local.ps1` by relative path silently skipped deploys twice: always run it from the repo root.
 
 ## Test environment (Emby)
 
-- Libraries at `C:\claude\{Movies,Music,Shows}` hold generated placeholder media (5 movies + trailer, 150 bulk movies, 2 series, 12 tracks). Users: `kevin` (Guid 187e8098a0404bf1a42200bcf6f9d29f, internal id 1), `test1` (id 2).
-- API key is in `%USERPROFILE%\.emby-spike-key`; never print it; send as `X-Emby-Token` to `localhost:8096` only; delete when done.
-- A throwaway probe plugin `SmartListsEmbySpike.dll` is deployed in the plugins folder (source only in the Claude session scratchpad). Remove it when finished.
-
-## Where we are
-
-- **Phase 1 (rename/retarget): done.**
-- **Phase 2 (convert to Emby types): done.** Plugin compiles clean.
-- **Phase 3 (port the tests): in progress.** The test project compiles. Last run: **1,732 tests, 1,690 pass, 42 fail** (started at 608 failing). The 30 tests of `Api/Filters` are excluded until phase 6 (`Api/SmartListsProblemDetailsAttributeTests.cs`, `Compile Remove="Api\**"`).
-- Fixture decisions made in `Emby.Plugin.SmartLists.Tests/Support/TestItems.cs`: every built item/user gets a unique `InternalId` (`TestItems.NextId()`); `TestLibraryManager` is keyed by `InternalId`, answers `GetItemById(long|Guid [,ctx])`, `GetItemLinks` (empty), array return types; `NeutralLocalizationManager` (`GetRatingScore`/`GetRatingLevel` null, `RemoveDiacritics` identity) is installed globally because Emby's `SortName` setter needs it; `LoudItemRepository` (answers `OnItemLinksFilled`, throws on anything else); `TestItems.NewUser(name)`; `.Loaded()` / `MarkTaggedItemsLoaded()` on items whose genres/tags/studios are set in memory, otherwise Emby's lazy loader overwrites them with the stored (empty) values.
-
-### The 42 remaining failures (by test class)
-
-UserDataOrderTests 9, Entities (ParentValues/People-style fixtures) 6, ParentValuesPrefilterResolverTests 5, RoundRobinLeastRecentlyWatchedTests 4, ContainerMatchingTests 4, AggregateUserScopeTests 3, NumericAndDateOrderTests 2, GroupIntoCollectionsTests 2, NameOrderTests 2, and one each in RoundRobinAirBlock, AncestorWalk, RoundRobinGrouping, CollectionAggregateMetadata, SimilarToGroupMapping. All remaining ones are `Assert` value/collection differences. Treat each as either a fixture gap or a **real production bug** (the date reflection bug in `DateUtils`/last-played was found this way and fixed). Do not just edit expectations: decide per failure.
-
-Helper scripts used this session live in the Claude scratchpad (not in the repo): a compiler-driven fixer for Guid-to-long `.Id` edits and a TRX failure grouper. Recreate them if needed; `dotnet test --logger "trx"` plus grouping by message is the useful part.
+- Libraries at `C:\claude\{Movies,Music,Shows}` hold generated placeholder media (5 movies, 150 bulk movies, 2 series, 12 tracks; "Test Movie One" has an NFO with actors and a director). Users: `kevin` (Guid 187e8098a0404bf1a42200bcf6f9d29f, admin) and `test1` (non-admin).
+- Test API key file `%USERPROFILE%\.emby-spike-key`: deleted once, then recreated by the owner for more testing (it may exist). Never print it; send it only as `X-Emby-Token` to `localhost:8096`; delete it again (and revoke the key in Emby's API Keys page) when testing is finished.
+- The throwaway spike plugin was removed from the plugins folder in phase 4.
 
 ## What is left
 
-1. **Finish phase 3**: resolve the 42 failures; re-run the whole suite; keep 0 plugin warnings.
-2. Port or re-home the 30 excluded API-filter tests when phase 6 lands.
-3. **Phase 4**: runtime-verify and finish services against the test Emby (see known gaps in the plan: playlist membership/ownership reflection in `Factory.cs` and `PlaylistUserResolver`, `CollectionIds`, `SetOwner`, `IsPublic` round trip, unverified type-name strings).
-4. **Phase 5**: `IServerEntryPoint` composition root (build the service graph by hand, pass `IFileSystem` etc.), logging adapter over Emby's `ILogger`, `IScheduledTask` shells (cleanup/backup), event wiring (`ItemAdded/Updated/Removed`, `UserDataSaved`: `UpdateUserRating` = favorite toggle, `TogglePlayed`). Rewrite from the excluded files `AutoRefreshHostedService`, `StorageMigrationHostedService`, `CleanupTask`, `BackupTask`.
-5. **Phase 6**: replace the MVC controllers (`Api/**`, about 6,000 lines) with Emby `IService` endpoints; adapt `config-*.js` and both HTML pages; hide fields that can never match on Emby (people roles beyond Actor/Director/Writer/Producer/GuestStar/Composer/Conductor/Lyricist, `VideoRangeType`); rename `Jellyfin*` DTO/UI vocabulary together.
-6. **Phase 7**: verify against the test Emby with real playlists/collections, update docs and `CLAUDE.md`/`AGENTS.md`, replace CI and release workflows (Emby build, zip artifact), remove the spike plugin and the API key file.
-7. **Performance audit** (new): in Emby, `BaseItem.Genres/Studios/Tags` load lazily from the database on first read, so rule evaluation over large libraries can issue a query per item. Measure on the test server before trusting refresh times.
-8. Audit the remaining name-based reflection in `Factory.cs` (57 sites), `Engine.cs` (29), `MediaStreamHelper`, `ArtistOrder`, etc. against Emby's real types (only `MediaStream` and the user-data/date properties have been checked).
+- Nothing required. Possible follow-ups: verify the Caddy block on the real proxy; watch the installer update path (0.1.2 to 0.1.3 should work in place); optionally re-enable the People prefilter after verifying `GetPeople`; a performance audit of lazily loaded Genres/Tags on very large libraries; audit the remaining name-based reflection in `Factory.cs` (about 57 sites), `Engine.cs`, `MediaStreamHelper`, `ArtistOrder`; widen the narrow rule-field dropdown list (long names wrap); decide whether to release a build after 0.1.3.
 
 ## Gotchas already hit
 
@@ -183,3 +178,12 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 ### Checkpoint U — v0.1.3: Field dropdown dying after the page is re-shown
 - Reproduced by the owner (create a list, open a playlist in another tab, return): the rule Field dropdown no longer opened until a reload. Root cause: `initSearchableSelect` bound its element listeners with `{signal: ruleRow signal}`; `reinitializeExistingRules` (run from `initPage` after `pagehide` cleanup resets `_pageInitialized`, then `pageshow`) aborts every rule's AbortController and creates a new one, but `initSearchableSelect` returns early on already-initialised selects, so the display click handler stayed removed. Other dropdowns (multi-selects, native selects) were unaffected because they do not use the rule signal.
 - Fix: the widget no longer ties its listeners to the passed signal (they live and die with its own DOM elements); the document-level outside-click listener removes itself when the wrapper leaves the DOM. A/B verified in the browser pane by dispatching `pagehide` + `pageshow` on the page: old code -> dropdown dead; new code -> opens after any number of cycles; all other custom dropdowns also open.
+
+### Checkpoint V: publishing, releases and owner decisions after the port (summary)
+- **Repo and publishing:** the owner renamed the GitHub repo to `feerlessleadr/emby.smartlists`; `origin` was updated and the in-repo links retargeted. The old Jellyfin `main` is preserved as the branch `jellyfin-original`; the port was pushed to `main` as a fast-forward; later fixes were pushed in batches, each on request.
+- **README additions (all pushed):** an accurate intro (rules are defined by the user in a rule builder; nothing is generated from free text); an AI disclosure and no-warranty section; credits to jyourstone and ankenyr; an AGPL-3.0 license summary and a non-affiliation line. `docs/install.md` got a "Before you install" backup note.
+- **Licensing guidance given (not legal advice):** an AGPL-3.0 derivative must stay AGPL; linking to the public repo from the Emby forums is fine; keep `LICENSE`; the repo is the source offer; no Emby code is redistributed; the embedded ImageSharp has its own split license, fine for an open-source repo.
+- **GitHub installer plugin analysed** (see Decisions): one loose DLL asset per release and a new tag every time. The first update through it failed with "file in use" on `SixLabors.ImageSharp.dll`, which led to v0.1.2 (checkpoint S); the 0.1.1 to 0.1.2 step needed one manual stop, replace, start.
+- **CI removed** at the owner's request (checkpoint P); `.github/` is gone; a stale Jellyfin `release` skill copy under `.agents` was deleted and the `verify` skills were rewritten for Emby.
+- **Production feedback loop:** layout polish (checkpoints Q and R, shipped in v0.1.1); image preview and Field dropdown bugs (checkpoints T and U, shipped in v0.1.3). The dropdown bug was reproduced from the owner's live tab state and confirmed fixed with an A/B check (old code dead after a simulated `pagehide` plus `pageshow`, new code alive).
+- **Housekeeping:** stray `embytray.exe` icons were closed on request; the clean-profile server on port 8097 is stopped; test lists and temporary files were deleted after each test; this status head was rewritten on 2026-10-05 so it no longer says "phase 3 in progress" or "nothing committed".
