@@ -8,9 +8,9 @@ Back up your Emby data folder (`<programdata>`, at least `config`, `data` and `p
 
 ## Install
 
-1. Get the plugin: either a release build (the single file `Emby.Plugin.SmartLists.dll`, possibly inside a zip), or build it yourself (`docs/development.md`, "Building a release zip"). It is self-contained: the image library used for covers is embedded in it.
+1. Get the plugin: either the single file `Emby.Plugin.SmartLists.dll` from the latest GitHub release, or build it yourself (`docs/development.md`, "Building a release"). It is self-contained: the image library used for covers is embedded in it.
 2. Stop Emby Server.
-3. Put `Emby.Plugin.SmartLists.dll` (extract it from the zip if needed) into Emby's plugin folder, `<programdata>\plugins` (on Windows by default `C:\Users\<you>\AppData\Roaming\Emby-Server\programdata\plugins`; on Linux `/var/lib/emby/plugins`). Do not put it in a sub-folder.
+3. Put `Emby.Plugin.SmartLists.dll` into Emby's plugin folder, `<programdata>\plugins` (on Windows by default `C:\Users\<you>\AppData\Roaming\Emby-Server\programdata\plugins`; on Linux `/var/lib/emby/plugins`). Do not put it in a sub-folder.
 4. Start Emby Server.
 5. Sign in as an administrator and open *Dashboard*. **SmartLists** appears in the left menu (under *Advanced*). Two tasks, *SmartLists backup task* and *SmartLists cleanup task*, appear under *Scheduled Tasks*.
 

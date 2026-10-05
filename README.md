@@ -32,8 +32,8 @@ See [docs/using.md](docs/using.md) for details and known quirks.
 
 ## Install
 
-1. Download `Emby.Plugin.SmartLists-<version>.zip` (or build it, see [docs/development.md](docs/development.md)).
-2. Stop Emby, place `Emby.Plugin.SmartLists.dll` in the server's `plugins` folder (`<programdata>/plugins`), start Emby.
+1. Download `Emby.Plugin.SmartLists.dll` from the latest [release](https://github.com/feerlessleadr/emby.smartlists/releases) (or build it, see [docs/development.md](docs/development.md)). It is a single self-contained file.
+2. Stop Emby, place the DLL in the server's `plugins` folder (`<programdata>/plugins`), start Emby. To update, replace the same file.
 3. Open *Dashboard* and click **SmartLists** in the left menu.
 
 Full steps and troubleshooting: [docs/install.md](docs/install.md).

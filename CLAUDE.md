@@ -114,7 +114,7 @@ Full detail in `docs/port/api-notes.md`. The ones that cause bugs:
 
 ## Versioning and releases
 
-Personal project: no release automation beyond a CI build. A release is the single self-contained `Emby.Plugin.SmartLists.dll` (or a zip containing only it) built with `-c Release -p:Version=x.y.z`, placed in Emby's `plugins` folder (see `docs/install.md`). The Emby plugin version is the assembly version; change it for every distributed build because it is also the resource cache key.
+Personal project: no release automation beyond a CI build. A release is the single self-contained `Emby.Plugin.SmartLists.dll` built with `-c Release -p:Version=x.y.z`, placed in Emby's `plugins` folder (see `docs/install.md`). The Emby plugin version is the assembly version; change it for every distributed build because it is also the resource cache key.
 
 ## When making changes
 

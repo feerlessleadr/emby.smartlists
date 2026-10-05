@@ -40,13 +40,13 @@ Tips:
 - Each server start leaves an `embytray.exe` running; `Stop-Process -Name embytray` clears them.
 - When driving the page from an automated browser the window must be visible, and navigating by clicking the sidebar entry is more reliable than editing the hash; details in `CLAUDE.md` ("UI gotchas").
 
-## Building a release zip
+## Building a release
 
 ```powershell
 ./dev/build-release.ps1 -Version 0.1.0
 ```
 
-Produces `artifacts/Emby.Plugin.SmartLists-0.1.0.zip` and the bare `artifacts/Emby.Plugin.SmartLists.dll`. The plugin is a single self-contained DLL (ImageSharp is embedded), so a release needs only ONE of the two as its asset; the GitHub plugin installer picks a loose `.dll` asset before a zip. Use a new version for every distributed build.
+Produces the bare `artifacts/Emby.Plugin.SmartLists.dll` (and a zip of it, `artifacts/Emby.Plugin.SmartLists-0.1.0.zip`, which releases no longer use). The plugin is a single self-contained DLL (ImageSharp is embedded). Publish releases with the bare DLL as the ONLY asset; the GitHub plugin installer picks a loose `.dll` asset before a zip. Use a new version for every distributed build.
 
 ## CI
 
