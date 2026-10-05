@@ -140,6 +140,38 @@ public class RoundRobinLeastRecentlyWatchedTests
     }
 
     [Fact]
+    public void MostRecentlyWatched_OrdersGroupsNewestFirst_AndNeverWatchedLast()
+    {
+        var showA = TestItems.Mov("Show A");
+        var showB = TestItems.Mov("Show B");
+        var showC = TestItems.Mov("Show C");
+        var never = TestItems.Mov("Never Watched Show");
+
+        var order = new RoundRobinMostRecentlyWatchedOrder { GroupByField = "SeriesName" };
+        order.GroupRecency["Show A"] = new DateTime(2024, 1, 1);
+        order.GroupRecency["Show B"] = new DateTime(2024, 1, 15);
+        order.GroupRecency["Show C"] = new DateTime(2024, 1, 8);
+
+        var all = new BaseItem[] { showA, showB, showC, never };
+        order.PreComputePositions(all);
+
+        Assert.Equal(["Show B", "Show C", "Show A", "Never Watched Show"], TestItems.Names(order.OrderBy(all)));
+    }
+
+    [Fact]
+    public void MostRecentlyWatched_IgnoresMidBlockHold()
+    {
+        var order = new RoundRobinMostRecentlyWatchedOrder { GroupByField = "SeriesName" };
+        order.GroupRecency["Old Held Show"] = new DateTime(2020, 1, 1);
+        order.GroupRecency["Recent Show"] = new DateTime(2026, 1, 1);
+        order.HeldGroups.Add("Old Held Show");
+
+        var result = InvokeOrderGroupKeys(order, ["Old Held Show", "Recent Show"]);
+
+        Assert.Equal(["Recent Show", "Old Held Show"], result);
+    }
+
+    [Fact]
     public void OrderGroupKeys_GroupAbsentFromRecency_IsTreatedAsNeverWatched_AndSortsFirst()
     {
         var watched = TestItems.Mov("Watched Show");

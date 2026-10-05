@@ -118,14 +118,15 @@
         { value: 'Round Robin', label: 'Round Robin (Interleave)', group: 'Round Robin' },
         { value: 'Random Round Robin', label: 'Random Round Robin (Interleave)', group: 'Round Robin' },
         { value: 'Shuffled Round Robin', label: 'Shuffled Round Robin (Interleave)', group: 'Round Robin' },
-        { value: 'Least Recently Watched Round Robin', label: 'Least Recently Watched Round Robin (Interleave)', group: 'Round Robin' }
+        { value: 'Least Recently Watched Round Robin', label: 'Least Recently Watched Round Robin (Interleave)', group: 'Round Robin' },
+        { value: 'Most Recently Watched Round Robin', label: 'Most Recently Watched Round Robin (Interleave)', group: 'Round Robin' }
     ];
 
     // Sorts that have no Ascending/Descending direction
-    SmartLists.ORDERLESS_SORTS = ['Random', 'Random Round Robin', 'Shuffled Round Robin', 'Least Recently Watched Round Robin', 'NoOrder'];
+    SmartLists.ORDERLESS_SORTS = ['Random', 'Random Round Robin', 'Shuffled Round Robin', 'Least Recently Watched Round Robin', 'Most Recently Watched Round Robin', 'NoOrder'];
 
     // Round Robin sort variants (all use a GroupBy field)
-    SmartLists.ROUND_ROBIN_SORTS = ['Round Robin', 'Random Round Robin', 'Shuffled Round Robin', 'Least Recently Watched Round Robin'];
+    SmartLists.ROUND_ROBIN_SORTS = ['Round Robin', 'Random Round Robin', 'Shuffled Round Robin', 'Least Recently Watched Round Robin', 'Most Recently Watched Round Robin'];
 
     SmartLists.isOrderlessSort = function (name) {
         return SmartLists.ORDERLESS_SORTS.indexOf(name) !== -1;

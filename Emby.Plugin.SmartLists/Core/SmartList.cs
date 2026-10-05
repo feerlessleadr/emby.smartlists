@@ -855,6 +855,7 @@ namespace Emby.Plugin.SmartLists.Core
                     }
                 }
 
+                // Also covers the Most Recently Watched subclass.
                 foreach (var lrwOrder in Orders.OfType<RoundRobinLeastRecentlyWatchedOrder>())
                 {
                     // Reads the order's own GroupByField/CollectionGroupKeys (injected above) and,
@@ -3805,6 +3806,7 @@ namespace Emby.Plugin.SmartLists.Core
             { "Random Round Robin", () => new RoundRobinRandomOrder() },
             { "Shuffled Round Robin", () => new RoundRobinShuffledOrder() },
             { "Least Recently Watched Round Robin", () => new RoundRobinLeastRecentlyWatchedOrder() },
+            { "Most Recently Watched Round Robin", () => new RoundRobinMostRecentlyWatchedOrder() },
             { "NoOrder", () => new NoOrder() },
         };
 
@@ -3821,6 +3823,7 @@ namespace Emby.Plugin.SmartLists.Core
             "Random Round Robin",
             "Shuffled Round Robin",
             "Least Recently Watched Round Robin",
+            "Most Recently Watched Round Robin",
             "NoOrder",
         };
 

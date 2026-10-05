@@ -529,8 +529,29 @@ namespace Emby.Plugin.SmartLists.Core.Orders
         /// </summary>
         public Dictionary<string, DateTime> GroupRecency { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>
+        /// When true, groups are ordered most recently watched first (never-watched groups last)
+        /// and the mid-block hold is ignored. See <see cref="RoundRobinMostRecentlyWatchedOrder"/>.
+        /// </summary>
+        protected virtual bool NewestFirst => false;
+
+        /// <summary>
+        /// When true, any playback (even an unfinished episode) advances a group's recency. The
+        /// least-recently-watched rotation only counts fully played items so that a half-watched
+        /// episode does not send its show to the back.
+        /// </summary>
+        protected virtual bool PartialPlaysCountForRecency => false;
+
         protected override List<string> OrderGroupKeys(IEnumerable<string> keys)
         {
+            if (NewestFirst)
+            {
+                return keys
+                    .OrderByDescending(k => GroupRecency.TryGetValue(k, out var recent) ? recent : DateTime.MinValue)
+                    .ThenBy(k => k, OrderUtilities.SharedNaturalComparer)
+                    .ToList();
+            }
+
             return keys
                 .OrderBy(k => HeldGroups.Contains(k) || !GroupRecency.TryGetValue(k, out var d) ? DateTime.MinValue : d)
                 .ThenBy(k => k, OrderUtilities.SharedNaturalComparer)
@@ -623,7 +644,7 @@ namespace Emby.Plugin.SmartLists.Core.Orders
                     // Only fully played items advance the rotation: Emby stamps LastPlayedDate
                     // on any playback, so a half-watched episode must not send its group to the
                     // back. Folder items keep the aggregate date (their Played flag is unreliable).
-                    var countsForRecency = aggregateLastPlayed != null || userData?.Played == true;
+                    var countsForRecency = aggregateLastPlayed != null || userData?.Played == true || PartialPlaysCountForRecency;
 
                     if (countsForRecency && lastPlayed > DateTime.MinValue &&
                         (!recency.TryGetValue(key, out var existing) || lastPlayed > existing))
@@ -684,6 +705,11 @@ namespace Emby.Plugin.SmartLists.Core.Orders
         internal void ApplyMidBlockHold(List<BaseItem> filteredItems, ILogger? logger)
         {
             HeldGroups.Clear();
+
+            if (NewestFirst)
+            {
+                return;
+            }
 
             if (WatchedByGroup == null || WatchedByGroup.Count == 0 || UnwatchedCollectionItemIds == null || CollectionGroupKeys == null)
             {
@@ -798,5 +824,21 @@ namespace Emby.Plugin.SmartLists.Core.Orders
                 }
             }
         }
+    }
+
+    /// <summary>
+    /// Round Robin sort with groups ordered by how recently the user watched anything in them:
+    /// most recently watched first, never-watched groups last (alphabetical tie-break). Any
+    /// playback counts, including an unfinished episode. With a "Next Unwatched" rule each show
+    /// contributes one episode, so this is a "Next Up" feed ordered by the show you watched last.
+    /// Recency comes from the UNFILTERED media pool, like <see cref="RoundRobinLeastRecentlyWatchedOrder"/>.
+    /// </summary>
+    public class RoundRobinMostRecentlyWatchedOrder : RoundRobinLeastRecentlyWatchedOrder
+    {
+        public override string Name => "Most Recently Watched Round Robin";
+
+        protected override bool NewestFirst => true;
+
+        protected override bool PartialPlaysCountForRecency => true;
     }
 }

@@ -89,6 +89,7 @@ public class OrderFactoryTests
         "Random Round Robin",
         "Shuffled Round Robin",
         "Least Recently Watched Round Robin",
+        "Most Recently Watched Round Robin",
         "NoOrder",
     ];
 

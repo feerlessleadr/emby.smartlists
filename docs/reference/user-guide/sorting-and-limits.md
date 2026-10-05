@@ -235,6 +235,7 @@ Like Random Round Robin, groups are interleaved in random order — and addition
 - **Random Round Robin**: Group order randomized each refresh, items within each group in natural order.
 - **Shuffled Round Robin**: Group order randomized each refresh AND items within each group shuffled.
 - **Least Recently Watched Round Robin**: Group order follows your watch history (least recently watched first), items within each group in natural order.
+- **Most Recently Watched Round Robin**: Group order follows your watch history (most recently watched first, any playback counts), items within each group in natural order.
 
 **Example** — Shuffled Round Robin (Group By: Series Name) over shows A, B, C might produce:
 
@@ -255,6 +256,9 @@ Both the show rotation and the episode order within each show are random, and re
 2. Select **Shuffled Round Robin (Interleave)** as your sort
 3. Choose the **Group By** field (e.g., Series Name for TV episodes) — the same Group By fields as Round Robin are supported
 4. No Sort Order is needed — both group order and item order are always randomized
+
+### Most Recently Watched Round Robin (Interleave)
+The opposite ordering: groups are ordered by the show you watched **most** recently, never-watched shows last (alphabetical tie-break). Any playback counts, including an unfinished episode, so a show you are part-way through rises to the top. Use it with the rule `Next Unwatched = true` (one episode per show) to get a "Next Up" feed ordered by recent watching, and add `Playback Status is not Played` or other rules as needed. Group By: Series Name; no Sort Order is needed.
 
 ### Least Recently Watched Round Robin (Interleave)
 Rotates through your shows starting with the one you watched **least** recently — shows you have never watched come first, and the show you watched most recently goes to the back of the rotation. Watch an episode of Show A today, and on the next refresh Show A moves to the end of the rotation while the other shows shift forward. Only **fully watched** episodes advance the rotation: stopping half-way through an episode doesn't send the show to the back, so you can pick it up again from the front. Within each group, items stay in natural order (episodes by season/episode number), or air-date order if you set **Order Within Group** to Air Date.
