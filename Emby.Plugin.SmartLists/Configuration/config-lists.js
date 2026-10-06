@@ -921,8 +921,18 @@
     SmartLists.findFirstEmptyRuleValueInput = function (page) {
         const inputs = page.querySelectorAll('#rules-container .rule-value-input, #bumper-rules-container .rule-value-input');
         for (let i = 0; i < inputs.length; i++) {
-            if (!inputs[i].value && inputs[i].offsetParent !== null) {
+            if (inputs[i].value) {
+                continue;
+            }
+            if (inputs[i].offsetParent !== null) {
                 return inputs[i];
+            }
+            // Tag-style rule values (e.g. Library Name "is in") keep the value in a hidden
+            // input; the visible control the user types into is the tag field in the same row.
+            const row = inputs[i].closest('.rule-row');
+            const tagField = row ? row.querySelector('.tag-input-field') : null;
+            if (tagField && tagField.offsetParent !== null) {
+                return tagField;
             }
         }
         return null;

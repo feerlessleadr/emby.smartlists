@@ -182,6 +182,20 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             if (r.MemberName == "LibraryName")
             {
                 var libraryNamesProperty = System.Linq.Expressions.Expression.PropertyOrField(param, "LibraryNames");
+
+                // IsIn/IsNotIn on library names match WHOLE names: "TV" must not also match
+                // "Kids TV" (the generic list IsIn is a partial match).
+                if (r.Operator is "IsIn" or "IsNotIn")
+                {
+                    var exactMethod = typeof(Engine).GetMethod(nameof(ListHasAnyExactName), System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Static);
+                    if (exactMethod == null) throw new InvalidOperationException("Engine.ListHasAnyExactName method not found");
+                    var exactCall = System.Linq.Expressions.Expression.Call(
+                        exactMethod,
+                        libraryNamesProperty,
+                        System.Linq.Expressions.Expression.Constant(r.TargetValue, typeof(string)));
+                    return r.Operator == "IsIn" ? exactCall : System.Linq.Expressions.Expression.Not(exactCall);
+                }
+
                 var enumerableExpr = BuildEnumerableExpression(r, libraryNamesProperty, libraryNamesProperty.Type, logger);
                 if (enumerableExpr != null)
                 {
@@ -1874,6 +1888,22 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             // Otherwise, check if any item in the list matches the regex.
             // RegexIsMatch converts a match timeout into a descriptive ArgumentException.
             return listItems.Any(s => s != null && RegexIsMatch(regex, s));
+        }
+
+        /// <summary>
+        /// Whole-name match: true if any value equals (case-insensitively, trimmed) any item of a
+        /// semicolon-separated list. Used for library names, where a partial match is wrong.
+        /// </summary>
+        /// <param name="values">The item's values (for example its library names)</param>
+        /// <param name="targetList">Semicolon-separated names to look for</param>
+        /// <returns>True if any value equals any listed name</returns>
+        internal static bool ListHasAnyExactName(IReadOnlyList<string>? values, string? targetList)
+        {
+            if (values == null || values.Count == 0 || string.IsNullOrWhiteSpace(targetList))
+                return false;
+
+            var wanted = targetList.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            return wanted.Any(w => values.Any(v => string.Equals(v?.Trim(), w, StringComparison.OrdinalIgnoreCase)));
         }
 
         /// <summary>

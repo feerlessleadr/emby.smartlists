@@ -60,16 +60,37 @@
             category: 'TV',
             description: 'The next unwatched episode of every show you are in the middle of, with the show you have not touched longest surfacing first. Updates itself as you watch.',
             adminOnly: false,
-            inputHint: null,
+            inputHint: 'Type each library name in the empty Library Name rule and press Enter (for example TV).',
             dto: {
                 Type: 'Playlist',
                 MediaTypes: ['Episode'],
                 ExpressionSets: [{
                     Expressions: [
-                        { MemberName: 'NextUnwatched', Operator: 'Equal', TargetValue: 'true' }
+                        { MemberName: 'NextUnwatched', Operator: 'Equal', TargetValue: 'true' },
+                        { MemberName: 'LibraryName', Operator: 'IsIn', TargetValue: '' }
                     ]
                 }],
                 Order: { SortOptions: [{ SortBy: 'Least Recently Watched Round Robin', SortOrder: 'Ascending', GroupByField: 'SeriesName' }] },
+                AutoRefresh: 'OnAllChanges'
+            }
+        },
+        {
+            id: 'next-up',
+            name: 'Next Up',
+            category: 'TV',
+            description: 'The next unwatched episode of each show you are part-way through, with the show you watched most recently first. Shows you have never started and shows you have finished are left out. Updates itself as you watch.',
+            adminOnly: false,
+            inputHint: 'Type each library name in the empty Library Name rule and press Enter (for example TV).',
+            dto: {
+                Type: 'Playlist',
+                MediaTypes: ['Episode'],
+                ExpressionSets: [{
+                    Expressions: [
+                        { MemberName: 'NextUnwatched', Operator: 'Equal', TargetValue: 'true', IncludeUnwatchedSeries: false },
+                        { MemberName: 'LibraryName', Operator: 'IsIn', TargetValue: '' }
+                    ]
+                }],
+                Order: { SortOptions: [{ SortBy: 'Most Recently Watched Round Robin', SortOrder: 'Ascending', GroupByField: 'SeriesName' }] },
                 AutoRefresh: 'OnAllChanges'
             }
         },

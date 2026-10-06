@@ -1205,6 +1205,24 @@ public class EngineOperatorTests
     }
 
     /// <summary>
+    /// Library names are matched whole for IsIn/IsNotIn: "TV" must not pull in "Kids TV".
+    /// </summary>
+    [Fact]
+    public void CompileRule_LibraryName_IsIn_MatchesWholeNamesOnly()
+    {
+        var tv = new Operand("tv") { LibraryNames = ["TV"] };
+        var kids = new Operand("kids") { LibraryNames = ["Kids TV"] };
+
+        Assert.True(Compile("LibraryName", "IsIn", "TV")(tv));
+        Assert.False(Compile("LibraryName", "IsIn", "TV")(kids));
+        Assert.True(Compile("LibraryName", "IsIn", "tv; Kids TV")(kids));
+        Assert.True(Compile("LibraryName", "IsIn", " TV ;YouTube Shows")(tv));
+        Assert.False(Compile("LibraryName", "IsIn", "")(tv));
+        Assert.True(Compile("LibraryName", "IsNotIn", "TV")(kids));
+        Assert.False(Compile("LibraryName", "IsNotIn", "TV")(tv));
+    }
+
+    /// <summary>
     /// OnlyDefaultAudioLanguage swaps the evaluated property from AudioLanguages to
     /// DefaultAudioLanguages, so a film with an English track available but Japanese as its
     /// default no longer matches an "audio languages = eng" rule.
