@@ -350,6 +350,12 @@
 
     // Extract error message from API error responses
     // Handles both modern Response objects and legacy error formats
+    // True only for a real failed fetch Response. Emby's ajax resolves an empty body
+    // (HTTP 204, as returned by list delete) as an empty string, which has no .ok.
+    SmartLists.isFailedResponse = function (response) {
+        return !!response && typeof response === 'object' && response.ok === false;
+    };
+
     SmartLists.extractErrorMessage = async function (err, defaultMessage) {
         if (!err) return defaultMessage;
 

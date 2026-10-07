@@ -173,7 +173,7 @@
                 contentType: 'application/json'
             });
 
-            if (!response.ok) {
+            if (SmartLists.isFailedResponse(response)) {
                 const errorMessage = await SmartLists.extractErrorMessage(response, 'HTTP ' + response.status + ': ' + response.statusText);
                 throw new Error(errorMessage);
             }
@@ -643,7 +643,7 @@
                 url: apiClient.getUrl(url),
                 contentType: 'application/json'
             }).then(function (response) {
-                if (!response.ok) {
+                if (SmartLists.isFailedResponse(response)) {
                     return SmartLists.extractErrorMessage(response, 'HTTP ' + response.status + ': ' + response.statusText)
                         .then(function (errorMessage) {
                             console.error('Error deleting list:', listId, errorMessage);
