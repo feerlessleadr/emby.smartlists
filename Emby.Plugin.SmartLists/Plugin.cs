@@ -1,10 +1,12 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using Emby.Plugin.SmartLists.Configuration;
 using MediaBrowser.Common.Configuration;
 using MediaBrowser.Common.Plugins;
+using MediaBrowser.Model.Drawing;
 using MediaBrowser.Model.Plugins;
 using MediaBrowser.Model.Serialization;
 
@@ -14,7 +16,7 @@ using MediaBrowser.Model.Serialization;
 namespace Emby.Plugin.SmartLists
 {
     [System.Diagnostics.CodeAnalysis.SuppressMessage("Naming", "CA1724:Type names should not match namespaces", Justification = "Plugin class name is required by Emby's plugin loader convention.")]
-    public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages
+    public class Plugin : BasePlugin<PluginConfiguration>, IHasWebPages, IHasThumbImage
     {
         public Plugin(IApplicationPaths applicationPaths, IXmlSerializer xmlSerializer)
             : base(applicationPaths, xmlSerializer)
@@ -72,6 +74,21 @@ namespace Emby.Plugin.SmartLists
         public override string Name => "SmartLists";
 
         public override string Description => "Create smart, rule-based playlists and collections in Emby, for movies, shows, music, or anything your library holds.";
+
+        /// <summary>
+        /// Gets the image Emby shows for the plugin in its plugin list and catalog.
+        /// </summary>
+        public ImageFormat ThumbImageFormat => ImageFormat.Png;
+
+        /// <summary>
+        /// Gets the plugin's thumbnail (embedded Resources/thumb.png).
+        /// </summary>
+        /// <returns>The image stream.</returns>
+        public Stream GetThumbImage()
+        {
+            var type = GetType();
+            return type.Assembly.GetManifestResourceStream(type.Namespace + ".Resources.thumb.png")!;
+        }
 
         /// <summary>
         /// Gets the current plugin instance.

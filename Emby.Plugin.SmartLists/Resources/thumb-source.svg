@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#070b1c"/>
+      <stop offset="0.5" stop-color="#140e3a"/>
+      <stop offset="1" stop-color="#2a0c46"/>
+    </linearGradient>
+    <radialGradient id="glowG" cx="0.47" cy="0.40" r="0.42">
+      <stop offset="0" stop-color="#52b54b" stop-opacity="0.42"/>
+      <stop offset="1" stop-color="#52b54b" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowM" cx="0.95" cy="0.05" r="0.5">
+      <stop offset="0" stop-color="#ff2d9a" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#ff2d9a" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="glowC" cx="0.0" cy="1.0" r="0.5">
+      <stop offset="0" stop-color="#38d6ff" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#38d6ff" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#a6ff8f"/>
+      <stop offset="1" stop-color="#2fa84a"/>
+    </linearGradient>
+    <linearGradient id="inbeam" gradientUnits="userSpaceOnUse" x1="190" y1="0" x2="268" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.15"/>
+      <stop offset="1" stop-color="#8bf27a" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="outbeam" gradientUnits="userSpaceOnUse" x1="352" y1="0" x2="392" y2="0">
+      <stop offset="0" stop-color="#8bf27a" stop-opacity="1"/>
+      <stop offset="1" stop-color="#ff5fb8" stop-opacity="1"/>
+    </linearGradient>
+    <linearGradient id="cardA" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc247"/><stop offset="1" stop-color="#ff4d6d"/></linearGradient>
+    <linearGradient id="cardB" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#38d6ff"/><stop offset="1" stop-color="#4a52ff"/></linearGradient>
+    <linearGradient id="cardC" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5fb8"/><stop offset="1" stop-color="#9b3dff"/></linearGradient>
+    <linearGradient id="cardD" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7cf29a"/><stop offset="1" stop-color="#1c9b8a"/></linearGradient>
+    <pattern id="dots" width="18" height="18" patternUnits="userSpaceOnUse">
+      <circle cx="2" cy="2" r="1" fill="#ffffff" fill-opacity="0.06"/>
+    </pattern>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="9"/></filter>
+    <filter id="soft3" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="3"/></filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="170%"><feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#000" flood-opacity="0.5"/></filter>
+    <path id="spark" d="M0 -1 C 0.08 -0.3, 0.3 -0.08, 1 0 C 0.3 0.08, 0.08 0.3, 0 1 C -0.08 0.3, -0.3 0.08, -1 0 C -0.3 -0.08, -0.08 -0.3, 0 -1 Z"/>
+  </defs>
+
+  <rect width="640" height="360" fill="url(#bg)"/>
+  <rect width="640" height="360" fill="url(#dots)"/>
+  <rect width="640" height="360" fill="url(#glowG)"/>
+  <rect width="640" height="360" fill="url(#glowM)"/>
+  <rect width="640" height="360" fill="url(#glowC)"/>
+
+  <g fill="none" stroke="#8bf27a"><circle cx="311" cy="136" r="96" stroke-opacity="0.10" stroke-width="1.5"/><circle cx="311" cy="136" r="140" stroke-opacity="0.07" stroke-width="1.5"/><circle cx="311" cy="136" r="190" stroke-opacity="0.05" stroke-width="1.5"/></g><!-- scattered sparkles -->
+  <g fill="#ffffff">
+    <use href="#spark" transform="translate(30 30) scale(7)" fill-opacity="0.55"/>
+    <use href="#spark" transform="translate(608 205) scale(6)" fill-opacity="0.45"/>
+    <use href="#spark" transform="translate(236 24) scale(5)" fill-opacity="0.4"/>
+    <use href="#spark" transform="translate(40 245) scale(4)" fill-opacity="0.35"/>
+    <use href="#spark" transform="translate(604 40) scale(8)" fill="#ff9bd5" fill-opacity="0.7"/>
+  </g>
+
+  <!-- rule chips -->
+  <g filter="url(#shadow)">
+    <g transform="translate(34 46)">
+      <rect width="156" height="44" rx="22" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.25"/>
+      <circle cx="24" cy="22" r="13" fill="url(#cardA)"/>
+      <use href="#spark" transform="translate(24 22) scale(6.5)" fill="#fff"/>
+      <rect x="46" y="14" width="86" height="7" rx="3.5" fill="#fff" fill-opacity="0.8"/>
+      <rect x="46" y="26" width="52" height="6" rx="3" fill="#fff" fill-opacity="0.35"/>
+    </g>
+    <g transform="translate(34 114)">
+      <rect width="156" height="44" rx="22" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.25"/>
+      <circle cx="24" cy="22" r="13" fill="url(#cardB)"/>
+      <circle cx="24" cy="22" r="6.5" fill="none" stroke="#fff" stroke-width="2"/>
+      <path d="M24 17 V22 H28" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
+      <rect x="46" y="14" width="70" height="7" rx="3.5" fill="#fff" fill-opacity="0.8"/>
+      <rect x="46" y="26" width="64" height="6" rx="3" fill="#fff" fill-opacity="0.35"/>
+    </g>
+    <g transform="translate(34 182)">
+      <rect width="156" height="44" rx="22" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.25"/>
+      <circle cx="24" cy="22" r="13" fill="url(#cardC)"/>
+      <path d="M17 22 Q24 14 31 22 Q24 30 17 22 Z" fill="none" stroke="#fff" stroke-width="2"/>
+      <circle cx="24" cy="22" r="2.6" fill="#fff"/>
+      <rect x="46" y="14" width="78" height="7" rx="3.5" fill="#fff" fill-opacity="0.8"/>
+      <rect x="46" y="26" width="46" height="6" rx="3" fill="#fff" fill-opacity="0.35"/>
+    </g>
+  </g>
+
+  <!-- connectors (rules -> hub) -->
+  <g fill="none" stroke="url(#inbeam)" stroke-width="3.5" stroke-linecap="round">
+    <path d="M190 68 C 232 68, 236 136, 270 136"/>
+    <path d="M190 136 L 270 136"/>
+    <path d="M190 204 C 232 204, 236 136, 270 136"/>
+  </g>
+  <g fill="#8bf27a">
+    <circle cx="190" cy="68" r="4"/><circle cx="190" cy="136" r="4"/><circle cx="190" cy="204" r="4"/>
+  </g>
+
+  <!-- hub -->
+  <circle cx="311" cy="136" r="58" fill="#52b54b" opacity="0.38" filter="url(#soft)"/>
+  <circle cx="311" cy="136" r="52" fill="none" stroke="#8bf27a" stroke-opacity="0.35" stroke-width="1.5" stroke-dasharray="2 7" stroke-linecap="round"/>
+  <circle cx="311" cy="136" r="40" fill="#0b1030" stroke="url(#green)" stroke-width="4.5"/>
+  <circle cx="311" cy="136" r="40" fill="none" stroke="#a6ff8f" stroke-opacity="0.35" stroke-width="10" filter="url(#soft3)"/>
+  <use href="#spark" transform="translate(311 136) scale(25)" fill="url(#green)"/>
+  <use href="#spark" transform="translate(311 136) scale(25)" fill="#ffffff" fill-opacity="0.18"/>
+  <circle cx="311" cy="136" r="3.5" fill="#ffffff"/>
+  <!-- refresh arrows on the dashed orbit -->
+  <g fill="none" stroke="#a6ff8f" stroke-width="4" stroke-linecap="round">
+    <path d="M262 112 A 54 54 0 0 1 300 83"/>
+    <path d="M360 160 A 54 54 0 0 1 322 189"/>
+  </g>
+  <path d="M294 72 L 308 82 L 292 91 Z" fill="#a6ff8f"/>
+  <path d="M328 200 L 314 190 L 330 181 Z" fill="#a6ff8f"/>
+  <circle cx="363" cy="104" r="3.5" fill="#38d6ff"/>
+  <circle cx="259" cy="168" r="3" fill="#ff5fb8"/>
+
+  <!-- hub -> playlist -->
+  <path d="M352 136 C 372 136, 372 68, 392 68" stroke="url(#outbeam)" stroke-width="4" stroke-linecap="round" fill="none"/><circle cx="392" cy="68" r="4.5" fill="#ff5fb8"/>
+
+  <!-- playlist stack (depth fade) -->
+  <g filter="url(#shadow)">
+    <g transform="translate(392 40)">
+      <rect width="214" height="56" rx="14" fill="#ffffff" fill-opacity="0.17" stroke="#a6ff8f" stroke-opacity="0.95" stroke-width="2.2"/>
+      <rect x="9" y="9" width="38" height="38" rx="9" fill="url(#cardA)"/>
+      <rect x="58" y="15" width="94" height="10" rx="5" fill="#fff" fill-opacity="0.92"/>
+      <rect x="58" y="33" width="60" height="8" rx="4" fill="#fff" fill-opacity="0.42"/>
+      <circle cx="182" cy="28" r="18" fill="#52b54b" opacity="0.55" filter="url(#soft3)"/>
+      <circle cx="182" cy="28" r="17" fill="url(#green)"/>
+      <path d="M176 19 L 191 28 L 176 37 Z" fill="#071022"/>
+    </g>
+    <g transform="translate(400 106) scale(0.96)" opacity="0.88">
+      <rect width="214" height="52" rx="13" fill="#ffffff" fill-opacity="0.12" stroke="#ffffff" stroke-opacity="0.22"/>
+      <rect x="8" y="8" width="36" height="36" rx="8" fill="url(#cardB)"/>
+      <rect x="54" y="14" width="100" height="9" rx="4.5" fill="#fff" fill-opacity="0.75"/>
+      <rect x="54" y="31" width="54" height="7" rx="3.5" fill="#fff" fill-opacity="0.34"/>
+    </g>
+    <g transform="translate(408 166) scale(0.92)" opacity="0.66">
+      <rect width="214" height="52" rx="13" fill="#ffffff" fill-opacity="0.10" stroke="#ffffff" stroke-opacity="0.17"/>
+      <rect x="8" y="8" width="36" height="36" rx="8" fill="url(#cardC)"/>
+      <rect x="54" y="14" width="82" height="9" rx="4.5" fill="#fff" fill-opacity="0.65"/>
+      <rect x="54" y="31" width="64" height="7" rx="3.5" fill="#fff" fill-opacity="0.3"/>
+    </g>
+    <g transform="translate(416 222) scale(0.88)" opacity="0.4">
+      <rect width="214" height="52" rx="13" fill="#ffffff" fill-opacity="0.08" stroke="#ffffff" stroke-opacity="0.13"/>
+      <rect x="8" y="8" width="36" height="36" rx="8" fill="url(#cardD)"/>
+      <rect x="54" y="14" width="96" height="9" rx="4.5" fill="#fff" fill-opacity="0.55"/>
+      <rect x="54" y="31" width="46" height="7" rx="3.5" fill="#fff" fill-opacity="0.26"/>
+    </g>
+  </g>
+
+  <!-- wordmark: the i-dot is a sparkle -->
+  <text id="wm" x="320" y="334" text-anchor="middle" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="62" font-weight="800" letter-spacing="1">
+    <tspan fill="#ffffff">Smart</tspan><tspan fill="url(#green)">L&#x131;sts</tspan>
+  </text>
+<use href="#spark" transform="translate(390 288) scale(11)" fill="#c8ffb8"/><circle cx="390" cy="288" r="14" fill="#8bf27a" opacity="0.35" filter="url(#soft3)"/></svg>

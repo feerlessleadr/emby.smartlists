@@ -67,6 +67,9 @@
     <EmbeddedResource Include="Configuration\config-init.js" />
     <!-- Smart list badge overlay for cover images -->
     <EmbeddedResource Include="Resources\badge.png" />
+    <!-- Plugin tile image shown in Emby's plugin list and catalog (source art: Resources\thumb-source.svg) -->
+    <EmbeddedResource Include="Resources\thumb.png" />
+    <None Include="Resources\thumb-source.svg" />
   </ItemGroup>
 
   <ItemGroup>
