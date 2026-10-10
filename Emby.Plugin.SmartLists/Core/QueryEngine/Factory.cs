@@ -4896,16 +4896,20 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         /// </summary>
         private static bool MatchesRegex(string name, string pattern, ILogger? logger)
         {
+            System.Text.RegularExpressions.Regex regex;
             try
             {
-                var regex = new System.Text.RegularExpressions.Regex(pattern, System.Text.RegularExpressions.RegexOptions.Compiled);
-                return regex.IsMatch(name);
+                // The shared cache compiles each pattern once and applies the match timeout every other regex rule has.
+                regex = Engine.GetOrCreateRegex(pattern, logger);
             }
-            catch (Exception ex)
+            catch (ArgumentException ex)
             {
                 logger?.LogWarning(ex, "Invalid regex pattern '{Pattern}' in SimilarTo expression", pattern);
                 return false;
             }
+
+            // A match timeout fails the refresh loudly, like every other regex rule (see Engine.RegexIsMatch).
+            return Engine.RegexIsMatch(regex, name);
         }
     }
 }

@@ -18,6 +18,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
     {
         // Cache for compiled regex patterns to avoid recompilation
         private static readonly ConcurrentDictionary<string, Regex> _regexCache = new();
+        private const int MaxCachedRegexes = 500;
 
         /// <summary>
         /// Normalizes a UserId string to "N" format (no dashes) for consistent dictionary lookups.
@@ -116,8 +117,14 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         /// <param name="logger">Optional logger for error reporting</param>
         /// <returns>The compiled regex</returns>
         /// <exception cref="ArgumentException">Thrown when the regex pattern is invalid</exception>
-        private static Regex GetOrCreateRegex(string pattern, ILogger? logger = null)
+        internal static Regex GetOrCreateRegex(string pattern, ILogger? logger = null)
         {
+            // Rule patterns come from stored lists and from API calls (including previews), so the cache must not grow without bound.
+            if (_regexCache.Count >= MaxCachedRegexes)
+            {
+                _regexCache.Clear();
+            }
+
             return _regexCache.GetOrAdd(pattern, key =>
             {
                 try

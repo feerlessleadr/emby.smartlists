@@ -6,13 +6,19 @@
     let aggressivePollingTimeout = null;
 
     /**
-     * Escape HTML to prevent XSS (using safe DOM-based approach)
+     * Escape text for HTML content AND for double- or single-quoted attribute values (data-message below).
+     * The DOM textContent/innerHTML trick used before escaped only & < >, so a quote in an error message
+     * (which can contain list-controlled text such as a regex) could end the attribute and add attributes.
      */
     function escapeHtml(text) {
         if (text == null) return '';
-        const div = document.createElement('div');
-        div.textContent = text;
-        return div.innerHTML;
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/`/g, '&#96;');
     }
 
     /**

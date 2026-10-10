@@ -24,10 +24,15 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine.Prefilters
         {
             try
             {
-                return Regex.IsMatch(string.Empty, pattern);
+                return Regex.IsMatch(string.Empty, pattern, RegexOptions.None, Engine.RegexMatchTimeout);
             }
             catch (ArgumentException)
             {
+                return true;
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                // Too slow even on the empty string: keep the rule per-item, where a timeout fails the refresh loudly.
                 return true;
             }
         }

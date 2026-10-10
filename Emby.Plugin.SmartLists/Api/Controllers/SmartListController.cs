@@ -586,6 +586,23 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
             // for anything, so a fresh save/refresh never sees the stale legacy value.
             list.MigrateLegacyFields();
 
+            // A new list may name its own Id, but only one that is free: creating must never replace an existing
+            // list (that is what PUT is for), and the stores key their files by the Id in its canonical form.
+            if (!string.IsNullOrEmpty(list.Id))
+            {
+                if (!Guid.TryParse(list.Id, out var suppliedId) || suppliedId == Guid.Empty)
+                {
+                    return BadRequest(new ProblemDetails { Title = "Validation Error", Detail = "Id must be a GUID (or left out)", Status = StatusCodes.Status400BadRequest });
+                }
+
+                if (await GetPlaylistStore().GetByIdAsync(suppliedId) != null || await GetCollectionStore().GetByIdAsync(suppliedId) != null)
+                {
+                    return Conflict(new ProblemDetails { Title = "Conflict", Detail = "A list with this Id already exists. Use PUT to change it.", Status = StatusCodes.Status409Conflict });
+                }
+
+                list.Id = suppliedId.ToString("D");
+            }
+
             // Route to appropriate handler based on type
             if (list.Type == Core.Enums.SmartListType.Collection)
             {
@@ -3790,6 +3807,32 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
 
             playlist.Type = Core.Enums.SmartListType.Playlist;
 
+            // A backup is untrusted input (it can come from anywhere): hold it to the same rules as a list created
+            // through the API, and use the Id in its canonical form so the "already exists" check below cannot be sidestepped.
+            if (!Guid.TryParse(playlist.Id, out var restoredPlaylistGuid) || restoredPlaylistGuid == Guid.Empty)
+            {
+                return (false, "Playlist has an invalid Id", 0, false);
+            }
+
+            playlist.Id = restoredPlaylistGuid.ToString("D");
+            var playlistValidation = InputValidator.ValidateSmartList(playlist);
+            if (!playlistValidation.IsValid)
+            {
+                return (false, $"Playlist '{playlist.Name}' is not valid: {playlistValidation.ErrorMessage}", 0, false);
+            }
+
+            // The Emby item ids in a backup point at items on the server it was made on. Keeping them would let a
+            // crafted or foreign backup make a later refresh rename, empty or delete an unrelated playlist, so they
+            // are dropped and the plugin finds or creates the Emby playlist again at the next refresh.
+            playlist.PlaylistId = null;
+            if (playlist.UserPlaylists != null)
+            {
+                foreach (var mapping in playlist.UserPlaylists)
+                {
+                    mapping.PlaylistId = null;
+                }
+            }
+
             // Validate and reassign user references
             var (validationSuccess, validationMessage) = await ValidateAndReassignPlaylistUsersAsync(playlist);
             if (!validationSuccess)
@@ -3804,7 +3847,20 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 {
                     return (false, $"Playlist '{playlist.Name}' with this ID already exists", 0, false);
                 }
+
                 wasOverwritten = true;
+
+                // Overwriting keeps the list attached to the Emby playlists this server already has for it: those ids
+                // come from this server's own store, not from the backup.
+                var current = await playlistStore.GetByIdAsync(restoredPlaylistGuid);
+                if (current != null)
+                {
+                    playlist.PlaylistId = current.PlaylistId;
+                    foreach (var mapping in playlist.UserPlaylists ?? [])
+                    {
+                        mapping.PlaylistId = current.UserPlaylists?.FirstOrDefault(c => string.Equals(c.UserId, mapping.UserId, StringComparison.OrdinalIgnoreCase))?.PlaylistId;
+                    }
+                }
             }
 
             await playlistStore.SaveAsync(playlist);
@@ -3851,6 +3907,21 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
 
             collection.Type = Core.Enums.SmartListType.Collection;
 
+            // See RestorePlaylistAsync: a backup is untrusted, so validate it and drop the Emby item id.
+            if (!Guid.TryParse(collection.Id, out var restoredCollectionGuid) || restoredCollectionGuid == Guid.Empty)
+            {
+                return (false, "Collection has an invalid Id", 0, false);
+            }
+
+            collection.Id = restoredCollectionGuid.ToString("D");
+            var collectionValidation = InputValidator.ValidateSmartList(collection);
+            if (!collectionValidation.IsValid)
+            {
+                return (false, $"Collection '{collection.Name}' is not valid: {collectionValidation.ErrorMessage}", 0, false);
+            }
+
+            collection.CollectionId = null;
+
             // Validate and reassign user references
             var (validationSuccess, validationMessage) = await ValidateAndReassignCollectionUserAsync(collection);
             if (!validationSuccess)
@@ -3865,7 +3936,9 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
                 {
                     return (false, $"Collection '{collection.Name}' with this ID already exists", 0, false);
                 }
+
                 wasOverwritten = true;
+                collection.CollectionId = (await collectionStore.GetByIdAsync(restoredCollectionGuid))?.CollectionId;
             }
 
             await collectionStore.SaveAsync(collection);

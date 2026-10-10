@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
@@ -50,8 +51,43 @@ namespace Emby.Plugin.SmartLists.Utilities
                 new PngConfigurationModule(),
                 new GifConfigurationModule(),
                 new WebpConfigurationModule(),
-                new BmpConfigurationModule()),
+                new BmpConfigurationModule())
+            {
+                // Covers are decoded in the Emby server process from files anyone with access to the media
+                // folders (or a metadata provider) can supply, so decoding must not be able to take the server down.
+                MemoryAllocator = SixLabors.ImageSharp.Memory.MemoryAllocator.Create(new SixLabors.ImageSharp.Memory.MemoryAllocatorOptions { AllocationLimitMegabytes = 512 }),
+            },
+            MaxFrames = 1, // a cover is one picture: an animated GIF or WebP is read as its first frame only
         };
+
+        /// <summary>The largest source picture decoded, in pixels (a 4K poster is about 8 million).</summary>
+        private const long MaxSourcePixels = 40_000_000;
+
+        /// <summary>The largest source file decoded, in bytes.</summary>
+        private const long MaxSourceBytes = 50L * 1024 * 1024;
+
+        /// <summary>
+        /// Loads a cover source safely: refuses a file that is too big, reads only the header to refuse a picture that
+        /// declares too many pixels (a tiny file can claim billions), and then decodes with <see cref="SafeDecoderOptions"/>.
+        /// A refusal is an exception the callers already handle by skipping that source.
+        /// </summary>
+        /// <param name="path">Path of the picture file.</param>
+        /// <returns>The decoded image.</returns>
+        private static Image LoadSafely(string path)
+        {
+            if (new FileInfo(path).Length > MaxSourceBytes)
+            {
+                throw new InvalidDataException("The picture file is too large to use as a cover.");
+            }
+
+            var info = Image.Identify(SafeDecoderOptions, path);
+            if (info == null || (long)info.Width * info.Height > MaxSourcePixels)
+            {
+                throw new InvalidDataException("The picture has too many pixels to use as a cover.");
+            }
+
+            return Image.Load(SafeDecoderOptions, path);
+        }
 
         /// <summary>
         /// Gets the Emby tile aspect ratio covers are cropped to for an image type:
@@ -144,7 +180,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                 try
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    using var sourceImage = Image.Load(SafeDecoderOptions, imagePaths[i]);
+                    using var sourceImage = LoadSafely(imagePaths[i]);
 
                     // Rotate EXIF-oriented sources (e.g. phone photos) into the display frame
                     // before any geometry runs on their pixel grid.
@@ -217,7 +253,7 @@ namespace Emby.Plugin.SmartLists.Utilities
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                using var image = Image.Load(SafeDecoderOptions, sourcePath);
+                using var image = LoadSafely(sourcePath);
 
                 // Rotate EXIF-oriented sources into the display frame BEFORE the crop
                 // geometry below reads Width/Height, and so the saved copy carries no

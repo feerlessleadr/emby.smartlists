@@ -210,3 +210,7 @@ Goal: make the playlist/collection services actually work on a live Emby. Order 
 ### Preview endpoint (for the Android app's editor)
 
 - Added POST /Plugins/SmartLists/preview (dry run: total plus the first N items a list's rules would pick, nothing saved). PlaylistService.Preview and CollectionService.Preview evaluate the rules for the first user (playlist) or the owner (collection); the controller assigns a throwaway Id when none is sent. Verified live on 0.1010.0129 for a playlist and a collection (nothing saved). Documented in docs/api.md. Planned release: 0.1.10 (not tagged yet).
+
+### Security review fixes (0.1.11)
+
+- Fixed the findings listed in docs/security.md (2026-10-10 review): quote-safe escaping on the Status page, validation and Emby-id clearing on backup restore, Id normalisation on restore and a 409 when creating over an existing Id, the timeout and cache cap for the SimilarTo regex, and size/pixel/frame limits when decoding cover pictures (CollageBuilder.LoadSafely). Tests: SecurityHardeningTests (1,811 in total, including a real hostile PNG header). Verified live on the dev server: create over an existing Id gives 409, a doctored zip (invalid regex, planted PlaylistId, N-format Id of an existing list) restores only the harmless list with its Emby id cleared.
