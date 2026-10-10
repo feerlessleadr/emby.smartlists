@@ -2084,6 +2084,27 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
         }
 
         /// <summary>
+        /// Gets the plugin and API version, so a client can check it is compatible before doing anything else.
+        /// </summary>
+        /// <returns>Name, plugin version and API version.</returns>
+        [HttpGet("info")]
+        public ActionResult<object> GetInfo()
+        {
+            return Ok(RuleCatalog.BuildInfo(Plugin.Instance?.Version.ToString() ?? "unknown"));
+        }
+
+        /// <summary>
+        /// Gets what a client needs to build rules and sorts: fields with their input types, operators and
+        /// allowed values, sorts, media types and value formats.
+        /// </summary>
+        /// <returns>The rule-builder catalog.</returns>
+        [HttpGet("catalog")]
+        public ActionResult<object> GetCatalog()
+        {
+            return Ok(RuleCatalog.Build());
+        }
+
+        /// <summary>
         /// Static readonly field operators dictionary for performance optimization.
         /// </summary>
         private static readonly Dictionary<string, string[]> _fieldOperators = Core.Constants.Operators.GetFieldOperatorsDictionary();

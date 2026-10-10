@@ -572,6 +572,40 @@ public class OrderFactoryTests
         Assert.Equal("", order.GetSortKey(unnamed, user, null, null));
     }
 
+    // -----------------------------------------------------------------------------------
+    // The sort list the HTTP API serves (RuleCatalog.Sorts) must match the web page's list
+    // -----------------------------------------------------------------------------------
+
+    [Fact]
+    public void ApiCatalogSorts_MatchTheWebPageSortOptions()
+    {
+        // "External List Order" is hidden in the page's catalog on purpose (external lists are out of scope).
+        var ui = UiSortOptionValues().Where(v => v != "External List Order").ToList();
+        var api = Emby.Plugin.SmartLists.Api.Controllers.RuleCatalog.Sorts.Select(s => s.Value).ToList();
+
+        Assert.Equal(ui, api);
+    }
+
+    [Fact]
+    public void ApiCatalogSorts_DirectionlessFlagMatchesTheWebPage_AndEveryEntryResolvesToARealSort()
+    {
+        var uiOrderless = UiOrderlessSortValues().ToHashSet(StringComparer.Ordinal);
+
+        foreach (var sort in Emby.Plugin.SmartLists.Api.Controllers.RuleCatalog.Sorts)
+        {
+            Assert.Equal(uiOrderless.Contains(sort.Value), sort.Directionless);
+            Assert.Equal(sort.Directionless, OrderFactory.IsDirectionless(sort.Value));
+
+            var registered = sort.Directionless ? sort.Value : sort.Value + " Ascending";
+            if (sort.Value != "NoOrder")
+            {
+                Assert.IsNotType<NoOrder>(OrderFactory.CreateOrder(registered));
+            }
+
+            Assert.Equal(sort.RoundRobin, OrderFactory.CreateOrder(registered) is RoundRobinBase);
+        }
+    }
+
     /// <summary>
     /// NoOrder inherits every default, so "Default" must leave the upstream sequence exactly as it
     /// found it - it is the identity element the whole ordering pipeline leans on.

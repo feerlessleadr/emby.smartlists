@@ -44,6 +44,7 @@ Full steps and troubleshooting: [docs/install.md](docs/install.md).
 |---|---|
 | [docs/install.md](docs/install.md) | Install, upgrade, uninstall |
 | [docs/using.md](docs/using.md) | Using the plugin, differences from the Jellyfin version, known issues |
+| [docs/api.md](docs/api.md) | The HTTP API (used by the admin page and the Android app): endpoints, rule format, examples |
 | [docs/security.md](docs/security.md) | What the plugin exposes, security tests run, residual risks, hardening tips |
 | [docs/development.md](docs/development.md) | Build, test, deploy and verify against a local Emby |
 | [docs/reference/](docs/reference/README.md) | Field, operator, sorting and scheduling reference carried over from the Jellyfin version |
