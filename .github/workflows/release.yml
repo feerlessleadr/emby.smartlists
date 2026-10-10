@@ -1,10 +1,12 @@
 name: Release
 
 # Publishing: push a tag such as v0.1.8 (git tag v0.1.8 && git push origin v0.1.8).
-# The workflow runs the tests first (a failure stops it before anything is published), then builds the single self-contained Emby.Plugin.SmartLists.dll with that version and
-# creates the GitHub release with that DLL as the ONLY asset (the GitHub plugin installer prefers a
-# loose .dll). The release notes are docs/releases/<tag>.md; if that file is missing, GitHub
-# generates notes from the commits.
+# The workflow runs the tests first (a failure stops it before anything is published), then builds the single
+# self-contained Emby.Plugin.SmartLists.dll with that version and creates the GitHub release with that DLL as
+# the ONLY asset (the GitHub plugin installer prefers a loose .dll). The release notes are docs/releases/<tag>.md;
+# if that file is missing, GitHub generates notes from the commits.
+#
+# It runs on Windows because the tests load Emby's own (Windows) server assemblies, which do not load on Linux.
 #
 # Dry run: Actions > Release > Run workflow builds the DLL and attaches it to the run as an
 # artifact, without creating a release or tag.
@@ -28,7 +30,10 @@ env:
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: pwsh
 
     steps:
       - name: Work out the version
@@ -36,24 +41,24 @@ jobs:
         env:
           INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            tag="$GITHUB_REF_NAME"
-            if ! echo "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
-              echo "::error::Tag '$tag' must look like v1.2.3 (or v1.2.3-rc.1 for a pre-release)."
+          if ($env:GITHUB_REF_TYPE -eq 'tag') {
+            $tag = $env:GITHUB_REF_NAME
+            if ($tag -notmatch '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$') {
+              Write-Output "::error::Tag '$tag' must look like v1.2.3 (or v1.2.3-rc.1 for a pre-release)."
               exit 1
-            fi
+            }
             # v1.2.3 (or v1.2.3-rc.1) -> assembly version 1.2.3
-            version=$(echo "$tag" | sed -E 's/^v//; s/-.*$//')
-          else
-            tag="dry-run"
-            version="$INPUT_VERSION"
-            if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
-              echo "::error::Version '$version' must look like 1.2.3."
+            $version = ($tag -replace '^v', '') -replace '-.*$', ''
+          } else {
+            $tag = 'dry-run'
+            $version = $env:INPUT_VERSION
+            if ($version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+$') {
+              Write-Output "::error::Version '$version' must look like 1.2.3."
               exit 1
-            fi
-          fi
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "version=$version" >> "$GITHUB_OUTPUT"
+            }
+          }
+          "tag=$tag" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Checkout
         uses: actions/checkout@v4
@@ -73,39 +78,47 @@ jobs:
       - name: Download the Emby server
         if: steps.emby-cache.outputs.cache-hit != 'true'
         run: |
-          curl -fsSL "https://github.com/MediaBrowser/Emby.Releases/releases/download/${EMBY_VERSION}/embyserver-win-x64-${EMBY_VERSION}.7z" -o emby-server.7z
+          $url = "https://github.com/MediaBrowser/Emby.Releases/releases/download/$($env:EMBY_VERSION)/embyserver-win-x64-$($env:EMBY_VERSION).7z"
+          Invoke-WebRequest -Uri $url -OutFile emby-server.7z
 
       - name: Extract the Emby assemblies
         run: |
-          sudo apt-get install -y --no-install-recommends p7zip-full > /dev/null
-          7z x -y -o"$RUNNER_TEMP/emby" emby-server.7z > /dev/null
-          model=$(find "$RUNNER_TEMP/emby" -name MediaBrowser.Model.dll | head -1)
-          if [ -z "$model" ]; then
-            echo "::error::MediaBrowser.Model.dll not found in the Emby archive"
+          $dest = Join-Path $env:RUNNER_TEMP 'emby'
+          & "C:\Program Files\7-Zip\7z.exe" x -y "-o$dest" emby-server.7z | Out-Null
+          $model = Get-ChildItem -Path $dest -Recurse -Filter MediaBrowser.Model.dll | Select-Object -First 1
+          if (-not $model) {
+            Write-Output '::error::MediaBrowser.Model.dll not found in the Emby archive'
             exit 1
-          fi
-          echo "EMBY_SYSTEM_DIR=$(dirname "$model")" >> "$GITHUB_ENV"
+          }
+          "EMBY_SYSTEM_DIR=$($model.DirectoryName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       # A failing test stops the workflow here: nothing is built for release and no release is created.
       - name: Run the tests
         run: |
-          set -o pipefail
-          dotnet test Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj --configuration Release "-p:EmbySystemDir=$EMBY_SYSTEM_DIR" --nologo 2>&1 | tee "$RUNNER_TEMP/test.log"
+          $log = Join-Path $env:RUNNER_TEMP 'test.log'
+          dotnet test Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj --configuration Release "-p:EmbySystemDir=$env:EMBY_SYSTEM_DIR" --nologo 2>&1 | Tee-Object -FilePath $log
+          exit $LASTEXITCODE
 
       # Puts the failure lines into a run annotation so they are visible without downloading the log.
       - name: Summarize test failures
         if: failure()
         run: |
-          { grep -E "error |Failed |Assert|Exception|Unhandled|Could not|not found|Passed!|Failed!|Total" "$RUNNER_TEMP/test.log" | head -40; echo "--- tail ---"; tail -n 25 "$RUNNER_TEMP/test.log"; } \
-            | cut -c1-400 | awk 'BEGIN{ORS="%0A"} {print}' > "$RUNNER_TEMP/summary.txt"
-          echo "::error title=Test run output::$(cat "$RUNNER_TEMP/summary.txt")"
+          $log = Join-Path $env:RUNNER_TEMP 'test.log'
+          if (Test-Path $log) {
+            $lines = Get-Content $log
+            $hits = $lines | Select-String -Pattern 'error |Failed |Assert|Exception|Unhandled|Could not|not found|Passed!|Failed!|Total' | Select-Object -First 40 | ForEach-Object { $_.Line }
+            $all = @($hits) + '--- tail ---' + ($lines | Select-Object -Last 25)
+            $text = ($all | ForEach-Object { if ($_.Length -gt 400) { $_.Substring(0, 400) } else { $_ } }) -join '%0A'
+            Write-Output "::error title=Test run output::$text"
+          }
 
       - name: Build
         run: |
-          dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj --configuration Release "-p:EmbySystemDir=$EMBY_SYSTEM_DIR" "-p:Version=${{ steps.version.outputs.version }}" --nologo
-          mkdir -p artifacts
-          cp Emby.Plugin.SmartLists/bin/Release/net8.0/Emby.Plugin.SmartLists.dll artifacts/Emby.Plugin.SmartLists.dll
-          ls -l artifacts
+          dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj --configuration Release "-p:EmbySystemDir=$env:EMBY_SYSTEM_DIR" "-p:Version=${{ steps.version.outputs.version }}" --nologo
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          New-Item -ItemType Directory -Force artifacts | Out-Null
+          Copy-Item Emby.Plugin.SmartLists/bin/Release/net8.0/Emby.Plugin.SmartLists.dll artifacts/Emby.Plugin.SmartLists.dll
+          Get-ChildItem artifacts | Format-Table Name, Length
 
       - name: Dry run - keep the DLL as a run artifact
         if: github.ref_type != 'tag'
@@ -119,13 +132,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${{ steps.version.outputs.tag }}"
-          flags=""
-          case "$tag" in *-*) flags="--prerelease" ;; esac
-          notes="docs/releases/${tag}.md"
-          if [ -f "$notes" ]; then
-            gh release create "$tag" artifacts/Emby.Plugin.SmartLists.dll --title "$tag" --notes-file "$notes" $flags
-          else
-            echo "::warning::$notes not found, generating notes from the commits"
-            gh release create "$tag" artifacts/Emby.Plugin.SmartLists.dll --title "$tag" --generate-notes $flags
-          fi
+          $tag = '${{ steps.version.outputs.tag }}'
+          $notes = "docs/releases/$tag.md"
+          $ghArgs = @('release', 'create', $tag, 'artifacts/Emby.Plugin.SmartLists.dll', '--title', $tag)
+          if ($tag -like '*-*') { $ghArgs += '--prerelease' }
+          if (Test-Path $notes) {
+            $ghArgs += @('--notes-file', $notes)
+          } else {
+            Write-Output "::warning::$notes not found, generating notes from the commits"
+            $ghArgs += '--generate-notes'
+          }
+          gh @ghArgs
+          exit $LASTEXITCODE

@@ -50,7 +50,7 @@ Releases are published by a GitHub Actions workflow (`.github/workflows/release.
 
 The workflow downloads the Emby Server 4.10.1.0 build from `MediaBrowser/Emby.Releases` for the assemblies it compiles against, runs the unit tests, builds `Emby.Plugin.SmartLists.dll` with the tag as its version, and creates the GitHub release with that DLL as the ONLY asset (the GitHub plugin installer picks a loose `.dll` asset before a zip) and `docs/releases/vX.Y.Z.md` as the notes (GitHub-generated notes if that file is missing). A tag with a suffix (`v0.2.0-rc.1`) is published as a pre-release. Use a new version for every distributed build.
 
-To try the workflow without publishing, run it from the Actions tab (Release, Run workflow, enter a version): it runs the tests, builds the DLL and attaches it to the run, and creates no release. If a tag push fails (for example a failing test), nothing is published; fix it, delete the tag (`git push origin --delete vX.Y.Z` and `git tag -d vX.Y.Z`) and tag again.
+To try the workflow without publishing, run it from the Actions tab (Release, Run workflow, enter a version): it runs the tests, builds the DLL and attaches it to the run, and creates no release. The workflow runs on a Windows runner because the tests load Emby's own Windows server assemblies, which fail to load on Linux (`BadImageFormatException`). If a tag push fails (for example a failing test), nothing is published; fix it, delete the tag (`git push origin --delete vX.Y.Z` and `git tag -d vX.Y.Z`) and tag again.
 
 To build the same DLL locally:
 
