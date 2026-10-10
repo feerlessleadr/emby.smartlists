@@ -206,6 +206,36 @@ namespace Emby.Plugin.SmartLists.Services.Collections
         }
 
         /// <summary>
+        /// Works out which items the collection's rules would pick right now, without creating or changing anything in
+        /// Emby (used by the API's preview). The owner user supplies the watch state.
+        /// </summary>
+        /// <param name="dto">The collection as it would be saved.</param>
+        /// <returns>Whether it worked, a message when it did not, and the number and ids of the items picked.</returns>
+        public (bool Success, string Message, int Total, List<long> ItemIds) Preview(SmartCollectionDto dto)
+        {
+            if (dto.MediaTypes == null || dto.MediaTypes.Count == 0)
+            {
+                return (false, "No media types specified. At least one media type must be selected.", 0, []);
+            }
+
+            if (!Guid.TryParse(dto.UserId, out var ownerUserId) || ownerUserId == Guid.Empty || _userManager.GetUserById(ownerUserId) is not { } ownerUser)
+            {
+                return (false, "Choose the collection's owner to preview it.", 0, []);
+            }
+
+            var allMedia = GetAllMedia(dto.MediaTypes, dto, ownerUser).ToArray();
+            var smartCollection = new Core.SmartList(dto)
+            {
+                UserManager = _userManager,
+                ItemRepository = _itemRepository,
+            };
+            var ids = smartCollection
+                .FilterPlaylistItems(allMedia, _libraryManager, ownerUser, new RefreshQueueService.RefreshCache(), _userDataManager, _logger, null)
+                .Distinct()
+                .ToList();
+            return (true, string.Empty, ids.Count, ids);
+        }
+        /// <summary>
         /// Core method to process a collection refresh with provided media items.
         /// This is the shared logic used by both RefreshAsync and ProcessCollectionRefreshWithCachedMediaAsync.
         /// </summary>

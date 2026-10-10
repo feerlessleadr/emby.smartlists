@@ -21,6 +21,7 @@ using AutoRefreshService = Emby.Plugin.SmartLists.Services.Shared.AutoRefreshSer
 using Emby.Plugin.SmartLists.Utilities;
 using MediaBrowser.Controller;
 using MediaBrowser.Controller.Entities;
+using MediaBrowser.Controller.Entities.TV;
 using MediaBrowser.Controller.Library;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Collections;
@@ -2104,6 +2105,73 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
             return Ok(RuleCatalog.Build());
         }
 
+        /// <summary>
+        /// Dry run: the items a list's rules would pick right now, without saving the list or touching anything in
+        /// Emby. A client uses it to show a preview while a list is being edited.
+        /// </summary>
+        /// <param name="list">The list as it would be saved (no Id needed).</param>
+        /// <param name="limit">How many items to describe (1 to 100; the total is always counted).</param>
+        /// <returns>The total number of matching items and a description of the first ones.</returns>
+        [HttpPost("preview")]
+        public async Task<ActionResult<object>> PreviewSmartList([FromBody] SmartListDto? list, [FromQuery] int limit = 25)
+        {
+            if (list == null)
+            {
+                return BadRequest(new ProblemDetails { Title = "Validation Error", Detail = "List data is required", Status = StatusCodes.Status400BadRequest });
+            }
+
+            var validationResult = InputValidator.ValidateSmartList(list);
+            if (!validationResult.IsValid)
+            {
+                return BadRequest(new ProblemDetails { Title = "Validation Error", Detail = validationResult.ErrorMessage, Status = StatusCodes.Status400BadRequest });
+            }
+
+            list.MigrateLegacyFields();
+            limit = Math.Clamp(limit, 1, 100);
+            if (string.IsNullOrEmpty(list.Id))
+            {
+                list.Id = Guid.NewGuid().ToString(); // a dry run needs an id to evaluate the list; nothing is saved
+            }
+
+            (bool Success, string Message, int Total, List<long> ItemIds) result;
+            if (list.Type == Core.Enums.SmartListType.Collection)
+            {
+                var collection = list as SmartCollectionDto ?? JsonSerializer.Deserialize<SmartCollectionDto>(JsonSerializer.Serialize(list))!;
+                result = await Task.Run(() => GetCollectionService().Preview(collection)).ConfigureAwait(false);
+            }
+            else
+            {
+                var playlist = list as SmartPlaylistDto ?? JsonSerializer.Deserialize<SmartPlaylistDto>(JsonSerializer.Serialize(list))!;
+                if (playlist.AllUsers)
+                {
+                    PlaylistUserResolver.ExpandAllUsers(playlist, _userManager);
+                }
+
+                result = await Task.Run(() => GetPlaylistService().Preview(playlist)).ConfigureAwait(false);
+            }
+
+            if (!result.Success)
+            {
+                return BadRequest(new ProblemDetails { Title = "Preview not possible", Detail = result.Message, Status = StatusCodes.Status400BadRequest });
+            }
+
+            var items = new List<object>();
+            foreach (var id in result.ItemIds.Take(limit))
+            {
+                var item = _libraryManager.GetItemById(id);
+                if (item == null)
+                {
+                    continue;
+                }
+
+                string? detail = item is Episode episode
+                    ? $"{episode.SeriesName} S{episode.ParentIndexNumber ?? 0:00}E{episode.IndexNumber ?? 0:00}"
+                    : item.ProductionYear?.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                items.Add(new { Id = id, item.Name, Type = item.GetClientTypeName(), Detail = detail });
+            }
+
+            return Ok(new { Total = result.Total, Items = items });
+        }
         /// <summary>
         /// Static readonly field operators dictionary for performance optimization.
         /// </summary>

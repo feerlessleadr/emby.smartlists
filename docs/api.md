@@ -139,6 +139,15 @@ Content-Type: application/json
 | `GET …/libraries` | `[{Id, Name, CollectionType}]` |
 | `GET …/currentuser` | The signed-in user (`400` when called with an API key, which has no user) |
 
+## Preview (dry run)
+
+`POST …/preview?limit=25` takes a list exactly as `POST …/` would, with or without an `Id`, and answers with what its rules would pick right now. Nothing is created or changed, in the plugin or in Emby.
+
+```json
+{ "Total": 9, "Items": [ { "Id": 15, "Name": "Bulk Movie 001", "Type": "Movie", "Detail": "1901" } ] }
+```
+
+`Total` is the full count (after the list's own limits); `Items` describes the first `limit` (1 to 100, default 25) in the list's order. `Detail` is the year, or series and episode number for an episode. A playlist is evaluated for the first user it is for, a collection for its owner; without one the call returns `400` ("Choose at least one user ..."). Bumpers are not woven in. Added in plugin 0.1.10 (the API version stays 1: the change only adds a call).
 ## Status
 
 | Call | Returns |

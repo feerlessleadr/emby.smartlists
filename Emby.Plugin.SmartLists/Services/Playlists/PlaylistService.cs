@@ -1244,6 +1244,48 @@ namespace Emby.Plugin.SmartLists.Services.Playlists
             return (true, string.Empty, string.Empty);
         }
 
+        /// <summary>
+        /// Works out which items the playlist's rules would pick right now, without creating or changing anything in
+        /// Emby (used by the API's preview). The first user the playlist is for supplies the watch state.
+        /// </summary>
+        /// <param name="dto">The playlist as it would be saved.</param>
+        /// <returns>Whether it worked, a message when it did not, and the number and ids of the items picked.</returns>
+        public (bool Success, string Message, int Total, List<long> ItemIds) Preview(SmartPlaylistDto dto)
+        {
+            if (dto.MediaTypes == null || dto.MediaTypes.Count == 0)
+            {
+                return (false, "No media types specified. At least one media type must be selected.", 0, []);
+            }
+
+            var validation = ValidateUnsupportedMediaTypes(dto.MediaTypes, dto.Name);
+            if (!validation.IsValid)
+            {
+                return (false, validation.ErrorMessage, 0, []);
+            }
+
+            var user = GetPlaylistUser(dto);
+            if (user == null && dto.UserPlaylists is { Count: > 0 } && Guid.TryParse(dto.UserPlaylists[0].UserId, out var firstUserId))
+            {
+                user = _userManager.GetUserById(firstUserId);
+            }
+
+            if (user == null)
+            {
+                return (false, "Choose at least one user for the playlist to preview it.", 0, []);
+            }
+
+            var allUserMedia = GetAllUserMedia(user, dto.MediaTypes, dto).ToArray();
+            var smartPlaylist = new Core.SmartList(dto)
+            {
+                UserManager = _userManager,
+                ItemRepository = _itemRepository,
+            };
+            var ids = smartPlaylist
+                .FilterPlaylistItems(allUserMedia, _libraryManager, user, new RefreshQueueService.RefreshCache(), _userDataManager, _logger, null)
+                .Distinct()
+                .ToList();
+            return (true, string.Empty, ids.Count, ids);
+        }
         private User? GetPlaylistUser(SmartPlaylistDto playlist)
         {
             // Parse User field and get the user
