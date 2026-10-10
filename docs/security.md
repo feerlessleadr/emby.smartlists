@@ -22,7 +22,7 @@ Written for running the plugin on an internet-facing Emby server. This is a revi
 | Input handling | Malformed JSON, wrong types, depth-3000 JSON, 100 kB and 30 MB bodies, 5,000-character regex, invalid regex, injection-style field names | 400 with a message each time; server stayed up (name cap 500 chars, regex cap 1,000, JSON depth 64) |
 | Regex | Catastrophic pattern `(a+)+$` | Accepted but every evaluation runs under a 1 s match timeout |
 | Script injection (UI) | HTML/script payloads in list name, overview, tags, sort title and rule value; viewed in Manage, expanded, and opened in Edit | Rendered as text, no element injected, no script ran |
-| Dependencies | `dotnet list package --vulnerable --include-transitive`, `--deprecated` | None reported (only direct reference: SixLabors.ImageSharp 3.1.12) |
+| Dependencies | `dotnet list package --vulnerable --include-transitive`, `--deprecated` | Reported on a fresh restore (2026-10-07): eleven new ImageSharp advisories, five of which affect 3.1.12 (the fix exists only in 4.x, which needs a paid Six Labors license). **Handled:** none is reachable in this plugin (see the ImageSharp note below), so they are suppressed in the csproj with a reason each. Only direct reference: SixLabors.ImageSharp 3.1.12 |
 | Static scan | Process start, dynamic assembly load, binary/XML deserialization, SQL, script compilation | None used (ImageSharp is loaded from a resource embedded in the plugin DLL via `Assembly.Load`) |
 
 ## Known residual risks
@@ -30,7 +30,7 @@ Written for running the plugin on an internet-facing Emby server. This is a revi
 - **Admin-only abuse**: an administrator can already do worse in Emby, but note: the *custom backup path* setting lets an admin choose where backup zips are written; a backup zip upload is capped at 1 GB and its contents are not size-limited when extracted (zip bomb), so a stolen admin token could fill a disk.
 - **Lists for unknown users**: creating a list for a non-existent user id is accepted (it fails at refresh). Harmless.
 - **Error detail**: some 500 responses include the exception message, which can contain server paths. Only administrators see these.
-- **ImageSharp** decodes uploaded images and library artwork. Keep the embedded package updated (`dotnet list package --vulnerable`).
+- **ImageSharp** decodes uploaded images and library artwork. It is pinned at 3.1.12 because the fixes for the advisories published 2026-10-07 (GHSA-wmxv-xphr-5c9g, GHSA-j9gm-c75j-xc9q, GHSA-jjfr-hcj7-qf5w, GHSA-j3p4-wp97-rph4, GHSA-gwg2-r3hj-4w44) exist only in 4.x, which needs a paid Six Labors license. Mitigation: TIFF is not decodable (`CollageBuilder` registers only JPEG, PNG, GIF, WebP and BMP decoders) and TIFF uploads are rejected (`ImageContentValidator`, extension and content-type lists), which removes the BigTIFF decoder loop and the TIFF encoder bugs; the plugin does not use the histogram processor, and the ICC parser bug in 3.x needs `IccProfile.Entries`, which the plugin never reads. Verified with a 24-byte BigTIFF: the default decoder is still running after 6 s, the plugin's options reject it in 4 ms. Re-check with `dotnet list package --vulnerable` and move to a patched 3.x if one appears.
 - **Plugin UI files are public** (Emby behaviour). No secrets are in them.
 - **Settings XML** has fields for third-party API keys (unused here, hidden in the UI). They would be stored in plain text if ever set.
 

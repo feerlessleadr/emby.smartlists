@@ -14,8 +14,6 @@ public class ImageContentValidatorTests
         yield return new object[] { "bmp", Encoding.ASCII.GetBytes("BM\0\0\0\0\0\0\0\0\0\0") };
         yield return new object[] { "webp", Encoding.ASCII.GetBytes("RIFF\x24\x00\x00\x00WEBPVP8 ") };
         yield return new object[] { "ico", new byte[] { 0, 0, 1, 0, 1, 0, 16, 16 } };
-        yield return new object[] { "tiff-le", new byte[] { 0x49, 0x49, 0x2A, 0x00, 8, 0, 0, 0 } };
-        yield return new object[] { "tiff-be", new byte[] { 0x4D, 0x4D, 0x00, 0x2A, 0, 0, 0, 8 } };
         yield return new object[] { "avif", new byte[] { 0, 0, 0, 0x1C, 0x66, 0x74, 0x79, 0x70, 0x61, 0x76, 0x69, 0x66 } };
     }
 
@@ -39,6 +37,14 @@ public class ImageContentValidatorTests
     public void RejectsEverythingElse(string text)
     {
         Assert.False(ImageContentValidator.LooksLikeRasterImage(Encoding.Latin1.GetBytes(text)));
+    }
+
+    [Fact]
+    public void RejectsTiff_BecauseTheBundledDecoderHasAnUnfixedDosBug()
+    {
+        Assert.False(ImageContentValidator.LooksLikeRasterImage(new byte[] { 0x49, 0x49, 0x2A, 0x00, 8, 0, 0, 0 }));
+        Assert.False(ImageContentValidator.LooksLikeRasterImage(new byte[] { 0x4D, 0x4D, 0x00, 0x2A, 0, 0, 0, 8 }));
+        Assert.False(ImageContentValidator.LooksLikeRasterImage(new byte[] { 0x49, 0x49, 0x2B, 0x00, 8, 0, 0, 0 })); // BigTIFF
     }
 
     [Fact]

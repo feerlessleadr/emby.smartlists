@@ -34,7 +34,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         /// </summary>
         private static readonly string[] SupportedImageExtensions =
         {
-            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".tiff", ".tif", ".apng", ".ico"
+            ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".avif", ".apng", ".ico"
         };
 
         private static readonly HashSet<string> AllowedExtensions = new(SupportedImageExtensions, StringComparer.OrdinalIgnoreCase);
@@ -421,7 +421,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 var validContentTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
                     "image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif",
-                    "image/bmp", "image/avif", "image/tiff", "image/apng", "image/x-icon"
+                    "image/bmp", "image/avif", "image/apng", "image/x-icon"
                 };
 
                 if (!validContentTypes.Contains(contentType))

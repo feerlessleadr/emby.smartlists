@@ -19,7 +19,7 @@ namespace Emby.Plugin.SmartLists.Utilities
         /// Gets whether <paramref name="header"/> (the first bytes of a file) starts with a supported raster signature.
         /// </summary>
         /// <param name="header">The leading bytes of the file.</param>
-        /// <returns>True when the signature is JPEG, PNG/APNG, GIF, BMP, WebP, ICO, TIFF or AVIF.</returns>
+        /// <returns>True when the signature is JPEG, PNG/APNG, GIF, BMP, WebP, ICO or AVIF. TIFF is not accepted (its decoder in the bundled ImageSharp has an unfixed DoS bug).</returns>
         public static bool LooksLikeRasterImage(ReadOnlySpan<byte> header)
         {
             if (header.Length >= 3 && header[0] == 0xFF && header[1] == 0xD8 && header[2] == 0xFF)
@@ -50,11 +50,6 @@ namespace Emby.Plugin.SmartLists.Utilities
             if (header.Length >= 4 && header[..4].SequenceEqual(new byte[] { 0x00, 0x00, 0x01, 0x00 }))
             {
                 return true; // ICO
-            }
-
-            if (header.Length >= 4 && (header[..4].SequenceEqual(new byte[] { 0x49, 0x49, 0x2A, 0x00 }) || header[..4].SequenceEqual(new byte[] { 0x4D, 0x4D, 0x00, 0x2A })))
-            {
-                return true; // TIFF
             }
 
             if (header.Length >= 12 && header[4..8].SequenceEqual("ftyp"u8)

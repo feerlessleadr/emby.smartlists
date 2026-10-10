@@ -55,4 +55,13 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+
+  <ItemGroup>
+    <!-- Same advisories (and reasons) as in Emby.Plugin.SmartLists.csproj; the plugin's suppressions do not flow to this project. -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
+  </ItemGroup>
 </Project>

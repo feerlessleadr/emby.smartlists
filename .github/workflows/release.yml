@@ -1,0 +1,122 @@
+name: Release
+
+# Publishing: push a tag such as v0.1.8 (git tag v0.1.8 && git push origin v0.1.8).
+# The workflow runs the tests first (a failure stops it before anything is published), then builds the single self-contained Emby.Plugin.SmartLists.dll with that version and
+# creates the GitHub release with that DLL as the ONLY asset (the GitHub plugin installer prefers a
+# loose .dll). The release notes are docs/releases/<tag>.md; if that file is missing, GitHub
+# generates notes from the commits.
+#
+# Dry run: Actions > Release > Run workflow builds the DLL and attaches it to the run as an
+# artifact, without creating a release or tag.
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build, for example 0.1.8 (dry run: nothing is published)'
+        required: true
+        default: '0.0.1'
+
+permissions:
+  contents: write
+
+env:
+  # The plugin compiles against this Emby Server build (its assemblies are not on NuGet).
+  EMBY_VERSION: 4.10.1.0
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Work out the version
+        id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag="$GITHUB_REF_NAME"
+            if ! echo "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+              echo "::error::Tag '$tag' must look like v1.2.3 (or v1.2.3-rc.1 for a pre-release)."
+              exit 1
+            fi
+            # v1.2.3 (or v1.2.3-rc.1) -> assembly version 1.2.3
+            version=$(echo "$tag" | sed -E 's/^v//; s/-.*$//')
+          else
+            tag="dry-run"
+            version="$INPUT_VERSION"
+            if ! echo "$version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+              echo "::error::Version '$version' must look like 1.2.3."
+              exit 1
+            fi
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Cache the Emby server download
+        id: emby-cache
+        uses: actions/cache@v4
+        with:
+          path: emby-server.7z
+          key: emby-server-${{ env.EMBY_VERSION }}
+
+      - name: Download the Emby server
+        if: steps.emby-cache.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "https://github.com/MediaBrowser/Emby.Releases/releases/download/${EMBY_VERSION}/embyserver-win-x64-${EMBY_VERSION}.7z" -o emby-server.7z
+
+      - name: Extract the Emby assemblies
+        run: |
+          sudo apt-get install -y --no-install-recommends p7zip-full > /dev/null
+          7z x -y -o"$RUNNER_TEMP/emby" emby-server.7z > /dev/null
+          model=$(find "$RUNNER_TEMP/emby" -name MediaBrowser.Model.dll | head -1)
+          if [ -z "$model" ]; then
+            echo "::error::MediaBrowser.Model.dll not found in the Emby archive"
+            exit 1
+          fi
+          echo "EMBY_SYSTEM_DIR=$(dirname "$model")" >> "$GITHUB_ENV"
+
+      # A failing test stops the workflow here: nothing is built for release and no release is created.
+      - name: Run the tests
+        run: |
+          dotnet test Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj --configuration Release "-p:EmbySystemDir=$EMBY_SYSTEM_DIR" --nologo
+
+      - name: Build
+        run: |
+          dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj --configuration Release "-p:EmbySystemDir=$EMBY_SYSTEM_DIR" "-p:Version=${{ steps.version.outputs.version }}" --nologo
+          mkdir -p artifacts
+          cp Emby.Plugin.SmartLists/bin/Release/net8.0/Emby.Plugin.SmartLists.dll artifacts/Emby.Plugin.SmartLists.dll
+          ls -l artifacts
+
+      - name: Dry run - keep the DLL as a run artifact
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Emby.Plugin.SmartLists-${{ steps.version.outputs.version }}
+          path: artifacts/Emby.Plugin.SmartLists.dll
+
+      - name: Create the GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          flags=""
+          case "$tag" in *-*) flags="--prerelease" ;; esac
+          notes="docs/releases/${tag}.md"
+          if [ -f "$notes" ]; then
+            gh release create "$tag" artifacts/Emby.Plugin.SmartLists.dll --title "$tag" --notes-file "$notes" $flags
+          else
+            echo "::warning::$notes not found, generating notes from the commits"
+            gh release create "$tag" artifacts/Emby.Plugin.SmartLists.dll --title "$tag" --generate-notes $flags
+          fi

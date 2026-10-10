@@ -40,17 +40,29 @@ Tips:
 - Each server start leaves an `embytray.exe` running; `Stop-Process -Name embytray` clears them.
 - When driving the page from an automated browser the window must be visible, and navigating by clicking the sidebar entry is more reliable than editing the hash; details in `CLAUDE.md` ("UI gotchas").
 
-## Building a release
+## Releasing
+
+Releases are published by a GitHub Actions workflow (`.github/workflows/release.yml`):
+
+1. Run the tests locally if you like; the workflow also runs them and stops without publishing if one fails.
+2. Write the release notes in `docs/releases/vX.Y.Z.md` (the changelog shown on the GitHub release) and commit and push them.
+3. Tag and push: `git tag vX.Y.Z` then `git push origin vX.Y.Z`.
+
+The workflow downloads the Emby Server 4.10.1.0 build from `MediaBrowser/Emby.Releases` for the assemblies it compiles against, runs the unit tests, builds `Emby.Plugin.SmartLists.dll` with the tag as its version, and creates the GitHub release with that DLL as the ONLY asset (the GitHub plugin installer picks a loose `.dll` asset before a zip) and `docs/releases/vX.Y.Z.md` as the notes (GitHub-generated notes if that file is missing). A tag with a suffix (`v0.2.0-rc.1`) is published as a pre-release. Use a new version for every distributed build.
+
+To try the workflow without publishing, run it from the Actions tab (Release, Run workflow, enter a version): it runs the tests, builds the DLL and attaches it to the run, and creates no release. If a tag push fails (for example a failing test), nothing is published; fix it, delete the tag (`git push origin --delete vX.Y.Z` and `git tag -d vX.Y.Z`) and tag again.
+
+To build the same DLL locally:
 
 ```powershell
 ./dev/build-release.ps1 -Version 0.1.0
 ```
 
-Produces the bare `artifacts/Emby.Plugin.SmartLists.dll` (and a zip of it, `artifacts/Emby.Plugin.SmartLists-0.1.0.zip`, which releases no longer use). The plugin is a single self-contained DLL (ImageSharp is embedded). Publish releases with the bare DLL as the ONLY asset; the GitHub plugin installer picks a loose `.dll` asset before a zip. Use a new version for every distributed build.
+This writes the bare `artifacts/Emby.Plugin.SmartLists.dll` (and a zip of it, which releases do not use).
 
 ## CI
 
-There is no CI: the repository has no GitHub workflows. Build and test locally with the commands above (the plugin needs Emby's own assemblies, which cannot be committed, so a hosted runner would need them supplied separately).
+There is no build-and-test workflow on every push; only the release workflow above exists (it runs the tests as part of a release). Build and test locally with the commands above.
 
 ## Project layout and architecture
 

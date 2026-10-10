@@ -99,6 +99,21 @@
     <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" GeneratePathProperty="true">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
+    <!--
+      Advisories published 2026-10-07 for ImageSharp <= 4.1.1. The fix exists only in 4.x, which needs a paid Six Labors
+      license, so 3.1.12 stays and each advisory is suppressed because the plugin cannot reach it:
+        GHSA-wmxv-xphr-5c9g  BigTIFF decoder loop: CollageBuilder registers no TIFF decoder (SafeDecoderOptions) and
+                             ImageContentValidator rejects TIFF uploads.
+        GHSA-j9gm-c75j-xc9q, GHSA-jjfr-hcj7-qf5w  TIFF CCITT encoders: the plugin never decodes or encodes TIFF (covers are saved as JPEG/PNG).
+        GHSA-j3p4-wp97-rph4  HistogramEqualization on a TIFF: the processor is not used and TIFF is not decoded.
+        GHSA-gwg2-r3hj-4w44  ICC CLUT parsing: in 3.x only reachable through IccProfile.Entries, which the plugin never reads.
+      Revisit when a fix lands in 3.x or the license situation changes.
+    -->
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-wmxv-xphr-5c9g" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j9gm-c75j-xc9q" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-jjfr-hcj7-qf5w" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-j3p4-wp97-rph4" />
+    <NuGetAuditSuppress Include="https://github.com/advisories/GHSA-gwg2-r3hj-4w44" />
     <EmbeddedResource Include="$(PkgSixLabors_ImageSharp)\lib\net6.0\SixLabors.ImageSharp.dll" LogicalName="SixLabors.ImageSharp.dll" Visible="false" />
   </ItemGroup>
 

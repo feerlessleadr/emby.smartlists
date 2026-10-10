@@ -4,7 +4,12 @@ using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 using SixLabors.ImageSharp;
+using SixLabors.ImageSharp.Formats;
+using SixLabors.ImageSharp.Formats.Bmp;
+using SixLabors.ImageSharp.Formats.Gif;
 using SixLabors.ImageSharp.Formats.Jpeg;
+using SixLabors.ImageSharp.Formats.Png;
+using SixLabors.ImageSharp.Formats.Webp;
 using SixLabors.ImageSharp.PixelFormats;
 using SixLabors.ImageSharp.Processing;
 
@@ -31,6 +36,22 @@ namespace Emby.Plugin.SmartLists.Utilities
         /// JPEG quality for all generated covers.
         /// </summary>
         private const int JpegQuality = 90;
+
+        /// <summary>
+        /// Decoder options for every image the plugin reads from disk. Only the formats covers actually
+        /// use are registered: TIFF is left out on purpose, because the TIFF decoder of the bundled
+        /// ImageSharp (3.1.x) has an unfixed denial-of-service bug (GHSA-wmxv-xphr-5c9g) and nothing here
+        /// needs it. A TIFF is rejected as an unknown format instead of being decoded.
+        /// </summary>
+        private static readonly DecoderOptions SafeDecoderOptions = new()
+        {
+            Configuration = new SixLabors.ImageSharp.Configuration(
+                new JpegConfigurationModule(),
+                new PngConfigurationModule(),
+                new GifConfigurationModule(),
+                new WebpConfigurationModule(),
+                new BmpConfigurationModule()),
+        };
 
         /// <summary>
         /// Gets the Emby tile aspect ratio covers are cropped to for an image type:
@@ -123,7 +144,7 @@ namespace Emby.Plugin.SmartLists.Utilities
                 try
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    using var sourceImage = Image.Load(imagePaths[i]);
+                    using var sourceImage = Image.Load(SafeDecoderOptions, imagePaths[i]);
 
                     // Rotate EXIF-oriented sources (e.g. phone photos) into the display frame
                     // before any geometry runs on their pixel grid.
@@ -196,7 +217,7 @@ namespace Emby.Plugin.SmartLists.Utilities
             try
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                using var image = Image.Load(sourcePath);
+                using var image = Image.Load(SafeDecoderOptions, sourcePath);
 
                 // Rotate EXIF-oriented sources into the display frame BEFORE the crop
                 // geometry below reads Width/Height, and so the saved copy carries no

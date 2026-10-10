@@ -19,6 +19,8 @@ primer.md
 [Dd]ebugPublic/
 [Rr]elease/
 [Rr]eleases/
+# Release notes used by the release workflow are tracked
+!docs/releases/
 # Project release skills are not build folders
 !.claude/skills/release/
 !.agents/skills/release/
