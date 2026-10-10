@@ -89,7 +89,16 @@ jobs:
       # A failing test stops the workflow here: nothing is built for release and no release is created.
       - name: Run the tests
         run: |
-          dotnet test Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj --configuration Release "-p:EmbySystemDir=$EMBY_SYSTEM_DIR" --nologo
+          set -o pipefail
+          dotnet test Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj --configuration Release "-p:EmbySystemDir=$EMBY_SYSTEM_DIR" --nologo 2>&1 | tee "$RUNNER_TEMP/test.log"
+
+      # Puts the failure lines into a run annotation so they are visible without downloading the log.
+      - name: Summarize test failures
+        if: failure()
+        run: |
+          { grep -E "error |Failed |Assert|Exception|Unhandled|Could not|not found|Passed!|Failed!|Total" "$RUNNER_TEMP/test.log" | head -40; echo "--- tail ---"; tail -n 25 "$RUNNER_TEMP/test.log"; } \
+            | cut -c1-400 | awk 'BEGIN{ORS="%0A"} {print}' > "$RUNNER_TEMP/summary.txt"
+          echo "::error title=Test run output::$(cat "$RUNNER_TEMP/summary.txt")"
 
       - name: Build
         run: |
