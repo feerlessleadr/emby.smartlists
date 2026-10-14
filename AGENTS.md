@@ -8,7 +8,7 @@ This is a straight port of the Jellyfin SmartLists plugin to **Emby Server 4.10.
 
 In: rules, smart playlists and collections, manual / scheduled / automatic refresh, the admin page, images, backups, templates.
 
-Also in: phone alerts for the Embidextrous Android app (`SmartLists.RefreshFailed` / `RefreshRunFinished` / `TimerStopped`, pushed with `ISessionManager.SendMessageToAdminSessions`; `GET Events` catch-up; `GET Notifications/Catalog`; switches on the Settings tab). The contract is `docs/notifications.md`: keep the message names and fields stable because the app parses them, and never change `ApiVersion` in `GET /info` for an addition (the app requires equality).
+Also in: phone alerts for the Embidextrous Android app (`SmartLists.RefreshFailed` / `RefreshRunFinished` / `TimerStopped`, delivered by the `SmartListsEventsStart` websocket subscription (`EventsPushListener`; the app keeps its token in a header, so session pushes do not reach it) and also pushed with `ISessionManager.SendMessageToAdminSessions`; `GET Events` catch-up; `GET Notifications/Catalog`; switches on the Settings tab). The contract is `docs/notifications.md`: keep the message names and fields stable because the app parses them, and never change `ApiVersion` in `GET /info` for an addition (the app requires equality).
 
 Out (hidden in the UI, not built): external lists (MDBList, Trakt, ...), the end-user page and its endpoints (`UserPagesController`, `UserSmartListController` are excluded from the build), people roles Emby cannot represent, `VideoRangeType`.
 

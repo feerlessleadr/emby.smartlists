@@ -20,7 +20,7 @@ The software is provided **as is**, with no warranty of any kind. The repository
 - **Admin page** under *Dashboard → SmartLists*: create, edit, clone, enable/disable, delete, status and history, templates.
 - **Custom cover images**, sort titles, descriptions and tags on the generated lists.
 - **Backups**: manual or scheduled zip of all list definitions and images, with restore.
-- **Phone alerts** for the Embidextrous Android app: a failed list refresh, a finished refresh run (off by default) and a stopped schedule timer, with per-event switches on the Settings tab. See [docs/notifications.md](docs/notifications.md).
+- **Phone alerts** for the Embidextrous Android app: a failed list refresh, a finished refresh run (off by default) and a stopped schedule timer, delivered over a websocket subscription and a catch-up route, with per-event switches on the Settings tab. See [docs/notifications.md](docs/notifications.md).
 - Scheduled tasks for backups and clean-up of leftovers appear under *Dashboard → Scheduled Tasks*.
 
 ## What does not (yet)

@@ -4,6 +4,7 @@ SmartLists can tell the Embidextrous Android app when something needs attention:
 
 ## How it works
 
+0. **Websocket subscription (what the app uses).** Emby links a websocket to a user session only when the token is in the websocket address (`?api_key=`). The app keeps its token in the `X-Emby-Token` header, so it is not an "administrator session" and `SendMessageToAdminSessions` never reaches it. The plugin therefore also offers a subscription on Emby's own websocket, like Hall Monitor's status push; see "Websocket subscription" below. The session push in step 1 stays (it still reaches Emby's own web admin sessions).
 1. **Push.** The plugin sends a message to every connected **administrator** session with Emby's `ISessionManager.SendMessageToAdminSessions`. It is fire and forget: a failure is logged and never affects a refresh. A session that is not connected at that moment never sees the message, and a socket that signed in with only an API key receives nothing.
 2. **Catch-up.** Every event gets a number (`Seq`) and is kept in a log of the last 500 events. The app asks `GET …/Events?After=<seq>` for what it missed and ignores numbers it already has.
 3. **Catalog.** `GET …/Notifications/Catalog` describes each event so the app can build its rule screen from the server.
@@ -73,6 +74,29 @@ A refresh that was cancelled, or that a client asked for wrongly (bad id, disabl
 
 **No file paths.** Drive letters, share names and folder paths never appear in a payload. Lists are described by name and type only, and any sentence copied from an error has paths replaced by `[path]`, is cut to its first line and is at most 200 characters.
 
+## Websocket subscription
+
+Connect to `/embywebsocket` with the administrator's token in the `X-Emby-Token` header and `deviceId` in the address (no `api_key`), then send:
+
+```json
+{"MessageType":"SmartListsEventsStart","Data":"0,30000,12"}
+```
+
+`0,30000` are the usual delay and interval in milliseconds; the third value (`12` here) is the highest `Seq` the app has already seen and is optional. `{"MessageType":"SmartListsEventsStop"}` ends the subscription. The plugin answers with `SmartListsEvents` messages:
+
+```json
+{"MessageType":"SmartListsEvents","Data":{"ApiLevel":1,"LatestSeq":14,"Truncated":false,
+  "Events":[{"Seq":13,"Name":"SmartLists.RefreshRunFinished","AtUtc":"2026-10-14T12:01:00Z","Data":{"...":"as pushed"}}]}}
+```
+
+- Once right after the start: the events after `afterSeq`, or an empty `Events` with only the `LatestSeq` baseline when no `afterSeq` was sent.
+- Promptly (about a second) whenever a new event is logged, only to subscribed connections, and each connection only gets events above the highest `Seq` already sent on it (so nothing arrives twice).
+- A heartbeat every 30 seconds: the same message with an empty `Events`, so the app can tell a dead connection from a quiet one.
+- `Events` is oldest first, the same objects as the catch-up route; `Truncated` is true when the log no longer reaches back to `afterSeq`. An `afterSeq` higher than `LatestSeq` is treated as `LatestSeq`.
+- Only an administrator may subscribe (checked on every push). Anyone else gets `{"MessageType":"SmartListsEvents","Data":{"Error":"Administrator login required."}}` once and nothing more.
+
+The log of what the connection already has is per socket. The catch-up route stays for reconnects and as a backup poll.
+
 ## Flood control
 
 - A failing list is announced once per hour, however often it fails. Lists that fail together (within 10 seconds) are one event with `Count` and the first five lists.
@@ -137,6 +161,7 @@ Gains two properties and keeps everything else, including `ApiVersion: 1` (the a
 - `Notifications/` (new files; nothing else in the plugin depends on them): `NotificationAggregator` (the flood-control and batching rules, no Emby types), `EventLog` (sequence numbers, 500-event ring, a separate `.seq` file), `NotificationCatalog`, `NotificationModels`, `PlainJson`, and `NotificationService` (the Emby glue: timers, the push, the watchdog).
 - `RefreshStatusService.CompleteOperation` is where every refresh outcome is recorded (queue, "Refresh all" and scheduled batches); it now raises an `OperationCompleted` event that the notification service listens to.
 - `AutoRefreshService` records when its one-shot schedule timer is next due (`IsScheduleTimerStalled`). A watchdog checks every 5 minutes.
+- `EventsPushListener` (an Emby `BasePeriodicWebSocketListener`, the pattern of Hall Monitor's `StatusPushListener`) and `EventsSubscription` (the Emby-free per-connection rules, unit tested). `NotificationService` calls `EventsPushListener.NotifyChanged()` after every logged event.
 - `StartupEntryPoint` receives `ISessionManager` from Emby and starts the service after the auto-refresh service.
 - The log lives in `<programdata>/config/SmartLists.Notifications/events.json` (with `events.json.seq`), outside the lists folder so it is never read as a list.
 
@@ -144,9 +169,11 @@ Gains two properties and keeps everything else, including `ApiVersion: 1` (the a
 
 Unit tests (`Emby.Plugin.SmartLists.Tests/Notifications/NotificationTests.cs`) cover the batching, the one-per-hour and once-a-day rules, the switches, path stripping, the log (restart, 500-event ring, truncation, damaged file), the catalog and the `info` additions. They do not talk to a running Emby.
 
-Manual live check on a test server (the plugin repo has no live-test script):
+Live check: `dev/Test-PhoneAlerts.ps1` connects the way the app does (token only in the `X-Emby-Token` header, `deviceId` in the address, no `api_key`), checks the baseline, the 30-second heartbeat, the catch-up route, the catalog, `info`, optionally a pushed event (`-ExpectEvent`) and the non-administrator refusal (`-NonAdminToken`). It has not been run yet. A test that connects with `api_key` proves nothing about the app.
 
-1. Install the build, start Emby, sign in as an administrator, and open Emby's websocket the way the Embidextrous app does, with that administrator's session token (from `AuthenticateByName`; a socket that has only an API key receives nothing).
+Manual steps for the pieces the script cannot cause by itself:
+
+1. Install the build, start Emby, sign in as an administrator, and open Emby's websocket the way the Embidextrous app does (token in the `X-Emby-Token` header) and send `SmartListsEventsStart`.
 2. Make a list fail, for example by deleting the Emby playlist's owner user while keeping a scheduled list, or by stopping the library path a rule reads. Wait about 15 seconds: a `SmartLists.RefreshFailed` message arrives. Fail the same list again within the hour: nothing arrives.
 3. Turn on **A refresh run finished**, save, and use **Refresh all** with at least two lists: one `SmartLists.RefreshRunFinished` arrives about 10 seconds after the last list.
 4. `GET /emby/Plugins/SmartLists/Events?After=0` lists what was sent, with `Seq` growing by one. Restart Emby and check that the next `Seq` continues.

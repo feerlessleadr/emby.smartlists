@@ -162,6 +162,7 @@ namespace Emby.Plugin.SmartLists.Notifications
         private void Send(PendingEvent pending)
         {
             var logged = Log.Append(pending);
+            EventsPushListener.NotifyChanged();
             var data = PlainJson.ToPlain(logged.Data);
             _ = Task.Run(async () =>
             {
@@ -180,21 +181,6 @@ namespace Emby.Plugin.SmartLists.Notifications
         /// <param name="after">The last number the caller has.</param>
         /// <param name="limit">The most events to return.</param>
         /// <returns>The answer.</returns>
-        public Dictionary<string, object?> GetEvents(long after, int limit)
-        {
-            var events = Log.After(after, limit, out var truncated);
-            return new Dictionary<string, object?>
-            {
-                ["LatestSeq"] = Log.LatestSeq,
-                ["Truncated"] = truncated,
-                ["Events"] = events.Select(e => new Dictionary<string, object?>
-                {
-                    ["Seq"] = e.Seq,
-                    ["Name"] = e.Name,
-                    ["AtUtc"] = e.AtUtc.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", System.Globalization.CultureInfo.InvariantCulture),
-                    ["Data"] = PlainJson.ToPlain(e.Data),
-                }).ToList(),
-            };
-        }
+        public Dictionary<string, object?> GetEvents(long after, int limit) => EventsPayload.Build(Log, after, limit);
     }
 }

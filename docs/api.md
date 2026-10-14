@@ -164,7 +164,7 @@ Content-Type: application/json
 | `GET …/Events?After=<seq>&Limit=100` | `{LatestSeq, Truncated, Events[{Seq, Name, AtUtc, Data}]}`: the alerts after a sequence number, oldest first, from a saved log of the last 500. `Truncated: true` means the log no longer reaches back that far. `Limit` 1 to 500 |
 | `GET …/Notifications/Catalog` | `{ApiLevel, Service{Id, Title, ChannelId, ChannelTitle}, Events[{Id, Title, Description, Params[], DefaultRule{Enabled, Params}, LockScreenText, OpensTab}]}` |
 
-The same alerts are pushed over Emby's websocket to administrator sessions as `{"MessageType":"SmartLists.RefreshFailed" | "SmartLists.RefreshRunFinished" | "SmartLists.TimerStopped","Data":{...}}`. Payloads, flood control and the on/off switches on the settings page are in [notifications.md](notifications.md).
+The app receives them by subscribing on Emby's websocket: send `{"MessageType":"SmartListsEventsStart","Data":"0,30000,<afterSeq>"}` and the plugin sends `{"MessageType":"SmartListsEvents","Data":{ApiLevel, LatestSeq, Truncated, Events[]}}` (see [notifications.md](notifications.md)). The same alerts are also pushed to Emby's own administrator sessions as `{"MessageType":"SmartLists.RefreshFailed" | "SmartLists.RefreshRunFinished" | "SmartLists.TimerStopped","Data":{...}}`. Payloads, flood control and the on/off switches on the settings page are in [notifications.md](notifications.md).
 
 ## Images and backups (not needed by a basic client)
 
@@ -173,5 +173,5 @@ The same alerts are pushed over Emby's websocket to administrator sessions as `{
 
 ## Changes
 
-- **Plugin 0.1.12** (API version still 1): added `GET /Events`, `GET /Notifications/Catalog`, the pushed `SmartLists.*` messages, and the `ApiLevel` and `Features` properties of `GET /info`. Nothing was removed or renamed.
+- **Plugin 0.1.12** (API version still 1): added `GET /Events`, `GET /Notifications/Catalog`, the websocket subscription (`SmartListsEventsStart`, `SmartListsEventsStop`, `SmartListsEvents`), the pushed `SmartLists.*` messages, and the `ApiLevel` and `Features` properties of `GET /info`. Nothing was removed or renamed.
 - **API version 1** (plugin 0.1.9): documented; added `GET /info` and `GET /catalog`. Everything else already existed (it is what the web page uses).
