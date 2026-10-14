@@ -91,7 +91,7 @@ Connect to `/embywebsocket` with the administrator's token in the `X-Emby-Token`
 
 - Once right after the start: the events after `afterSeq`, or an empty `Events` with only the `LatestSeq` baseline when no `afterSeq` was sent.
 - Promptly (about a second) whenever a new event is logged, only to subscribed connections, and each connection only gets events above the highest `Seq` already sent on it (so nothing arrives twice).
-- A heartbeat every 30 seconds: the same message with an empty `Events`, so the app can tell a dead connection from a quiet one.
+- A heartbeat every 30 seconds (the plugin's own timer): the same message with an empty `Events` (every message also carries `ServerTimeUtc`), so the app can tell a dead connection from a quiet one.
 - `Events` is oldest first, the same objects as the catch-up route; `Truncated` is true when the log no longer reaches back to `afterSeq`. An `afterSeq` higher than `LatestSeq` is treated as `LatestSeq`.
 - Only an administrator may subscribe, checked on every push: the plugin looks the token up with Emby's session manager (session by access token, its user, `IsAdministrator`), and also accepts a socket whose `connection.User` is an administrator (opened by Emby's web UI). The token is never logged, echoed or stored. Anyone else gets `{"MessageType":"SmartListsEvents","Data":{"Error":"Administrator login required."}}` once and nothing more.
 
@@ -169,7 +169,7 @@ Gains two properties and keeps everything else, including `ApiVersion: 1` (the a
 
 Unit tests (`Emby.Plugin.SmartLists.Tests/Notifications/NotificationTests.cs`) cover the batching, the one-per-hour and once-a-day rules, the switches, path stripping, the log (restart, 500-event ring, truncation, damaged file), the catalog and the `info` additions. They do not talk to a running Emby.
 
-Live check: `dev/Test-PhoneAlerts.ps1` connects the way the app does (token only in the `X-Emby-Token` header, `deviceId` in the address, no `api_key`), checks the baseline, the 30-second heartbeat, the catch-up route, the catalog, `info`, optionally a pushed event (`-ExpectEvent`) and the non-administrator refusal (`-NonAdminToken`). It has not been run yet. A test that connects with `api_key` proves nothing about the app.
+Live check: `dev/Test-PhoneAlerts.ps1` connects the way the app does (token only in the `X-Emby-Token` header, `deviceId` in the address, no `api_key`), checks the baseline, the 30-second heartbeat, the catch-up route, the catalog, `info`, optionally a pushed event (`-ExpectEvent`) and the non-administrator refusal (`-NonAdminToken`). A test that connects with `api_key` proves nothing about the app.
 
 Manual steps for the pieces the script cannot cause by itself:
 

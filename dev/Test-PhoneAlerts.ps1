@@ -42,20 +42,30 @@ function Send-Text($ws, $text) {
     $ws.SendAsync((New-Object ArraySegment[byte] -ArgumentList (, $bytes)), 'Text', $true, [Threading.CancellationToken]::None).Wait()
 }
 
-# Reads one text message or returns $null after the timeout.
+# Reads one text message or returns $null after the timeout. The receive is never cancelled (cancelling a ClientWebSocket receive aborts the
+# socket); an unfinished receive is kept and reused by the next call.
+$script:pending = @{}
 function Receive-Message($ws, [int] $seconds) {
-    $cts = New-Object Threading.CancellationTokenSource
-    $cts.CancelAfter([TimeSpan]::FromSeconds($seconds))
-    $buffer = New-Object byte[] 65536
-    $builder = New-Object System.Text.StringBuilder
-    try {
-        do {
+    $key = $ws.GetHashCode()
+    $deadline = (Get-Date).AddSeconds($seconds)
+    while ($true) {
+        if (-not $script:pending.ContainsKey($key)) {
+            $buffer = New-Object byte[] 65536
             $segment = New-Object ArraySegment[byte] -ArgumentList (, $buffer)
-            $result = $ws.ReceiveAsync($segment, $cts.Token).GetAwaiter().GetResult()
-            [void]$builder.Append([Text.Encoding]::UTF8.GetString($buffer, 0, $result.Count))
-        } while (-not $result.EndOfMessage)
-    } catch { return $null }
-    return $builder.ToString() | ConvertFrom-Json
+            $script:pending[$key] = @{ Task = $ws.ReceiveAsync($segment, [Threading.CancellationToken]::None); Buffer = $buffer; Text = (New-Object System.Text.StringBuilder) }
+        }
+        $p = $script:pending[$key]
+        $left = [int][Math]::Max(0, ($deadline - (Get-Date)).TotalMilliseconds)
+        if (-not $p.Task.Wait($left)) { return $null }
+        $result = $p.Task.Result
+        [void]$p.Text.Append([Text.Encoding]::UTF8.GetString($p.Buffer, 0, $result.Count))
+        if ($result.EndOfMessage) {
+            $script:pending.Remove($key)
+            return $p.Text.ToString() | ConvertFrom-Json
+        }
+        $segment = New-Object ArraySegment[byte] -ArgumentList (, $p.Buffer)
+        $p.Task = $ws.ReceiveAsync($segment, [Threading.CancellationToken]::None)
+    }
 }
 
 # Reads messages until one named SmartListsEvents arrives (Emby also sends KeepAlive and other messages).
@@ -112,7 +122,7 @@ if ($ExpectEvent) {
 }
 
 Send-Text $ws '{"MessageType":"SmartListsEventsStop"}'
-$ws.CloseAsync('NormalClosure', 'done', [Threading.CancellationToken]::None).Wait()
+try { $ws.CloseAsync('NormalClosure', 'done', [Threading.CancellationToken]::None).Wait() } catch { }
 
 # ---- catch-up route agrees with the push ----
 $headers = @{ 'X-Emby-Token' = $Token }
@@ -131,7 +141,7 @@ if ($NonAdminToken) {
     $err = Receive-Events $ws2 10
     Check ($err -and $err.Data.Error -eq 'Administrator login required.') 'non-administrator gets the Error reply'
     Check ($err -and -not $err.Data.Events) 'non-administrator gets no events'
-    $ws2.CloseAsync('NormalClosure', 'done', [Threading.CancellationToken]::None).Wait()
+    try { $ws2.CloseAsync('NormalClosure', 'done', [Threading.CancellationToken]::None).Wait() } catch { }
 }
 else { Write-Host 'SKIP  non-administrator check (no -NonAdminToken)' }
 

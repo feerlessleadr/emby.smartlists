@@ -81,6 +81,9 @@ namespace Emby.Plugin.SmartLists.Notifications
             }
 
             data["ApiLevel"] = EventNames.ApiLevel;
+
+            // Makes every message different, so a heartbeat is never dropped as a repeat.
+            data["ServerTimeUtc"] = System.DateTime.UtcNow.ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
             return data;
         }
     }

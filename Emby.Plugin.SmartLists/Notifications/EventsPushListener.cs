@@ -28,12 +28,19 @@ namespace Emby.Plugin.SmartLists.Notifications
     /// </summary>
     public class EventsPushListener : BasePeriodicWebSocketListener<Dictionary<string, object?>, EventsPushState>
     {
+        private const int HeartbeatSeconds = 30;
+
         private static EventsPushListener? _instance;
+
+        private readonly Timer _heartbeat;
 
         public EventsPushListener(ILogManager logManager)
             : base(logManager.GetLogger("SmartListsEvents"))
         {
             _instance = this;
+
+            // Emby's own period timer did not send the heartbeat on the live test server, so push every 30 seconds ourselves (as Hall Monitor does).
+            _heartbeat = new Timer(_ => NotifyChanged(), null, TimeSpan.FromSeconds(HeartbeatSeconds), TimeSpan.FromSeconds(HeartbeatSeconds));
         }
 
         protected override string Name => "SmartListsEvents";
