@@ -2112,6 +2112,34 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
         }
 
         /// <summary>
+        /// Gets the phone-alert events after a sequence number (catch-up for an app that missed a push), oldest first.
+        /// </summary>
+        /// <param name="after">The last <c>Seq</c> the client has (0 for everything in the log).</param>
+        /// <param name="limit">The most events to return (1 to 500, default 100).</param>
+        /// <returns><c>{ LatestSeq, Truncated, Events: [ { Seq, Name, AtUtc, Data } ] }</c>.</returns>
+        [HttpGet("Events")]
+        public ActionResult<object> GetNotificationEvents([FromQuery] long after = 0, [FromQuery] int limit = 100)
+        {
+            var service = Notifications.NotificationService.Instance;
+            if (service == null)
+            {
+                return StatusCode(StatusCodes.Status503ServiceUnavailable, "Phone alerts have not started yet");
+            }
+
+            return Ok(service.GetEvents(Math.Max(0, after), limit));
+        }
+
+        /// <summary>
+        /// Gets the phone-alert catalog: every event with its title, description, parameters, default rule and lock-screen text.
+        /// </summary>
+        /// <returns>The catalog.</returns>
+        [HttpGet("Notifications/Catalog")]
+        public ActionResult<object> GetNotificationCatalog()
+        {
+            return Ok(Notifications.NotificationCatalog.Build());
+        }
+
+        /// <summary>
         /// Gets what a client needs to build rules and sorts: fields with their input types, operators and
         /// allowed values, sorts, media types and value formats.
         /// </summary>

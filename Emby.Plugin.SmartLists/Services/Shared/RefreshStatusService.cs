@@ -99,6 +99,11 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         private readonly ConcurrentDictionary<string, RefreshHistoryEntry> _refreshHistory = new();
         private RefreshQueueService? _refreshQueueService;
 
+        /// <summary>
+        /// Raised after an operation has been moved to history (used by the phone alerts; a handler's failure never reaches the refresh).
+        /// </summary>
+        public event Action<Emby.Plugin.SmartLists.Notifications.RefreshOutcome>? OperationCompleted;
+
         public RefreshStatusService(ILogger<RefreshStatusService> logger)
         {
             _logger = logger;
@@ -229,6 +234,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 };
 
                 _refreshHistory.AddOrUpdate(listId, historyEntry, (key, existing) => historyEntry);
+                RaiseCompleted(historyEntry);
 
                 _logger.LogDebug("Completed refresh operation for list {ListId} ({ListName}): Success={Success}, Duration={Duration}ms",
                     listId, operation.ListName, success, duration.TotalMilliseconds);
@@ -236,6 +242,28 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             else
             {
                 _logger.LogWarning("Attempted to complete operation for list {ListId} that was not being tracked", listId);
+            }
+        }
+
+        private void RaiseCompleted(RefreshHistoryEntry entry)
+        {
+            try
+            {
+                OperationCompleted?.Invoke(new Emby.Plugin.SmartLists.Notifications.RefreshOutcome
+                {
+                    ListId = entry.ListId,
+                    ListName = entry.ListName,
+                    ListType = entry.ListType.ToString(),
+                    Trigger = entry.TriggerType.ToString(),
+                    Success = entry.Success,
+                    Error = entry.Success ? null : entry.ErrorMessage,
+                    StartUtc = entry.StartTime,
+                    EndUtc = entry.EndTime ?? entry.StartTime.Add(entry.Duration),
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "A refresh-completed handler failed");
             }
         }
 

@@ -165,6 +165,10 @@ namespace Emby.Plugin.SmartLists.Api.Controllers
             Name = "SmartLists",
             PluginVersion = pluginVersion,
             ApiVersion,
+
+            // Added with the phone alerts (0.1.12): the level of the notification contract and what this plugin offers beyond the list API.
+            ApiLevel = Notifications.EventNames.ApiLevel,
+            Features = new[] { "events", "catalog" },
         };
 
         /// <summary>

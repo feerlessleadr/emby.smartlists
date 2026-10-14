@@ -20,6 +20,7 @@ The software is provided **as is**, with no warranty of any kind. The repository
 - **Admin page** under *Dashboard → SmartLists*: create, edit, clone, enable/disable, delete, status and history, templates.
 - **Custom cover images**, sort titles, descriptions and tags on the generated lists.
 - **Backups**: manual or scheduled zip of all list definitions and images, with restore.
+- **Phone alerts** for the Embidextrous Android app: a failed list refresh, a finished refresh run (off by default) and a stopped schedule timer, with per-event switches on the Settings tab. See [docs/notifications.md](docs/notifications.md).
 - Scheduled tasks for backups and clean-up of leftovers appear under *Dashboard → Scheduled Tasks*.
 
 ## What does not (yet)
@@ -45,6 +46,7 @@ Full steps and troubleshooting: [docs/install.md](docs/install.md).
 | [docs/install.md](docs/install.md) | Install, upgrade, uninstall |
 | [docs/using.md](docs/using.md) | Using the plugin, differences from the Jellyfin version, known issues |
 | [docs/api.md](docs/api.md) | The HTTP API (used by the admin page and the Android app): endpoints, rule format, examples |
+| [docs/notifications.md](docs/notifications.md) | Phone alerts: the pushed messages, catch-up and catalog routes, switches |
 | [docs/security.md](docs/security.md) | What the plugin exposes, security tests run, residual risks, hardening tips |
 | [docs/development.md](docs/development.md) | Build, test, deploy and verify against a local Emby |
 | [docs/reference/](docs/reference/README.md) | Field, operator, sorting and scheduling reference carried over from the Jellyfin version |

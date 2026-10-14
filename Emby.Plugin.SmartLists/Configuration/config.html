@@ -1055,6 +1055,66 @@
                         </div>
 
                         </div>
+                        <h2 class="sectionTitle" style="margin-top: 2em;">Phone alerts</h2>
+                        <div class="fieldDescription">Alerts for the Embidextrous Android app. What the app does with them (sound, quiet hours, which to show) is set in the app.</div>
+                        <div class="checkboxList paperList" style="padding: 0.5em 1em; margin-bottom: 1em; margin-top: 1em;">
+                            <div class="sectioncheckbox">
+                                <label class="emby-checkbox-label">
+                                    <input type="checkbox" is="emby-checkbox" id="sendPhoneAlerts"
+                                        data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">Send phone alerts</span>
+                                    <span class="checkboxOutline">
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
+                                            aria-hidden="true"></span>
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
+                                            aria-hidden="true"></span>
+                                    </span>
+                                </label>
+                                <div class="fieldDescription">Master switch. When off, nothing is sent to the Embidextrous app and nothing is logged for it. Only administrator sessions receive alerts.</div>
+                            </div>
+                            <div class="sectioncheckbox">
+                                <label class="emby-checkbox-label">
+                                    <input type="checkbox" is="emby-checkbox" id="phoneAlertRefreshFailed"
+                                        data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">A list refresh failed</span>
+                                    <span class="checkboxOutline">
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
+                                            aria-hidden="true"></span>
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
+                                            aria-hidden="true"></span>
+                                    </span>
+                                </label>
+                                <div class="fieldDescription">At most one alert per list per hour. Lists that fail together make one alert.</div>
+                            </div>
+                            <div class="sectioncheckbox">
+                                <label class="emby-checkbox-label">
+                                    <input type="checkbox" is="emby-checkbox" id="phoneAlertRefreshRunFinished"
+                                        data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">A refresh run finished</span>
+                                    <span class="checkboxOutline">
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
+                                            aria-hidden="true"></span>
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
+                                            aria-hidden="true"></span>
+                                    </span>
+                                </label>
+                                <div class="fieldDescription">One summary after Refresh all or a scheduled batch (off by default: it is chatty).</div>
+                            </div>
+                            <div class="sectioncheckbox">
+                                <label class="emby-checkbox-label">
+                                    <input type="checkbox" is="emby-checkbox" id="phoneAlertTimerStopped"
+                                        data-embycheckbox="true" class="emby-checkbox">
+                                    <span class="checkboxLabel">The refresh timer stopped</span>
+                                    <span class="checkboxOutline">
+                                        <span class="md-icon checkboxIcon checkboxIcon-checked check"
+                                            aria-hidden="true"></span>
+                                        <span class="md-icon checkboxIcon checkboxIcon-unchecked"
+                                            aria-hidden="true"></span>
+                                    </span>
+                                </label>
+                                <div class="fieldDescription">Sent when scheduled refreshes stop running although lists have schedules. At most once a day.</div>
+                            </div>
+                        </div>
                         <h2 class="sectionTitle" style="margin-top: 2em; display: flex; align-items: center;">
                             Backup & Restore
                             <a href="https://github.com/feerlessleadr/emby.smartlists/blob/main/docs/reference/user-guide/configuration.md#backup-restore"

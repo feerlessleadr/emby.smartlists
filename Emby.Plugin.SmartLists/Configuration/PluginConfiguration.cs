@@ -227,5 +227,27 @@ namespace Emby.Plugin.SmartLists.Configuration
         /// If null or empty, uses the default path: {DataPath}/smartlists/backups/
         /// </summary>
         public string? BackupCustomPath { get; set; } = null;
+
+        // ===== Phone alerts (docs/notifications.md) =====
+
+        /// <summary>
+        /// Gets or sets the master switch for alerts sent to the Embidextrous phone app. When off nothing is sent or logged.
+        /// </summary>
+        public bool SendPhoneAlerts { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets whether a failed list refresh is sent (SmartLists.RefreshFailed).
+        /// </summary>
+        public bool PhoneAlertRefreshFailed { get; set; } = true;
+
+        /// <summary>
+        /// Gets or sets whether the end of a refresh run is sent (SmartLists.RefreshRunFinished). Off by default: it is chatty.
+        /// </summary>
+        public bool PhoneAlertRefreshRunFinished { get; set; } = false;
+
+        /// <summary>
+        /// Gets or sets whether a stopped schedule timer is sent (SmartLists.TimerStopped).
+        /// </summary>
+        public bool PhoneAlertTimerStopped { get; set; } = true;
     }
 }

@@ -19,10 +19,10 @@ The plugin's admin page and the Emby SmartLists Android app both talk to this AP
 `GET …/info`
 
 ```json
-{ "Name": "SmartLists", "PluginVersion": "0.1.9.0", "ApiVersion": 1 }
+{ "Name": "SmartLists", "PluginVersion": "0.1.12.0", "ApiVersion": 1, "ApiLevel": 1, "Features": ["events", "catalog"] }
 ```
 
-Call it first. A client built for API version N works with any plugin whose `ApiVersion` is N. If it is different, tell the user to update the app or the plugin.
+Call it first. A client built for API version N works with any plugin whose `ApiVersion` is N. If it is different, tell the user to update the app or the plugin. `ApiLevel` and `Features` were added in 0.1.12 for the phone alerts (see [notifications.md](notifications.md)): `ApiLevel` is the level of the notification contract, not of this API, and `Features` lists `events` (the `Events` route and the pushed messages) and `catalog` (`Notifications/Catalog`). An older plugin reports neither.
 
 ## Rule-builder catalog
 
@@ -157,6 +157,15 @@ Content-Type: application/json
 | `GET …/Status/History` | Recent refreshes |
 | `GET …/Timer/Status` | The schedule timer (`isRunning`, `nextScheduledCheck`); `POST …/Timer/Restart` restarts it |
 
+## Phone alerts
+
+| Call | Returns |
+|---|---|
+| `GET …/Events?After=<seq>&Limit=100` | `{LatestSeq, Truncated, Events[{Seq, Name, AtUtc, Data}]}`: the alerts after a sequence number, oldest first, from a saved log of the last 500. `Truncated: true` means the log no longer reaches back that far. `Limit` 1 to 500 |
+| `GET …/Notifications/Catalog` | `{ApiLevel, Service{Id, Title, ChannelId, ChannelTitle}, Events[{Id, Title, Description, Params[], DefaultRule{Enabled, Params}, LockScreenText, OpensTab}]}` |
+
+The same alerts are pushed over Emby's websocket to administrator sessions as `{"MessageType":"SmartLists.RefreshFailed" | "SmartLists.RefreshRunFinished" | "SmartLists.TimerStopped","Data":{...}}`. Payloads, flood control and the on/off switches on the settings page are in [notifications.md](notifications.md).
+
 ## Images and backups (not needed by a basic client)
 
 - Images: `GET …/{id}/images`, `POST …/{id}/images` (multipart: `file`, `imageType`), `DELETE …/{id}/images/{imageType}`, `GET …/{id}/images/{imageType}/file` (needs the token header). Allowed: JPEG, PNG, GIF, WebP, BMP, AVIF, APNG, ICO.
@@ -164,4 +173,5 @@ Content-Type: application/json
 
 ## Changes
 
+- **Plugin 0.1.12** (API version still 1): added `GET /Events`, `GET /Notifications/Catalog`, the pushed `SmartLists.*` messages, and the `ApiLevel` and `Features` properties of `GET /info`. Nothing was removed or renamed.
 - **API version 1** (plugin 0.1.9): documented; added `GET /info` and `GET /catalog`. Everything else already existed (it is what the web page uses).

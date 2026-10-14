@@ -6,6 +6,8 @@ using MediaBrowser.Controller.Persistence;
 using MediaBrowser.Controller.Playlists;
 using MediaBrowser.Controller.Plugins;
 using MediaBrowser.Controller.Providers;
+using MediaBrowser.Controller.Session;
+using Emby.Plugin.SmartLists.Notifications;
 using MediaBrowser.Model.IO;
 using MediaBrowser.Model.Logging;
 
@@ -19,6 +21,8 @@ namespace Emby.Plugin.SmartLists.Host
     {
         private readonly ILogger _log;
         private readonly SmartListsHost _host;
+        private readonly ISessionManager _sessionManager;
+        private NotificationService? _notifications;
 
         public StartupEntryPoint(
             ILogManager logManager,
@@ -30,8 +34,10 @@ namespace Emby.Plugin.SmartLists.Host
             IProviderManager providerManager,
             IFileSystem fileSystem,
             IServerApplicationPaths applicationPaths,
-            IItemRepository itemRepository)
+            IItemRepository itemRepository,
+            ISessionManager sessionManager)
         {
+            _sessionManager = sessionManager;
             _log = logManager.GetLogger("SmartLists");
             _host = SmartListsHost.Create(
                 libraryManager, userManager, playlistManager, collectionManager, userDataManager, providerManager, fileSystem, applicationPaths, itemRepository, logManager);
@@ -41,12 +47,14 @@ namespace Emby.Plugin.SmartLists.Host
         public void Run()
         {
             _host.StartAutoRefresh();
-            _log.Info("SmartLists started (auto-refresh listening).");
+            _notifications = NotificationService.Start(_host, _sessionManager);
+            _log.Info("SmartLists started (auto-refresh listening, phone alerts ready).");
         }
 
         /// <inheritdoc />
         public void Dispose()
         {
+            _notifications?.Dispose();
             _host.Dispose();
         }
     }

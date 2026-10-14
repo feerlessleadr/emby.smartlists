@@ -1622,6 +1622,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
 
                 // Use a one-shot timer that reschedules itself after each execution
                 _scheduleTimer = new Timer(CheckScheduledRefreshes, null, delayToNextQuarter, Timeout.InfiniteTimeSpan);
+                _nextScheduleFireUtc = nextQuarterHour;
 
                 _logger.LogInformation("Schedule timer initialized successfully - will check every 15 minutes starting at {NextCheck}", nextQuarterHour);
             }
@@ -1642,6 +1643,30 @@ namespace Emby.Plugin.SmartLists.Services.Shared
         public bool IsScheduleTimerRunning()
         {
             return _scheduleTimer != null && !_disposed;
+        }
+
+        // When the one-shot schedule timer is next due (UTC); null until it has been armed.
+        private DateTime? _nextScheduleFireUtc;
+
+        /// <summary>
+        /// True when the schedule timer does not exist, or should have fired more than <paramref name="grace"/> ago and has not
+        /// re-armed itself (a failed reschedule leaves a one-shot timer silent for good). Used by the phone alerts.
+        /// </summary>
+        /// <param name="grace">How late the timer may be before it counts as stopped.</param>
+        /// <returns>True when scheduled refreshes are not running.</returns>
+        public bool IsScheduleTimerStalled(TimeSpan grace)
+        {
+            if (_disposed)
+            {
+                return false;
+            }
+
+            if (_scheduleTimer == null)
+            {
+                return true;
+            }
+
+            return _nextScheduleFireUtc.HasValue && DateTime.UtcNow - _nextScheduleFireUtc.Value > grace;
         }
 
         // Public method to get the next scheduled check time
@@ -1786,6 +1811,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                     now, nextQuarterHour, delayToNextQuarter);
 
                 _scheduleTimer.Change(delayToNextQuarter, Timeout.InfiniteTimeSpan);
+                _nextScheduleFireUtc = nextQuarterHour;
             }
             catch (Exception ex)
             {

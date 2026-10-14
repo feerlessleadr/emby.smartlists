@@ -8,6 +8,8 @@ This is a straight port of the Jellyfin SmartLists plugin to **Emby Server 4.10.
 
 In: rules, smart playlists and collections, manual / scheduled / automatic refresh, the admin page, images, backups, templates.
 
+Also in: phone alerts for the Embidextrous Android app (`SmartLists.RefreshFailed` / `RefreshRunFinished` / `TimerStopped`, pushed with `ISessionManager.SendMessageToAdminSessions`; `GET Events` catch-up; `GET Notifications/Catalog`; switches on the Settings tab). The contract is `docs/notifications.md`: keep the message names and fields stable because the app parses them, and never change `ApiVersion` in `GET /info` for an addition (the app requires equality).
+
 Out (hidden in the UI, not built): external lists (MDBList, Trakt, ...), the end-user page and its endpoints (`UserPagesController`, `UserSmartListController` are excluded from the build), people roles Emby cannot represent, `VideoRangeType`.
 
 ## Development commands (Windows, PowerShell)
@@ -54,6 +56,8 @@ Emby.Plugin.SmartLists/
 ├── Core/                     Business logic: Constants, Enums, Models, Orders (sorts), QueryEngine, SmartList.cs
 ├── Services/                 Playlists, Collections, Shared (AutoRefresh, RefreshQueue, Backup/Cleanup tasks,
 │                             images, status), ExternalList (compiled, not wired), Abstractions
+├── Notifications/            Phone alerts: NotificationAggregator (flood control, Emby-free), EventLog (Seq, 500-event ring),
+│                             NotificationCatalog, NotificationService (Emby glue); see docs/notifications.md
 ├── Utilities/                DtoMapper, InputValidator, Emby* extension helpers, ContainerMembers, ...
 └── Configuration/            config.html + config-*.js (admin page), config-controller.js (Emby page controller)
 ```

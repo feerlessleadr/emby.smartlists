@@ -2068,6 +2068,15 @@
                 });
             }
 
+            // Load phone alert switches (defaults: all on except the run summary)
+            var phoneAlertDefaults = { sendPhoneAlerts: ['SendPhoneAlerts', true], phoneAlertRefreshFailed: ['PhoneAlertRefreshFailed', true], phoneAlertRefreshRunFinished: ['PhoneAlertRefreshRunFinished', false], phoneAlertTimerStopped: ['PhoneAlertTimerStopped', true] };
+            Object.keys(phoneAlertDefaults).forEach(function (id) {
+                var el = page.querySelector('#' + id);
+                if (el) {
+                    var v = config[phoneAlertDefaults[id][0]];
+                    el.checked = (v === undefined || v === null) ? phoneAlertDefaults[id][1] : !!v;
+                }
+            });
             // Load backup settings
             var backupEnabledEl = page.querySelector('#backupEnabled');
             if (backupEnabledEl) {
@@ -2295,6 +2304,13 @@
                 }
             }
 
+            // Save phone alert switches
+            ['sendPhoneAlerts', 'phoneAlertRefreshFailed', 'phoneAlertRefreshRunFinished', 'phoneAlertTimerStopped'].forEach(function (id) {
+                var el = page.querySelector('#' + id);
+                if (el) {
+                    config[id.charAt(0).toUpperCase() + id.slice(1)] = el.checked;
+                }
+            });
             // Save backup settings
             var backupEnabledCheckbox = page.querySelector('#backupEnabled');
             config.BackupEnabled = backupEnabledCheckbox ? backupEnabledCheckbox.checked : false;
