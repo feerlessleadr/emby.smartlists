@@ -96,7 +96,7 @@
     plugin that ships its own copy. The runtime asset is excluded so it is not copied next to the plugin.
   -->
   <ItemGroup>
-    <PackageReference Include="SixLabors.ImageSharp" Version="3.1.12" GeneratePathProperty="true">
+    <PackageReference Include="SixLabors.ImageSharp" Version="4.1.2" GeneratePathProperty="true">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
     <!--
