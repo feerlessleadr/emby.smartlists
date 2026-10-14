@@ -177,6 +177,32 @@ namespace Emby.Plugin.SmartLists.Notifications
             });
         }
 
+        /// <summary>
+        /// Whether an access token belongs to a session of an administrator. The token is only passed to Emby's session manager: it is never logged,
+        /// echoed or stored, and a failed lookup is just "not an administrator".
+        /// </summary>
+        /// <param name="token">The access token from the start message.</param>
+        /// <param name="deviceId">The device id from the socket address.</param>
+        /// <param name="remoteAddress">The caller's address.</param>
+        /// <returns>True for a live session of an administrator.</returns>
+        public bool IsAdministratorToken(string? token, string? deviceId, System.Net.IPAddress? remoteAddress)
+        {
+            if (string.IsNullOrEmpty(token))
+            {
+                return false;
+            }
+
+            try
+            {
+                var session = _sessions.GetSessionByAuthenticationToken(token, deviceId, remoteAddress, "http");
+                return session != null && _host.UserManager.GetUserById(session.UserId)?.Policy?.IsAdministrator == true;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
         /// <summary>The events for the Events route, as plain dictionaries.</summary>
         /// <param name="after">The last number the caller has.</param>
         /// <param name="limit">The most events to return.</param>

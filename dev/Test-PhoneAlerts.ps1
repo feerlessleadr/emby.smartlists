@@ -3,7 +3,7 @@
   Live check of the SmartLists phone-alert subscription, connecting the way the Embidextrous app does: the token ONLY in the X-Emby-Token
   header, deviceId in the address, no api_key.
 .DESCRIPTION
-  1. Connects to /embywebsocket and sends SmartListsEventsStart ("0,30000,<afterSeq>").
+  1. Connects to /embywebsocket and sends SmartListsEventsStart ("0,30000,<afterSeq>,<token>": the token is also in the body because Emby does not link a header-authenticated socket to its user).
   2. Expects the baseline SmartListsEvents message (ApiLevel, LatestSeq, Truncated, Events) right away.
   3. Waits for a heartbeat (empty Events) within 35 seconds.
   4. With -ExpectEvent, also waits for a message that carries events: cause a list refresh to fail while it waits.
@@ -73,8 +73,9 @@ function Receive-Events($ws, [int] $seconds) {
 
 # ---- administrator subscription ----
 $ws = Open-Socket $Token
-$data = if ($AfterSeq -ge 0) { "0,30000,$AfterSeq" } else { '0,30000' }
-Send-Text $ws ('{"MessageType":"SmartListsEventsStart","Data":"' + $data + '"}')
+# Like the app: afterSeq (empty = none) and the administrator token inside the start message; the token is never in the address.
+$afterText = if ($AfterSeq -ge 0) { "$AfterSeq" } else { '' }
+Send-Text $ws ('{"MessageType":"SmartListsEventsStart","Data":"0,30000,' + $afterText + ',' + $Token + '"}')
 
 $first = Receive-Events $ws 10
 Check ($null -ne $first) 'baseline SmartListsEvents arrives right after the start message'
@@ -126,7 +127,7 @@ Check ($info.ApiVersion -eq 1 -and $info.Features -contains 'events' -and $info.
 # ---- non-administrator ----
 if ($NonAdminToken) {
     $ws2 = Open-Socket $NonAdminToken
-    Send-Text $ws2 '{"MessageType":"SmartListsEventsStart","Data":"0,30000"}'
+    Send-Text $ws2 ('{"MessageType":"SmartListsEventsStart","Data":"0,30000,,' + $NonAdminToken + '"}')
     $err = Receive-Events $ws2 10
     Check ($err -and $err.Data.Error -eq 'Administrator login required.') 'non-administrator gets the Error reply'
     Check ($err -and -not $err.Data.Events) 'non-administrator gets no events'

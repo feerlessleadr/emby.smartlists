@@ -76,13 +76,13 @@ A refresh that was cancelled, or that a client asked for wrongly (bad id, disabl
 
 ## Websocket subscription
 
-Connect to `/embywebsocket` with the administrator's token in the `X-Emby-Token` header and `deviceId` in the address (no `api_key`), then send:
+Connect to `/embywebsocket` with the administrator's token in the `X-Emby-Token` header and `deviceId` in the address (no `api_key`), then send the token again inside the start message (Emby fills a socket's user only when the token is in the address, so a header-authenticated socket is "nobody" to the plugin):
 
 ```json
-{"MessageType":"SmartListsEventsStart","Data":"0,30000,12"}
+{"MessageType":"SmartListsEventsStart","Data":"0,30000,12,<access token>"}
 ```
 
-`0,30000` are the usual delay and interval in milliseconds; the third value (`12` here) is the highest `Seq` the app has already seen and is optional. `{"MessageType":"SmartListsEventsStop"}` ends the subscription. The plugin answers with `SmartListsEvents` messages:
+`0,30000` are the usual delay and interval in milliseconds; the third value (`12` here) is the highest `Seq` the app has already seen (empty or `0` when it has seen nothing: empty gives only the baseline, `0` gives everything in the log); the fourth is the administrator's access token, sent inside the websocket and never in an address. `{"MessageType":"SmartListsEventsStop"}` ends the subscription. The plugin answers with `SmartListsEvents` messages:
 
 ```json
 {"MessageType":"SmartListsEvents","Data":{"ApiLevel":1,"LatestSeq":14,"Truncated":false,
@@ -93,7 +93,7 @@ Connect to `/embywebsocket` with the administrator's token in the `X-Emby-Token`
 - Promptly (about a second) whenever a new event is logged, only to subscribed connections, and each connection only gets events above the highest `Seq` already sent on it (so nothing arrives twice).
 - A heartbeat every 30 seconds: the same message with an empty `Events`, so the app can tell a dead connection from a quiet one.
 - `Events` is oldest first, the same objects as the catch-up route; `Truncated` is true when the log no longer reaches back to `afterSeq`. An `afterSeq` higher than `LatestSeq` is treated as `LatestSeq`.
-- Only an administrator may subscribe (checked on every push). Anyone else gets `{"MessageType":"SmartListsEvents","Data":{"Error":"Administrator login required."}}` once and nothing more.
+- Only an administrator may subscribe, checked on every push: the plugin looks the token up with Emby's session manager (session by access token, its user, `IsAdministrator`), and also accepts a socket whose `connection.User` is an administrator (opened by Emby's web UI). The token is never logged, echoed or stored. Anyone else gets `{"MessageType":"SmartListsEvents","Data":{"Error":"Administrator login required."}}` once and nothing more.
 
 The log of what the connection already has is per socket. The catch-up route stays for reconnects and as a backup poll.
 

@@ -162,4 +162,32 @@ public class EventsSubscriptionTests : IDisposable
         Assert.True(e.TryGetProperty("AtUtc", out _));
         Assert.Equal(1, e.GetProperty("Data").GetProperty("Seq").GetInt64());
     }
+
+    [Fact]
+    public void TheTokenAfterAfterSeqDoesNotDisturbAfterSeqAndNeverAppearsInAPush()
+    {
+        Add(3);
+        var sub = new EventsSubscription();
+        sub.ParseStartValues(new[] { "1", "SECRET-TOKEN-VALUE" });
+        Assert.Equal(1, sub.AfterSeq);
+        Assert.DoesNotContain("SECRET-TOKEN-VALUE", JsonSerializer.Serialize(sub.Next(_log, true)));
+
+        var empty = new EventsSubscription();
+        empty.ParseStartValues(new[] { string.Empty, "SECRET-TOKEN-VALUE" });
+        Assert.Null(empty.AfterSeq);
+        Assert.Empty(Events(empty.Next(_log, true)!));
+    }
+
+    [Fact]
+    public void AdministratorStatusIsCheckedOnEveryPush()
+    {
+        Add(1);
+        var sub = new EventsSubscription();
+        sub.ParseStartValues(new[] { "0" });
+        Assert.Single(Events(sub.Next(_log, true)!));
+        Assert.Equal("Administrator login required.", sub.Next(_log, false)!["Error"]); // the session ended or the user lost the right
+        Assert.Null(sub.Next(_log, false));
+        Add(1);
+        Assert.Single(Events(sub.Next(_log, true)!)); // and it works again once the check passes
+    }
 }

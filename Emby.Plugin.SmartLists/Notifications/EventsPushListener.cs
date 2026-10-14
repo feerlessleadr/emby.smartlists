@@ -12,12 +12,16 @@ namespace Emby.Plugin.SmartLists.Notifications
     public class EventsPushState : WebSocketListenerState
     {
         public EventsSubscription Subscription { get; } = new EventsSubscription();
+
+        /// <summary>Gets or sets the administrator access token the app sent in the start message. Never logged, echoed or stored.</summary>
+        public string? Token { get; set; }
     }
 
     /// <summary>
     /// Alerts over Emby's own websocket, for an app that cannot rely on session pushes (Emby links a socket to a session only when the token is in
     /// the address, and the app keeps its token in a header). The app connects to /embywebsocket as an administrator and sends
-    /// <c>{"MessageType":"SmartListsEventsStart","Data":"0,30000,&lt;afterSeq&gt;"}</c> (the third value is optional); the plugin then sends
+    /// <c>{"MessageType":"SmartListsEventsStart","Data":"0,30000,&lt;afterSeq&gt;,&lt;token&gt;"}</c> (afterSeq may be empty; the token is the administrator's
+    /// access token, which Emby does not link to a header-authenticated socket, so the plugin checks it itself); the plugin then sends
     /// <c>{"MessageType":"SmartListsEvents","Data":{ApiLevel, LatestSeq, Truncated, Events[]}}</c> once at once, whenever new events are logged, and as
     /// a heartbeat (empty Events) every 30 seconds. <c>SmartListsEventsStop</c> ends it. Anyone but an administrator gets <c>Data.Error</c> only.
     /// The pattern is Hall Monitor's StatusPushListener.
@@ -51,7 +55,9 @@ namespace Emby.Plugin.SmartLists.Notifications
 
         protected override void ParseMessageParams(string[] values, EventsPushState state)
         {
+            // Emby takes the delay and the period; what is left is afterSeq (may be empty) and the administrator token.
             state.Subscription.ParseStartValues(values);
+            state.Token = values.Length > 1 && !string.IsNullOrWhiteSpace(values[1]) ? values[1].Trim() : null;
         }
 
         protected override Task<Dictionary<string, object?>> GetDataToSend(IWebSocketConnection connection, EventsPushState state, CancellationToken cancellationToken)
@@ -69,7 +75,8 @@ namespace Emby.Plugin.SmartLists.Notifications
 
 #pragma warning restore MT1000
             var service = NotificationService.Instance;
-            var isAdministrator = connection.User?.Policy?.IsAdministrator == true;
+            var isAdministrator = connection.User?.Policy?.IsAdministrator == true
+                || (service != null && service.IsAdministratorToken(state.Token, connection.QueryString?["deviceId"], connection.RemoteAddress));
 
             var data = state.Subscription.Next(service?.Log, isAdministrator);
             return Task.FromResult(data!);
