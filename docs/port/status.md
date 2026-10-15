@@ -14,7 +14,7 @@ Living handoff document. Read this first, then [CLAUDE.md](../../CLAUDE.md) (arc
 | Decision | Detail |
 |---|---|
 | Jellyfin dropped | This repo is the Emby plugin. No upstream tracking, no compat layer, no Jellyfin-named shims. The original Jellyfin code is kept on the `jellyfin-original` branch of the repo (old `main` at `e25f62f`). |
-| Target | Emby Server 4.10.1.0, net8.0. Local dev install: `C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0` (plugins in `programdata\plugins`, launch `system\EmbyServer.exe`). A clean second profile lives in `Downloads\emby-clean-test` (own copy of `system`, port 8097; stopped). |
+| Target | Emby Server 4.10.1.0, net8.0. Local dev install: `%USERPROFILE%\Downloads\embyserver-win-x64-4.10.1.0` (plugins in `programdata\plugins`, launch `system\EmbyServer.exe`). A clean second profile lives in `Downloads\emby-clean-test` (own copy of `system`, port 8097; stopped). |
 | Repo | `https://github.com/feerlessleadr/emby.smartlists` (renamed from `jellyfin-smartlists-plugin-emby`). The port was fast-forwarded onto `main` (no history rewrite) at the owner's choice ("option 2"); the local branch is `main`. Pushing and release publishing happen only when the owner says so. |
 | Scope | In: rules, smart playlists and collections, manual/scheduled/auto refresh, admin page, images, backups, templates. Out (hidden): external lists, end-user page, person roles Emby lacks, `VideoRangeType`. |
 | Distribution | A single self-contained `Emby.Plugin.SmartLists.dll` (ImageSharp embedded; a loose DLL is file-locked on Windows and broke in-place upgrades in 0.1.1). Installed by the owner's `Emby.GitHubRepoPluginInstall` plugin: it uses GitHub Releases (newest non-prerelease by published date), detects a new version by a differing **tag name**, prefers a loose `.dll` asset over a zip, extracts zips recursively over `plugins` with overwrite, and does not retry locked files. So: a new tag and a new assembly version for every release, one asset only. |
@@ -34,10 +34,10 @@ Living handoff document. Read this first, then [CLAUDE.md](../../CLAUDE.md) (arc
 See `docs/development.md`. Short version (from the repo root):
 
 ```powershell
-$env:EMBY_SYSTEM_DIR = 'C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0\system'
+$env:EMBY_SYSTEM_DIR = '%USERPROFILE%\Downloads\embyserver-win-x64-4.10.1.0\system'
 dotnet build Emby.Plugin.SmartLists/Emby.Plugin.SmartLists.csproj
 dotnet test  Emby.Plugin.SmartLists.Tests/Emby.Plugin.SmartLists.Tests.csproj
-./dev/deploy-local.ps1 -EmbyRoot 'C:\Users\kgiglio\Downloads\embyserver-win-x64-4.10.1.0'   # run from the repo root
+./dev/deploy-local.ps1 -EmbyRoot '%USERPROFILE%\Downloads\embyserver-win-x64-4.10.1.0'   # run from the repo root
 ./dev/build-release.ps1 -Version 0.1.4                                                     # -> artifacts\*.dll and *.zip
 ```
 
