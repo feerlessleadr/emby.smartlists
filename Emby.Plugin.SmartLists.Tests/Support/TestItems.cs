@@ -296,9 +296,9 @@ public static class TestItems
     }
 
     /// <summary>
-    /// Links <paramref name="child"/> to <paramref name="parent"/> through <c>ParentId</c> - the
-    /// only link the ancestor walk follows - and registers BOTH with the library-manager stub so
-    /// <c>GetParent()</c> can resolve them.
+    /// Links <paramref name="child"/> to <paramref name="parent"/> through <c>ParentId</c> and
+    /// registers BOTH with the library-manager stub so <c>GetParent()</c> can resolve them.
+    /// A virtual album is a second link, <c>InternalAlbumId</c>, and is not set here.
     ///
     /// Deliberately does NOT touch <c>SeriesId</c>/<c>SeasonId</c>: those drift from the real
     /// tree, and reaching for them instead of the parent chain is exactly what issue #495 was.

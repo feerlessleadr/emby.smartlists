@@ -146,8 +146,12 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             BaseItem item,
             ILibraryManager libraryManager,
             ConcurrentDictionary<long, AncestorValues> memo,
-            ILogger? logger)
-            => Walk(item, libraryManager, memo, AncestorValues.Empty, static (acc, node) => acc.Union(node), logger);
+            ILogger? logger,
+            LinkedAlbumCache? albums = null)
+        {
+            var inherited = Walk(item, libraryManager, memo, AncestorValues.Empty, static (acc, node) => acc.Union(node), logger);
+            return IncludeLinkedAlbum(item, libraryManager, inherited, albums, static (acc, node) => acc.Union(node), logger);
+        }
 
         /// <summary>
         /// Every ancestor NODE of <paramref name="item"/> — the same walk as <see cref="Resolve"/>
@@ -165,8 +169,12 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             BaseItem item,
             ILibraryManager libraryManager,
             ConcurrentDictionary<long, IReadOnlyList<BaseItem>> memo,
-            ILogger? logger)
-            => Walk<IReadOnlyList<BaseItem>>(item, libraryManager, memo, Array.Empty<BaseItem>(), AppendAncestor, logger);
+            ILogger? logger,
+            LinkedAlbumCache? albums = null)
+        {
+            var inherited = Walk<IReadOnlyList<BaseItem>>(item, libraryManager, memo, Array.Empty<BaseItem>(), AppendAncestor, logger);
+            return IncludeLinkedAlbum(item, libraryManager, inherited, albums, AppendAncestor, logger);
+        }
 
         /// <summary>
         /// Returns a NEW list holding <paramref name="acc"/> plus <paramref name="node"/>, or
@@ -247,6 +255,54 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
             return acc;
         }
 
+        /// <summary>
+        /// Folds in the virtual MusicAlbum linked by <see cref="BaseItem.InternalAlbumId"/>
+        /// when that album is not already in the ParentId chain.
+        ///
+        /// On Emby 4.10.1.0 a track's ParentId is the on-disk folder. The album people tag
+        /// in the metadata editor is a separate MusicAlbum with no path and IsFolder false,
+        /// stored on the track as InternalAlbumId and indexed in AncestorIds. Reading
+        /// <see cref="BaseItem.AlbumId"/> is deliberately avoided: when InternalAlbumId is 0
+        /// that getter calls GetAlbumItem, which loads tags. The album is applied per item,
+        /// after the memoized parent walk, so two tracks in one folder keep their own albums.
+        /// The album is NOT written into <paramref name="albums"/> under the parent-memo key.
+        /// </summary>
+        private static TAcc IncludeLinkedAlbum<TAcc>(
+            BaseItem item,
+            ILibraryManager libraryManager,
+            TAcc inherited,
+            LinkedAlbumCache? albums,
+            Func<TAcc, BaseItem, TAcc> union,
+            ILogger? logger)
+            where TAcc : class
+        {
+            var albumId = item.InternalAlbumId;
+            if (albumId == 0 || albumId == item.InternalId)
+            {
+                return inherited;
+            }
+
+            // Already the immediate parent, or already present in the node list. Folding it
+            // again would allocate a new ancestor list and break the memo's reference sharing.
+            if (albumId == item.ParentId)
+            {
+                return inherited;
+            }
+
+            if (inherited is IReadOnlyList<BaseItem> nodes && nodes.Any(node => node.InternalId == albumId))
+            {
+                return inherited;
+            }
+
+            var album = (albums ?? new LinkedAlbumCache()).Resolve(albumId, item, libraryManager, logger);
+            if (album == null || album.InternalId == item.InternalId || IsWalkBoundary(album))
+            {
+                return inherited;
+            }
+
+            return union(inherited, album);
+        }
+
         private static bool IsWalkBoundary(BaseItem node)
             => node is AggregateFolder || node is UserRootFolder || node is UserView;
 
@@ -285,6 +341,62 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
                 logger?.LogWarning(ex, "SmartLists failed to resolve library values for '{Name}'", anchor.Name);
                 return empty;
             }
+        }
+    }
+
+    /// <summary>
+    /// Per-refresh cache of virtual albums resolved by <see cref="BaseItem.InternalAlbumId"/>.
+    /// Kept off the parent-walk memo: that memo is shared by every item under a folder, and
+    /// two tracks in one folder can belong to different albums.
+    /// </summary>
+    internal sealed class LinkedAlbumCache
+    {
+        private readonly ConcurrentDictionary<long, BaseItem> _found = new();
+        private readonly ConcurrentDictionary<long, byte> _missing = new();
+
+        /// <summary>Drops every cached album. Call this whenever the parent-walk memo is cleared.</summary>
+        public void Clear()
+        {
+            _found.Clear();
+            _missing.Clear();
+        }
+
+        /// <summary>
+        /// The album item, or null when it does not resolve. A failure is remembered for this
+        /// cache's lifetime so one missing album is not looked up again for every track.
+        /// </summary>
+        public BaseItem? Resolve(long albumId, BaseItem item, ILibraryManager libraryManager, ILogger? logger)
+        {
+            if (_missing.ContainsKey(albumId))
+            {
+                return null;
+            }
+
+            if (_found.TryGetValue(albumId, out var cached))
+            {
+                return cached;
+            }
+
+            BaseItem? album;
+            try
+            {
+                album = libraryManager.GetItemById(albumId);
+            }
+            catch (Exception ex)
+            {
+                logger?.LogWarning(ex, "SmartLists failed to resolve linked album {AlbumId} for '{Name}'", albumId, item.Name);
+                _missing[albumId] = 0;
+                return null;
+            }
+
+            if (album == null)
+            {
+                _missing[albumId] = 0;
+                return null;
+            }
+
+            _found[albumId] = album;
+            return album;
         }
     }
 }

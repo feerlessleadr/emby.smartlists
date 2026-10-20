@@ -2269,7 +2269,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         {
             try
             {
-                var values = AncestorValueResolver.Resolve(baseItem, libraryManager, cache.AncestorValuesById, logger);
+                var values = AncestorValueResolver.Resolve(baseItem, libraryManager, cache.AncestorValuesById, logger, cache.LinkedAlbums);
                 if (wantTags) { operand.ParentTags = values.Tags; }
                 if (wantStudios) { operand.ParentStudios = values.Studios; }
                 if (wantGenres) { operand.ParentGenres = values.Genres; }
@@ -2299,7 +2299,7 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine
         {
             try
             {
-                var ancestors = AncestorValueResolver.ResolveAncestors(baseItem, libraryManager, cache.AncestorItemsById, logger);
+                var ancestors = AncestorValueResolver.ResolveAncestors(baseItem, libraryManager, cache.AncestorItemsById, logger, cache.LinkedAlbums);
                 operand.ParentIsFavoriteByUser[user.Id.ToString("N")] = AnyAncestorIsFavorite(ancestors, user, userDataManager, cache);
 
                 if (additionalUserIds == null)

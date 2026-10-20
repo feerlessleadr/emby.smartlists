@@ -271,6 +271,8 @@ Each of these fields has three options:
 | **Movie, series, album, video, photo, book** | The folders it sits in → library |
 | **Extras** (trailers, behind the scenes, ...) | The movie or series they belong to → everything above that |
 
+On Emby the album in that table is the album item the track is linked to, including when that item is not the folder the audio files sit in. A tag on the album and a tag on the folder both count.
+
 So a tag set on a single **season** now applies to that season's episodes, and a tag set on the **library itself** applies to everything inside it.
 
 !!! note "Collections and playlists are not parents"

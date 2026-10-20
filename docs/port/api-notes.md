@@ -168,7 +168,7 @@ Important: `ParentValuesPrefilterResolver`, `PeoplePrefilterResolver` and `Strea
 | `BaseItem.ForcedSortName` | none on `BaseItem` (only on `BaseItemDto`). `SortName {get;set;}` exists, and `MetadataFields.SortName` can be locked. Whether setting `SortName` persists as a forced value is unverified. |
 | `BaseItem.GetOwner()` (extras) | none found. `BaseItem` has `GetExtras(...)`, `GetExtraIds(...)`, `ExtraType` but no owner getter. Used by `AncestorValueResolver`; extras handling needs a separate investigation or can be skipped initially. |
 | `BaseItem.GetParent()` | `GetParent()` and `Parent : Folder` exist. |
-| `Audio.AlbumEntity` | none. `Audio` has `Album` (string, via `IHasMusicAlbum`), `AlbumArtists`, `AlbumArtistItems`. Resolving the album entity needs a query (`AlbumIds`) or by name. |
+| `Audio.AlbumEntity` | none. `Audio` has `Album` (string), `AlbumArtists`, `AlbumArtistItems`, and `InternalAlbumId` / `GetAlbumId(IDataContext)`. `AlbumId` calls `GetAlbumId(null)`, which returns `InternalAlbumId` when it is set and otherwise calls `GetAlbumItem`, and that loads tags. Use `InternalAlbumId`, then `LibraryManager.GetItemById`. |
 | `Episode.SeasonId` | none. `Episode.Season` / `Episode.SeasonFolder : Season` and `Episode.Series` exist; use `.Season?.InternalId`. |
 | `MetadataProvider.Imdb/Tmdb/Tvdb` | `MediaBrowser.Model.Entities.MetadataProviders` (plural), has `Imdb, Tmdb, Tvdb`, also `TmdbCollection`. `GetProviderId`/`SetProviderId` exist as extensions in `ProviderIdsExtensions`. |
 | `MetadataField.Genres/Studios/OfficialRating` | `MediaBrowser.Model.Entities.MetadataFields` (plural); all three exist. `LockedFields : MetadataFields[]`. |
@@ -195,6 +195,18 @@ Run with a throwaway plugin (`SmartListsEmbySpike`, net8.0, referencing only `Me
 | Forced sort title | `item.SetSortNameDirect(x)` + `item.UpdateToRepository(ItemUpdateType.MetadataEdit, parent)` persists, and the REST DTO then reports `ForcedSortName = x`. **A library scan, a `Default` refresh and a `ValidationOnly` refresh keep it; a `FullRefresh` (even with `ReplaceAllMetadata=false`) overwrites it with the plain name.** Also adding `MetadataFields.SortName` to `item.LockedFields` before saving **protects it** from `FullRefresh` and from `ReplaceAllMetadata=true`. So the Emby port must lock `SortName` when it sets a custom title (the Jellyfin code already checks `LockedFields` for genres/studios/rating, so the pattern is familiar). `ResetSortName` is not public: to undo, set the plain name and remove the lock. (Refresh endpoint note: `ImageRefreshMode=None` returns HTTP 400; use `Default`/`ValidationOnly`/`FullRefresh`.) |
 | Favorite / played events | `UserDataSaved` fires with **`UpdateUserRating`** for favorite toggles (`IsFavorite` in `UserData`) and **`TogglePlayed`** for played toggles. Jellyfin's `UpdateUserData` reason does not exist; map both of these. `args.User.Name` is populated. |
 | User IDs | `User` has `InternalId` (long) and `Id` (Guid); `kevin`=1, `test1`=2. |
+
+### Music albums are not parents (verified 2026-10-20, Emby 4.10.1.0)
+
+Reading a live music library and decompiling `MediaBrowser.Controller.dll`:
+
+- `MusicAlbum.IsFolder` is false. Album rows have a null path and a null `ParentId`. They are not in a track's `GetParent()` chain.
+- `Audio.ParentId` is the physical folder that contains the file. `Audio.InternalAlbumId` is the virtual `MusicAlbum`. On this library every track with an album id had `ParentId != InternalAlbumId` (including tracks that sit directly in an album folder, not only multi-disc tracks).
+- `AncestorIds2` lists the virtual album at distance 1 and the physical folder at distance 2. `GetParents()` only follows `ParentId`, so it never yields the album. `BaseItem.GetInheritedTags` is therefore not a substitute unless it is checked against this shape; the plugin walk must not assume it.
+- Tags are `ItemLinks2` rows of type 4 (`ItemLinkType.Tags`) pointing at `Tag` items. The `MediaItems.Tags` text column was null for every row. `InternalItemsQuery.Tags` still finds those links. An `IsFolder = true` query does not return a tagged `MusicAlbum`, so a parent-tag prefilter that expands only folders never reaches the tracks.
+- Do not read `BaseItem.AlbumId` on the hot path. Its getter calls `GetAlbumId(null)`, and a zero `InternalAlbumId` falls through to `GetAlbumItem`, which calls `EnsureTaggedItemsLoaded`.
+- The REST DTO can still report `IsFolder: true` for a `MusicAlbum`. That is not the entity property. `InternalItemsQuery.IsFolder = true` uses the entity property and does not return the album.
+- Checked again on a separate Emby 4.10.1.0 with generated audio (not the library used for the notes above): the album's path and `ParentId` were empty, each track's `ParentId` was the folder, and `AlbumId` was the album. A tag saved only on the album was returned by `Items?Tags=`. Audio playlists for Tags `Contains` and `Equal`, with each parent Yes option, contained that album's tracks and not the other album's track. The same `Contains` rule with the parent switches off contained nothing. Virtual `MusicArtist` items were not added to the walk; the on-disk artist folder is already a `ParentId` ancestor.
 
 ### Still open after this pass
 

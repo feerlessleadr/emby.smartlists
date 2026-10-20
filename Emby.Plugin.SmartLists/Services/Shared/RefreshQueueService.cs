@@ -343,6 +343,7 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                 {
                     cache.AncestorValuesById.Clear();
                     cache.AncestorItemsById.Clear();
+                    cache.LinkedAlbums.Clear();
                 }
             }
         }
@@ -1008,6 +1009,13 @@ namespace Emby.Plugin.SmartLists.Services.Shared
             /// </summary>
             public ConcurrentDictionary<long, IReadOnlyList<BaseItem>> AncestorItemsById { get; } = new();
 
+            /// <summary>
+            /// Virtual MusicAlbum items keyed by InternalAlbumId. Separate from AncestorValuesById
+            /// because that dictionary is shared by every child of a folder, and those children
+            /// can belong to different albums. Cleared with the ancestor memos.
+            /// </summary>
+            internal LinkedAlbumCache LinkedAlbums { get; } = new();
+
             public ConcurrentDictionary<long, CategorizedPeople> ItemPeople { get; } = new();
             
             // User-specific data cache - keyed by (ItemId, UserId) to support playlist user + additional users in rules
@@ -1077,9 +1085,14 @@ namespace Emby.Plugin.SmartLists.Services.Shared
                         ids.Add(episode.SeriesId);
                         break;
                     case Audio audio:
-                        // Direct parent is normally the album. Tracks nested in a sub-folder are not covered here
-                        // (Emby resolved AlbumEntity for them; Emby has no equivalent).
+                        // ParentId is the on-disk folder. The virtual MusicAlbum (InternalAlbumId)
+                        // is a different item; album-keyed track caches are cleared through it.
                         ids.Add(audio.ParentId);
+                        if (audio.InternalAlbumId != 0)
+                        {
+                            ids.Add(audio.InternalAlbumId);
+                        }
+
                         break;
                     case Season or Series or MusicAlbum:
                         // The container itself appeared or disappeared.

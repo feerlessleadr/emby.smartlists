@@ -18,9 +18,10 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine.Prefilters
     /// 1. A value-filtered GetItemIds over ALL item types. The Tags/Genres/StudioIds filters
     ///    match any BaseItem row including folders (Series/Season/library folders), so this
     ///    yields both leaf matches and value-carrying containers.
-    /// 2. GetItemIds(AncestorIds = containerIds) for everything physically under the matched
-    ///    containers - the DB's transitive parent chain + GetCollectionFolders, the same
-    ///    edges the plugin walk follows.
+    /// 2. GetItemIds(AncestorIds = containerIds) for everything under the matched
+    ///    containers. Folders come from IsFolder = true. MusicAlbum is added on its own:
+    ///    on Emby 4.10.1.0 MusicAlbum.IsFolder is false, but AncestorIds still lists that
+    ///    album for its tracks (InternalAlbumId). The per-item walk unions the same album.
     /// Candidates = direct matches UNION descendants. Superset holds because OnlyParent*
     /// only narrows the plugin match and final per-item evaluation always still runs.
     ///
@@ -386,6 +387,34 @@ namespace Emby.Plugin.SmartLists.Core.QueryEngine.Prefilters
                 }
 
                 containerIds.Add(container.InternalId);
+            }
+
+            // MusicAlbum.IsFolder is false on Emby 4.10.1.0, so the folder query above never
+            // sees a tagged album. Tracks still list that album in AncestorIds via InternalAlbumId.
+            // Expanding those ids is what lets an Equal tag rule reach the tracks. A failure here
+            // drops the whole prefilter (null) rather than returning a set that omitted them.
+            try
+            {
+                var albumQuery = new InternalItemsQuery
+                {
+                    GroupByPresentationUniqueKey = false,
+                    IncludeItemTypes = [ItemKinds.MusicAlbum],
+                };
+                applyValueFilter(albumQuery);
+                foreach (var album in context.LibraryManager.GetItemList(albumQuery))
+                {
+                    if (album == null || containerIds.Contains(album.InternalId))
+                    {
+                        continue;
+                    }
+
+                    containerIds.Add(album.InternalId);
+                }
+            }
+            catch (Exception ex)
+            {
+                context.Logger?.LogWarning(ex, "Parent-values prefilter: album expansion failed for {Field} {Operator}; rule stays per-item", expression.MemberName, expression.Operator);
+                return null;
             }
 
             var result = new HashSet<long>(direct);

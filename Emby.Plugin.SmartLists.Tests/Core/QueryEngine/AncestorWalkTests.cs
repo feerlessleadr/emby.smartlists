@@ -421,6 +421,86 @@ public class AncestorWalkTests
         Assert.Equal(2, values.Tags.Count);
     }
 
+    /// <summary>
+    /// Emby stores the album people edit in the metadata editor as a MusicAlbum that is NOT the
+    /// track's ParentId. ParentId is the on-disk folder (no tags). The album id is
+    /// InternalAlbumId, and that is the item whose tags must reach the track. Two tracks in the
+    /// same folder keep their own albums: folding the album into the parent memo would give
+    /// both tracks whichever album was walked first.
+    /// </summary>
+    [Fact]
+    public void Resolve_IncludesVirtualAlbum_WithoutLeakingItToTheOtherAlbumInTheSameFolder()
+    {
+        var folder = TestItems.PhysicalFolder("Halloween");
+        folder.Tags = ["folder-tag"];
+        folder.MarkTaggedItemsLoaded();
+
+        var halloween = TestItems.Album("Halloween");
+        halloween.Tags = ["halloween"];
+        halloween.Studios = ["Spooky"];
+        halloween.Genres = ["Novelty"];
+        halloween.MarkTaggedItemsLoaded();
+
+        var christmas = TestItems.Album("Christmas");
+        christmas.Tags = ["christmas"];
+        christmas.MarkTaggedItemsLoaded();
+
+        var ghostbusters = TestItems.Under(TestItems.Track("Halloween", 1, 1, "Ghostbusters"), folder);
+        var sleigh = TestItems.Under(TestItems.Track("Christmas", 1, 1, "Sleigh Ride"), folder);
+        ghostbusters.InternalAlbumId = halloween.InternalId;
+        sleigh.InternalAlbumId = christmas.InternalId;
+        TestLibraryManager.Items[halloween.InternalId] = halloween;
+        TestLibraryManager.Items[christmas.InternalId] = christmas;
+
+        var memo = NewMemo();
+        var albums = new LinkedAlbumCache();
+        var first = AncestorValueResolver.Resolve(ghostbusters, BaseItem.LibraryManager, memo, null, albums);
+        var before = TestLibraryManager.CallsFor(halloween.InternalId);
+        var second = AncestorValueResolver.Resolve(ghostbusters, BaseItem.LibraryManager, memo, null, albums);
+        var other = AncestorValueResolver.Resolve(sleigh, BaseItem.LibraryManager, memo, null, albums);
+
+        Assert.Equal(before, TestLibraryManager.CallsFor(halloween.InternalId));
+        Assert.Contains("halloween", first.Tags);
+        Assert.Contains("folder-tag", first.Tags);
+        Assert.Contains("Spooky", first.Studios);
+        Assert.Contains("Novelty", first.Genres);
+        Assert.Equal(first.Tags, second.Tags);
+        Assert.Contains("christmas", other.Tags);
+        Assert.Contains("folder-tag", other.Tags);
+        Assert.DoesNotContain("halloween", other.Tags);
+        Assert.DoesNotContain("christmas", first.Tags);
+    }
+
+    /// <summary>
+    /// When the album really is the ParentId, the linked-album step must not look the album up
+    /// again. The parent memo already folded it.
+    /// </summary>
+    [Fact]
+    public void Resolve_SkipsAlbumLookup_WhenTheAlbumIsAlreadyTheParent()
+    {
+        var top = TestItems.PhysicalFolder("music");
+        var album = TestItems.Album("Kind of Blue");
+        album.Tags = ["jazz"];
+        album.MarkTaggedItemsLoaded();
+        var first = TestItems.Track("Kind of Blue", 1, 1);
+        var second = TestItems.Track("Kind of Blue", 1, 2);
+        TestItems.Under(album, top);
+        TestItems.Under(first, album);
+        TestItems.Under(second, album);
+        first.InternalAlbumId = album.InternalId;
+        second.InternalAlbumId = album.InternalId;
+
+        var memo = NewMemo();
+        var albums = new LinkedAlbumCache();
+        Assert.Contains("jazz", AncestorValueResolver.Resolve(first, BaseItem.LibraryManager, memo, null, albums).Tags);
+
+        var before = TestLibraryManager.CallsFor(album.InternalId, top.InternalId);
+        var values = AncestorValueResolver.Resolve(second, BaseItem.LibraryManager, memo, null, albums);
+
+        Assert.Equal(before, TestLibraryManager.CallsFor(album.InternalId, top.InternalId));
+        Assert.Contains("jazz", values.Tags);
+    }
+
     // ---------------------------------------------------------------------------------------
     // ResolveAncestors - the same walk, returning the nodes (parent favorites)
     // ---------------------------------------------------------------------------------------
@@ -480,6 +560,24 @@ public class AncestorWalkTests
         Assert.Equal(before, after);
         Assert.Same(firstAncestors, secondAncestors);
         Assert.Contains(secondAncestors, a => a.Id == album.Id);
+    }
+
+    /// <summary>
+    /// The virtual album is the closest ancestor Emby records, so it is appended after the
+    /// physical folder. A favorite on that album then counts for the track.
+    /// </summary>
+    [Fact]
+    public void ResolveAncestors_AppendsVirtualAlbumAfterThePhysicalFolder()
+    {
+        var folder = TestItems.PhysicalFolder("Halloween");
+        var album = TestItems.Album("Halloween");
+        var track = TestItems.Under(TestItems.Track("Halloween", 1, 1), folder);
+        track.InternalAlbumId = album.InternalId;
+        TestLibraryManager.Items[album.InternalId] = album;
+
+        var ancestors = AncestorValueResolver.ResolveAncestors(track, BaseItem.LibraryManager, new(), null, new LinkedAlbumCache());
+
+        Assert.Equal([folder.Id, album.Id], ancestors.Select(a => a.Id).ToArray());
     }
 
     /// <summary>
