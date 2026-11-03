@@ -1,3 +1,5 @@
+> **Persistent docs (workspace):** read `C:\dev\_docs\WORKSPACE.md` (environment, how projects connect) and `STATUS.md` here before starting. Look in `DECISIONS.md` only when a past decision matters; the detailed history stays in `docs/port/status.md`. The keep-docs-updated rules live in `C:\dev\CLAUDE.md`.
+
 # SmartLists for Emby
 
 An Emby Server plugin that creates dynamic playlists and collections from user-defined rules (genres, ratings, years, play state, and so on) and keeps them up to date automatically.
