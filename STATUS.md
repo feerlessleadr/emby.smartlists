@@ -6,7 +6,8 @@ Last updated: 2026-11-03. Deeper history: `docs/port/status.md`.
 The Emby port of the Jellyfin SmartLists plugin: rules-based smart playlists and collections for Emby Server 4.10.1.0. GitHub repo `feerlessleadr/emby.smartlists` (renamed from this folder's name). AGPL-3.0.
 
 ## Current state
-- Latest release `v0.1.12` (2026-10-14, tag on `8e5d6eb`): phone alerts for the Embidextrous app. The published DLL passed the 18-check phone-alert live test on the test server. Tags `v0.1.0` to `v0.1.12` all exist. Release notes are in `docs/releases/`.
+- Latest release `v0.1.13` (2026-10-20): an Audio playlist that checks parent tags now sees a tag stored on the album item (the API version stays 1). Notes: `docs/releases/v0.1.13.md`. Not recorded here: whether 0.1.13 was live-tested or is installed on production.
+- Before that, `v0.1.12` (2026-10-14, tag on `8e5d6eb`): phone alerts for the Embidextrous app. The published DLL passed the 18-check phone-alert live test on the test server. Tags `v0.1.0` to `v0.1.13` all exist. Release notes are in `docs/releases/`.
 - `main` equals `origin/main` at `ce9e702` ("Record the release"). Working tree clean.
 - About 1,858 unit tests pass (xunit, net10.0). The plugin builds with zero warnings (warnings are errors).
 - `.github/workflows/release.yml` exists: a `vX.Y.Z` tag builds the DLL on windows-latest and publishes one bare DLL. `docs/port/status.md` says "No CI" in its head section. That text is stale. A later entry restored the workflow. Trust the workflow file.
